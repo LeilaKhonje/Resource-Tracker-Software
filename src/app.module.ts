@@ -4,8 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 //import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 //export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -38,6 +38,7 @@ import { AuthModule } from './auth/auth.module';
     }),*/
 
     AuthModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
