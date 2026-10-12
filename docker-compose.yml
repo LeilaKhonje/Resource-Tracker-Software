@@ -7,21 +7,28 @@ services:
     env_file:
       - .env
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
   mysql:
     image: mysql:8.4
     container_name: resource-tracker-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: resourcepassword
       MYSQL_DATABASE: resource_tracker
       MYSQL_USER: resource_user
-      MYSQL_PASSWORD: resource_password
+      MYSQL_PASSWORD: resourcepassword
     ports:
-      - "3307:3307"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-presourcepassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   mysql_data:
