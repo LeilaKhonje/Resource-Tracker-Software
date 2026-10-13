@@ -20,7 +20,7 @@ services:
       MYSQL_USER: resource_user
       MYSQL_PASSWORD: resourcepassword
     ports:
-      - "3307:3306"
+      - "3306:3307"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
