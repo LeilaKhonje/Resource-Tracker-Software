@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { createObserveModule } from '@nestjs/observe';
+//import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationsController } from './notifications/notifications.controller';
 import { NotificationsModule } from './notifications/notifications.module';
 
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: [
@@ -28,11 +27,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       synchronize: true, // Set to false in production
     }),
 
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'resource-tracker-software',
-    }),
+  
 
     NotificationsModule,
   ],
