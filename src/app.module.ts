@@ -28,6 +28,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 
     AuthModule,
     NotificationsModule,
+    DepartmentsModule,
+
+    TeamsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
