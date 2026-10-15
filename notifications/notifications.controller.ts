@@ -1,19 +1,47 @@
-import {Controller,Get,Param,Patch,} from '@nestjs/common';
+
+import {Body,Controller,Delete,Get,Param,ParseIntPipe,  Patch, Post, Req,
+} from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
 export class NotificationsController {
-
   constructor(
-    private notificationsService: NotificationsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
-  @Get(':userId')
-  getUserNotifications(
-    @Param('userId') userId: string,
-  ) {
+  @Get()
+  getMyNotifications(@Req() req: any) {
+    return this.notificationsService.getUserNotifications(
+      req.user.id,
+    );
+  }
 
-    return this.notificationsService
-      .getUserNotifications(+userId);
+  @Patch(':id/read')
+  markAsRead(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.notificationsService.markAsRead(
+      id,
+      req.user.id,
+    );
+  }
+  @Post()
+  createNotification(
+    @Body() body:{userId:number,message:string},){
+      return this.notificationsService.createNotification(
+        body.userId,body.message,
+      );
+    }
+     @Delete(':userId/:notificationId')
+  deleteNotification(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Param('notificationId', ParseIntPipe)
+    notificationId: number,
+  ) {
+    return this.notificationsService.deleteNotification(
+      userId,
+      notificationId,
+    );
   }
 }
