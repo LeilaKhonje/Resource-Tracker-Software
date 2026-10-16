@@ -14,10 +14,10 @@ services:
     container_name: resource-tracker-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: resourcepassword
       MYSQL_DATABASE: resource_tracker
       MYSQL_USER: resource_user
-      MYSQL_PASSWORD: resource_password
+      MYSQL_PASSWORD: resourcepassword
     ports:
       - "3307:3307"
     volumes:
