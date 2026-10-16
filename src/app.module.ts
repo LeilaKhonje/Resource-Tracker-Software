@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 
 //export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -38,7 +39,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     }),*/
 
     AuthModule,
-    NotificationsModule,
+    NotificationsModule,,
+    ResourcerequestModule
   ],
   controllers: [AppController],
   providers: [AppService],
