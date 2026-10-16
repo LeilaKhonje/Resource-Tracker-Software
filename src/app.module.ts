@@ -1,22 +1,19 @@
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-//import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { TeamsModule } from './teams/teams.module';
 
-//export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
-  imports: [
-    //TypeOrmModule.forRoot({
-    
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-   ObserveModule.forRoot({
+  imports: 
+    [ResourceAllocationModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -32,15 +29,12 @@ import { ResourcerequestModule } from './resourcerequest/resourcerequest.module'
       synchronize: true, // Set to false in production
     }),
 
-    /*ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'resource-tracker-software',
-    }),*/
-
     AuthModule,
     NotificationsModule,,
     ResourcerequestModule
+    NotificationsModule,
+    DepartmentsModule,
+    TeamsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
