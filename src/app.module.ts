@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { TeamsModule } from './teams/teams.module';
 
 
 @Module({
@@ -29,7 +31,6 @@ import { NotificationsModule } from './notifications/notifications.module';
     AuthModule,
     NotificationsModule,
     DepartmentsModule,
-
     TeamsModule,
   ],
   controllers: [AppController],
