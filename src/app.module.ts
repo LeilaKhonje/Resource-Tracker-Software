@@ -9,6 +9,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
+import { LineManagerDashboardModule } from './line-manager-dashboard/line-manager-dashboard.module';
 
 
 @Module({
@@ -30,11 +31,13 @@ import { TeamsModule } from './teams/teams.module';
     }),
 
     AuthModule,
-    NotificationsModule,,
-    ResourcerequestModule
+    NotificationsModule,
+    ResourcerequestModule,
     NotificationsModule,
     DepartmentsModule,
     TeamsModule,
+
+    LineManagerDashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
