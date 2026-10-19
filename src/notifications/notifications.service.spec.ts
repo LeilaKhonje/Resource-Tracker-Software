@@ -1,12 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotificationsService } from './notifications.service';
+import { Notification } from './notification.entity';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [NotificationsService],
+      providers: [
+        NotificationsService,
+        {
+          provide: getRepositoryToken(Notification),
+          useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
+            find: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<NotificationsService>(NotificationsService);
