@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-//import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -11,7 +10,6 @@ import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
 import { ProjectsModule } from './projects/projects.module';
 
-//export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: 
@@ -37,7 +35,6 @@ import { ProjectsModule } from './projects/projects.module';
     DepartmentsModule,
     TeamsModule,
     ProjectsModule,
-    ResourceAllocationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

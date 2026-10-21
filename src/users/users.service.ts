@@ -1,6 +1,6 @@
 import {BadRequestException, Injectable, NotFoundException} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { UserRole } from './user-role.enum';
 import { User } from './user.entity';
 import { Department } from '../departments/entities/department.entity';
@@ -22,21 +22,10 @@ export class UsersService {
   ): Promise<User> {
     const user = this.usersRepository.create({
       ...userData,
-      role: UserRole.MANAGING_DIRECTOR,
+      role: null,
     });
 
-    try {
-      return await this.usersRepository.save(user);
-    } catch (error) {
-      if (!this.isManagingDirectorConstraintViolation(error)) {
-        throw error;
-      }
-
-      // The unique generated-column index makes this safe even when multiple
-      // first registrations race: only one save can claim the role.
-      user.role = null;
-      return this.usersRepository.save(user);
-    }
+    return this.usersRepository.save(user);
   }
 
   async assignRole(
@@ -151,23 +140,5 @@ export class UsersService {
       departmentId: user.department?.id ?? null,
       teamId: user.team?.id ?? null,
     };
-  }
-
-  private isManagingDirectorConstraintViolation(error: unknown): boolean {
-    if (!(error instanceof QueryFailedError)) {
-      return false;
-    }
-
-    const driverError = error.driverError;
-    if (typeof driverError !== 'object' || driverError === null) {
-      return false;
-    }
-
-    const details = driverError as { code?: unknown; message?: unknown };
-    return (
-      details.code === 'ER_DUP_ENTRY' &&
-      typeof details.message === 'string' &&
-      details.message.includes('IDX_users_single_managing_director')
-    );
   }
 }
