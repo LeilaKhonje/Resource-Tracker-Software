@@ -4,7 +4,6 @@ import { LineManagerDashboardService } from './line-manager-dashboard.service';
 import { QueryResourceRequestsDto } from './dto/QueryResourceRequestsDto';
 import { ReviewResourceRequestDto } from './dto/ReviewResourceRequestDto';
 import { RejectResourceRequestDto } from './dto/RejectResourceRequestsDto';
-import { RequestStatus } from '../resourcerequest/entities/resourcerequest.entity';
 
 class ApproveResourceRequestDto {
   comment?: string;
@@ -29,7 +28,10 @@ export class LineManagerDashboardController {
   //}
 
   @Get('requests')
-  GetRequests(@Query('status') status?: RequestStatus) {
+  GetRequests(
+    @Query('status')
+    status?: Parameters<LineManagerDashboardService['getAllRequests']>[0],
+  ) {
     return this.lineManagerService.getAllRequests(status);
   }
 
