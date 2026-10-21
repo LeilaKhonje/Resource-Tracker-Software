@@ -1,4 +1,5 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Department } from '../../departments/entities/department.entity';
 
 @Entity()
 export class Team {
@@ -10,4 +11,8 @@ export class Team {
 
   @Column({ type: 'varchar', length: 500, nullable: false })
   description?: string;
+
+  @ManyToOne(() => Department, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'department_id' })
+  department: Department | null;
 }

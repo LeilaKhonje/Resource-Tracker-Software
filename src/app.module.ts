@@ -1,14 +1,17 @@
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+//import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
+import { ProjectsModule } from './projects/projects.module';
 
+//export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: 
@@ -25,13 +28,15 @@ import { TeamsModule } from './teams/teams.module';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      synchronize: true, // Set to false in production
+      synchronize: process.env.DB_SYNCHRONIZE === 'true', 
     }),
 
     AuthModule,
+    ResourcerequestModule,
     NotificationsModule,
     DepartmentsModule,
     TeamsModule,
+    ProjectsModule,
     ResourceAllocationModule,
   ],
   controllers: [AppController],
