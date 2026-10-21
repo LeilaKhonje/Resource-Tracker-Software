@@ -19,7 +19,7 @@ Protect resource endpoints with `JwtAuthGuard` and apply `@Roles(...)` with
 `RolesGuard` to enforce role-specific access. A valid token is sent as
 `Authorization: Bearer <accessToken>`.
 
-The managing director can assign `team_lead`, `line_manager`, or
-`department_head` through `PATCH /users/:id/role` with a JSON body such as
-`{"role":"team_lead"}`. The managing director role cannot be assigned or
-changed through this endpoint.
+Department heads can assign `team_lead` through `PATCH /users/:id/role` with a
+JSON body such as `{"role":"team_lead"}`. The managing director can assign
+`line_manager` and `department_head`. The managing director role cannot be
+assigned or changed through this endpoint.

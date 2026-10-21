@@ -6,17 +6,16 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  RequestStatus,
-  ResourceRequest,
-} from './entities/resourcerequest.entity';
-import { AuditLog } from './entities/audit-log.entity';
+import {RequestStatus, ResourceRequest} from './entities/resourcerequest.entity';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { AssociateTeamDto } from './dto/associate-team.dto';
 import { AssociateDepartmentDto } from './dto/associate-department.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
-import { AuthUser, UserRole } from './roles';
+import { UserRole } from '../users/user-role.enum';
+import { AuditLog } from '../auditlog/auditlog.entity';
+
+type AuthUser = { id: string; role: UserRole };
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -197,7 +196,7 @@ export class ResourcerequestService {
   // Team lead tracking: their own requests for a given team.
   // Other roles see all requests in that team.
   findByTeam(teamId: string, user: AuthUser, status?: RequestStatus) {
-    const where: Partial<ResourceRequest> = { teamId };
+    const where: Record<string, any> = { teamId };
     if (user.role === UserRole.TEAM_LEAD) where.requestedBy = user.id;
     if (user.role === UserRole.LINE_MANAGER) where.lineManagerId = user.id;
     // TODO: scope DEPARTMENT_HEAD to their own department once the
@@ -223,7 +222,7 @@ export class ResourcerequestService {
     this.assertCanView(request, user);
     return this.audit.find({
       where: { requestId: id },
-      order: { createdAt: 'ASC' },
+      // order: { createdAt: 'ASC' },
     });
   }
 
