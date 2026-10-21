@@ -9,23 +9,20 @@ export class NotificationsController {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  @Get()
-  getMyNotifications(@Req() req: any) {
-    return this.notificationsService.getUserNotifications(
-      req.user.id,
-    );
-  }
+@Get(':id')
+getUserNotifications(@Param('id', ParseIntPipe) id: number) {
+  return this.notificationsService.getUserNotifications(id);
+}
 
   @Patch(':id/read')
-  markAsRead(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: any,
-  ) {
-    return this.notificationsService.markAsRead(
-      id,
-      req.user.id,
-    );
-  }
+markAsRead(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: { userId: number },
+) {
+  return this.notificationsService.markAsRead(id, body.userId);
+}
+
+
   @Post()
   createNotification(
     @Body() body:{userId:number,message:string},){
