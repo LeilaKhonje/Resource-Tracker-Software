@@ -8,6 +8,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
 
 
@@ -34,6 +35,7 @@ import { ProjectsModule } from './projects/projects.module';
     NotificationsModule,
     DepartmentsModule,
     TeamsModule,
+    DashboardModule,
     ProjectsModule,
   ],
   controllers: [AppController],
