@@ -10,6 +10,7 @@ import { ResourcerequestModule } from './resourcerequest/resourcerequest.module'
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
 import { ProjectsModule } from './projects/projects.module';
+import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 
 //export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
