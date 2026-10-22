@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { RequestStatus, ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { ResourceAllocation, AllocationStatus } from '../resource-allocation/entity/ResourceAllocation.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -9,40 +9,40 @@ export class LineManagerDashboardService {
     throw new Error('Method not implemented.');
   }
   constructor(
-    @InjectRepository(ResourceRequest)
-    private readonly resourceRequestRepository: Repository<ResourceRequest>,
+    @InjectRepository(ResourceAllocation)
+    private readonly resourceAllocationRepository: Repository<ResourceAllocation>,
   ) {}
 
   async getOverview() {
-   const total = await this.resourceRequestRepository.count();
-   const approved = await this.resourceRequestRepository.count({ where: { status: RequestStatus.APPROVED } });
-   const rejected = await this.resourceRequestRepository.count({ where: { status: RequestStatus.REJECTED } });
-   const queried = await this.resourceRequestRepository.count({ where: { status: RequestStatus.QUERIED } });
-   const submitted = await this.resourceRequestRepository.count({ where: { status: RequestStatus.SUBMITTED } });
+   const total = await this.resourceAllocationRepository.count();
+   const approved = await this.resourceAllocationRepository.count({ where: { status: AllocationStatus.APPROVED } });
+   const rejected = await this.resourceAllocationRepository.count({ where: { status: AllocationStatus.REJECTED } });
+   const queried = await this.resourceAllocationRepository.count({ where: { status: AllocationStatus.QUERIED } });
+   const allocated = await this.resourceAllocationRepository.count({ where: { status: AllocationStatus.ALLOCATED } });
    return {
     total,
     approved,
     rejected,
     queried,
-    submitted
+    allocated
    };
   }
-  getAllRequests(status?: RequestStatus) {
+  getAllRequests(status?: AllocationStatus) {
     if (status) {
-      return this.resourceRequestRepository.find({ where: { status } });
+      return this.resourceAllocationRepository.find({ where: { status } });
     }
-    return this.resourceRequestRepository.find();
+    return this.resourceAllocationRepository.find();
   }
   async approveRequest(id: string, dto: any) {
-    await this.resourceRequestRepository.update(id, { status: RequestStatus.APPROVED });
-    return this.resourceRequestRepository.findOne({ where: { id } });
+    await this.resourceAllocationRepository.update(id, { status: AllocationStatus.APPROVED });
+    return this.resourceAllocationRepository.findOne({ where: { id: Number(id) } });
 }
 async rejectRequest(id: string, dto: any) {
-    await this.resourceRequestRepository.update(id, { status: RequestStatus.REJECTED });
-    return this.resourceRequestRepository.findOne({ where: { id } });
+    await this.resourceAllocationRepository.update(id, { status: AllocationStatus.REJECTED });
+    return this.resourceAllocationRepository.findOne({ where: { id: Number(id) } });
 }
 async reviewRequest(id: string, dto: any) {
-    await this.resourceRequestRepository.update(id, { status: RequestStatus.QUERIED } as any);
-    return this.resourceRequestRepository.findOne({ where: { id } });
+    await this.resourceAllocationRepository.update(id, { status: AllocationStatus.QUERIED } as any);
+    return this.resourceAllocationRepository.findOne({ where: { id: Number(id) } });
 }
 }

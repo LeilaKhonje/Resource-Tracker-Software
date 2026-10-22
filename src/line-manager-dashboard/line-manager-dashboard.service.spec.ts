@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { ResourceAllocation } from '../resource-allocation/entity/ResourceAllocation.entity';
 import { LineManagerDashboardService } from './line-manager-dashboard.service';
 
 describe('LineManagerDashboardService', () => {
@@ -11,7 +11,7 @@ describe('LineManagerDashboardService', () => {
       providers: [
         LineManagerDashboardService,
         {
-          provide: getRepositoryToken(ResourceRequest),
+          provide: getRepositoryToken(ResourceAllocation),
           useValue: {
             count: jest.fn(),
             find: jest.fn(),

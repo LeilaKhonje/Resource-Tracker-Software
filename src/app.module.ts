@@ -6,11 +6,13 @@ import { AppService } from './app.service';
 import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { TeamsModule } from './teams/teams.module';
 
 
 @Module({
   imports: 
-    [ResourceAllocationModule,
+    [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -29,8 +31,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     AuthModule,
     NotificationsModule,
     DepartmentsModule,
-
     TeamsModule,
+    ResourceAllocationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
