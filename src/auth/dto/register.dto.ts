@@ -17,8 +17,8 @@ export class RegisterDto {
   lastName: string;
 
   @IsString()
-  @MinLength(4)
-  @MaxLength(8)
+  @MinLength(8)
+  @MaxLength(12)
   @Matches(/\d/, { message: 'Password must contain at least one number' })
   password: string;
 }
