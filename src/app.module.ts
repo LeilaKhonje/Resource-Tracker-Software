@@ -8,7 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
-
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: 
@@ -32,6 +32,7 @@ import { TeamsModule } from './teams/teams.module';
     NotificationsModule,
     DepartmentsModule,
     TeamsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
