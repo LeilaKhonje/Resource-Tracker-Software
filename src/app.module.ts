@@ -1,4 +1,6 @@
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DepartmentsModule } from './departments/departments.module';
+import { TeamsModule } from './teams/teams.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -23,7 +25,7 @@ import { NotificationsModule } from './notifications/notifications.module';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      synchronize: true, // Set to false in production
+      synchronize: true, 
     }),
 
     AuthModule,
