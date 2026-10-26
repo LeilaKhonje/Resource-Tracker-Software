@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-//import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -10,9 +9,12 @@ import { ResourcerequestModule } from './resourcerequest/resourcerequest.module'
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
 import { ProjectsModule } from './projects/projects.module';
+import { AuditLogsModule } from './auditlog/auditlog.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+import { LineManagerDashboardModule } from './line-manager-dashboard/line-manager-dashboard.module';
+import { ReportsModule } from './reports/reports.module';
 
-//export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: 
@@ -38,7 +40,11 @@ import { ResourceAllocationModule } from './resource-allocation/resource-allocat
     DepartmentsModule,
     TeamsModule,
     ProjectsModule,
+    AuditLogsModule,
+    DashboardModule,
     ResourceAllocationModule,
+    LineManagerDashboardModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { LineManagerDashboardService } from './line-manager-dashboard.service';
 import { LineManagerDashboardController } from './line-manager-dashboard.controller';
-//import { Department } from '../departments/entities/department.entity';
-//import { ResourceAllocation } from '../resource-allocation/entities/resource-allocation.entity';
+import { DepartmentsModule } from '../departments/departments.module';
 import { ResourceAllocationModule } from '../resource-allocation/resource-allocation.module';
 
 @Module({
-  imports: [ ResourceAllocationModule ],
+  imports: [ DepartmentsModule, ResourceAllocationModule ],
   providers: [LineManagerDashboardService],
   controllers: [LineManagerDashboardController]
 })
