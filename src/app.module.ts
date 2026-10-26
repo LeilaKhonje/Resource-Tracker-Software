@@ -8,6 +8,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
 import { AuditLogsModule } from './auditlog/auditlog.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -39,6 +40,7 @@ import { ReportsModule } from './reports/reports.module';
     NotificationsModule,
     DepartmentsModule,
     TeamsModule,
+    DashboardModule,
     ProjectsModule,
     AuditLogsModule,
     DashboardModule,
