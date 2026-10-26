@@ -1,11 +1,11 @@
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+// cspell:ignore resourcerequest
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
@@ -14,7 +14,7 @@ import { LineManagerDashboardModule } from './line-manager-dashboard/line-manage
 
 @Module({
   imports: 
-    [ResourceAllocationModule,
+    [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -27,7 +27,7 @@ import { LineManagerDashboardModule } from './line-manager-dashboard/line-manage
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      synchronize: true, // Set to false in production
+      synchronize: process.env.DB_SYNCHRONIZE === 'true', 
     }),
 
     AuthModule,

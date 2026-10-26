@@ -1,10 +1,5 @@
 
-import {
-  Controller,
-  Get,
-  Query,
-  ParseIntPipe,
-  DefaultValuePipe,
+import {Controller,Get,Query,ParseIntPipe, DefaultValuePipe,
 } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 

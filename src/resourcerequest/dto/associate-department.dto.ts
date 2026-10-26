@@ -1,7 +1,7 @@
 import { IsString, IsNotEmpty } from 'class-validator';
 
-export class AssociateTeamDto {
+export class AssociateDepartmentDto {
   @IsString()
   @IsNotEmpty()
-  teamId: string;
+  departmentId: string;
 }

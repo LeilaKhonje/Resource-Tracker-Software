@@ -72,7 +72,7 @@ export class ResourceRequest {
 
   // ---- Line manager's decision ----
   @Column({ type: 'text', nullable: true })
-  reviewNote: string; // reason for rejection or the query question
+  reviewNote: string | null; // reason for rejection or the query question
 
   @Column({ nullable: true })
   reviewedBy: string;

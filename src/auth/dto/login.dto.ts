@@ -6,7 +6,7 @@ export class LoginDto {
   email: string;
 
   @IsString()
-  @MaxLength(8)
+  @MaxLength(12)
   @Matches(/\d/, { message: 'Password must contain at least one number' })
   password: string;
 }

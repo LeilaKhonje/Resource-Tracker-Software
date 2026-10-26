@@ -28,6 +28,7 @@ export class NotificationsService{
       order:{createdAt:'DESC'},
     });
   }
+  
   async markAsRead(
     notificationId:number,
     userId:number,
@@ -42,6 +43,7 @@ export class NotificationsService{
     notification.isRead = true;
     return this.notificationRepository.save(notification);
   }
+
   async deleteNotification(userId:number, notificationId:number){
     const notification =await this.notificationRepository.findOne({
       where:{
