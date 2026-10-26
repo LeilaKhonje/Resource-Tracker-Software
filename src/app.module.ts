@@ -11,7 +11,6 @@ import { TeamsModule } from './teams/teams.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
 import { AuditLogsModule } from './auditlog/auditlog.module';
-import { DashboardModule } from './dashboard/dashboard.module';
 import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 import { LineManagerDashboardModule } from './line-manager-dashboard/line-manager-dashboard.module';
 import { ReportsModule } from './reports/reports.module';
@@ -43,7 +42,6 @@ import { ReportsModule } from './reports/reports.module';
     DashboardModule,
     ProjectsModule,
     AuditLogsModule,
-    DashboardModule,
     ResourceAllocationModule,
     LineManagerDashboardModule,
     ReportsModule,
