@@ -5,6 +5,8 @@ import { Team } from './entities/team.entity';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { Department } from '../departments/entities/department.entity';
+import { User } from '../users/user.entity';
+import { Project } from '../projects/entities/project.entity';
 
 @Injectable()
 export class TeamsService {
@@ -13,6 +15,10 @@ export class TeamsService {
     private readonly teamRepository: Repository<Team>,
     @InjectRepository(Department)
     private readonly departmentRepository: Repository<Department>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Project)
+    private readonly projectRepository: Repository<Project>,
   ) {}
 
   async create(createTeamDto: CreateTeamDto) {
@@ -24,17 +30,33 @@ export class TeamsService {
   }
 
   async findAll() {
-    return this.teamRepository.find();
+    return this.teamRepository.find({ relations: { department: true } });
   }
 
   async findOne(id: number) {
-    const team = await this.teamRepository.findOne({ where: { id } });
+    const team = await this.teamRepository.findOne({
+      where: { id },
+      relations: { department: true },
+    });
 
     if (!team) {
       throw new NotFoundException(`Team with id ${id} not found`);
     }
 
     return team;
+  }
+
+  async findUsers(id: number) {
+    await this.findOne(id);
+    return this.userRepository.find({ where: { team: { id } } });
+  }
+
+  async findProjects(id: number) {
+    await this.findOne(id);
+    return this.projectRepository.find({
+      where: { teams: { id } },
+      relations: { teams: true },
+    });
   }
 
   async update(id: number, updateTeamDto: UpdateTeamDto) {
