@@ -23,7 +23,6 @@ export class User {
   @Column({
     type: 'enum',
     enum: UserRole,
-  @Column({type: 'enum',enum: UserRole,
     nullable: true,
   })
   role: UserRole | null;
