@@ -1,18 +1,20 @@
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { DepartmentsModule } from './departments/departments.module';
-import { TeamsModule } from './teams/teams.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { TeamsModule } from './teams/teams.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ProjectsModule } from './projects/projects.module';
 
 
 @Module({
   imports: 
-    [ResourceAllocationModule,
+    [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -25,14 +27,16 @@ import { NotificationsModule } from './notifications/notifications.module';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      synchronize: true, 
+      synchronize: process.env.DB_SYNCHRONIZE === 'true', 
     }),
 
     AuthModule,
+    ResourcerequestModule,
     NotificationsModule,
     DepartmentsModule,
-
     TeamsModule,
+    DashboardModule,
+    ProjectsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

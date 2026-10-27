@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
+import {Body, Controller,Delete,Get,Param,Patch,
   Post,
 } from '@nestjs/common';
 import { CreateTeamDto } from './dto/create-team.dto';
@@ -23,6 +17,16 @@ export class TeamsController {
   @Get()
   findAll() {
     return this.teamsService.findAll();
+  }
+
+  @Get(':id/users')
+  findUsers(@Param('id') id: string) {
+    return this.teamsService.findUsers(Number(id));
+  }
+
+  @Get(':id/projects')
+  findProjects(@Param('id') id: string) {
+    return this.teamsService.findProjects(Number(id));
   }
 
   @Get(':id')

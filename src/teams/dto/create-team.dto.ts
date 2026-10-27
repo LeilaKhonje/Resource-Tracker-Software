@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
 export class CreateTeamDto {
   @IsString()
   @IsNotEmpty()
@@ -9,4 +9,8 @@ export class CreateTeamDto {
   @IsString()
   @Length(0, 500)
   description?: string;
+
+  @IsInt()
+  @Min(1)
+  departmentId: number;
 }
