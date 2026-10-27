@@ -36,6 +36,10 @@ export class LineManagerDashboardController {
   @ApiQuery({ name: 'status', required: false, enum: RequestStatus, description: 'Filter requests by status' })
   @ApiResponse({ status: 200, description: 'Requests returned' })
   GetRequests(@Query('status') status?: RequestStatus) {
+  GetRequests(
+    @Query('status')
+    status?: Parameters<LineManagerDashboardService['getAllRequests']>[0],
+  ) {
     return this.lineManagerService.getAllRequests(status);
   }
 

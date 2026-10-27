@@ -1,7 +1,7 @@
 
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional,Min } from 'class-validator';
-//import { RequestStatus } from '../../resource-requests/resource-request.entity';
+import { IsInt, IsOptional,Min } from 'class-validator';
+//import { RequestStatus } from '../resource-request/resource-request.entity';
 
 export class QueryResourceRequestsDto {
   @IsOptional()
