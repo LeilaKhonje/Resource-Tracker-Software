@@ -34,6 +34,7 @@ export class ProjectsService {
     return this.projectRepository.save(project);
   }
 
+
   async findAll(user: AuthTokenPayload) {
     if (user.role === UserRole.MANAGING_DIRECTOR) {
       return this.projectRepository.find({
@@ -74,6 +75,12 @@ export class ProjectsService {
     }
     project.teams = teams;
     return this.projectRepository.save(project);
+  }
+
+  async remove(id: number, user: AuthTokenPayload) {
+    const project = await this.findOne(id, user);
+    await this.projectRepository.remove(project);
+    return { message: `Project with id ${id} deleted successfully` };
   }
 
   private async getDepartmentHeadDepartmentId(user: AuthTokenPayload): Promise<number> {
