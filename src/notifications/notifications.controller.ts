@@ -1,5 +1,5 @@
 
-import {Body,BadRequestException,Controller,Delete,Get,Param,ParseIntPipe,Patch, Post,} from '@nestjs/common';
+import {Body,BadRequestException,Controller,Delete,Get,Param,ParseIntPipe,Patch, Post, Req} from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -59,12 +59,6 @@ export class NotificationsController {
         'Please provide userId and message',
       );
     }
-     @Delete(':userId/:notificationId')
-     @ApiOperation({ summary: 'Delete a notification for a user' })
-     @ApiParam({ name: 'userId', description: 'User ID', type: Number })
-     @ApiParam({ name: 'notificationId', description: 'Notification ID', type: Number })
-     @ApiResponse({ status: 200, description: 'Notification deleted' })
-
     return this.notificationsService.createNotification(
       body.userId,
       body.message,

@@ -3,7 +3,7 @@ import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { LineManagerDashboardService } from './line-manager-dashboard.service';
 import { QueryResourceRequestsDto } from './dto/QueryResourceRequestsDto';
 import { RejectResourceRequestDto } from './dto/RejectResourceRequestsDto';
-import { RequestStatus } from '../resourcerequest/entities/resourcerequest.entity';
+import { AllocationStatus } from '../resource-allocation/entity/ResourceAllocation.entity';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 class ApproveResourceRequestDto {
@@ -33,13 +33,9 @@ export class LineManagerDashboardController {
 
   @Get('requests')
   @ApiOperation({ summary: 'List resource requests' })
-  @ApiQuery({ name: 'status', required: false, enum: RequestStatus, description: 'Filter requests by status' })
+  @ApiQuery({ name: 'status', required: false, enum: AllocationStatus, description: 'Filter requests by status' })
   @ApiResponse({ status: 200, description: 'Requests returned' })
-  GetRequests(@Query('status') status?: RequestStatus) {
-  GetRequests(
-    @Query('status')
-    status?: Parameters<LineManagerDashboardService['getAllRequests']>[0],
-  ) {
+  getRequests(@Query('status') status?: AllocationStatus) {
     return this.lineManagerService.getAllRequests(status);
   }
 
