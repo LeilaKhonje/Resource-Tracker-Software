@@ -10,6 +10,11 @@ import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
+import { AuditLogsModule } from './auditlog/auditlog.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { LineManagerDashboardModule } from './line-manager-dashboard/line-manager-dashboard.module';
+import { ReportsModule } from './reports/reports.module';
+import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 
 
 @Module({
@@ -37,6 +42,11 @@ import { ProjectsModule } from './projects/projects.module';
     TeamsModule,
     DashboardModule,
     ProjectsModule,
+    AuditLogsModule,
+    DashboardModule,
+    LineManagerDashboardModule,
+    ReportsModule,
+    ResourceAllocationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

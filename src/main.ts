@@ -10,7 +10,8 @@ async function bootstrap() {
   
   const config = new DocumentBuilder()
     .setTitle('Resource Tracker API')
-    .setDescription('API for managing resource requests, projects, teams, and allocations.')
+    .setDescription(
+      'API document for resource tracker system. This api supports user registration and login, resource requests, resource tracking, and department, teams, and projects.')
     .setVersion('1.0')
     .addBearerAuth(
       {

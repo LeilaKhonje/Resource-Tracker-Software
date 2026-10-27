@@ -3,28 +3,31 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRole } from './user-role.enum';
 import { User } from './user.entity';
-import { Department } from '../departments/entities/department.entity';
-import { Team } from '../teams/entities/team.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
-    @InjectRepository(Department)
-    private readonly departmentsRepository: Repository<Department>,
-    @InjectRepository(Team)
-    private readonly teamsRepository: Repository<Team>,
   ) {}
 
-  async createForRegistration(
-    userData: Pick<User, 'fullName' | 'email' | 'passwordHash'>,
-  ): Promise<User> {
-    const user = this.usersRepository.create({
-      ...userData,
-      role: null,
-    });
+  async getMyProfile(userId: string){
+    const user = await this .usersRepository.findOne({where: {id: userId},});
+    
+    if(!user){
+      throw new NotFoundException('User Not found');
+    }
 
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role
+    };
+  }
+
+  async createForRegistration(
+    userData: Pick<User, 'fullName' | 'email' | 'passwordHash'>,): Promise<User> {const user = this.usersRepository.create({...userData, role: null, });
     return this.usersRepository.save(user);
   }
 
@@ -32,13 +35,8 @@ export class UsersService {
     userId: string,
     role: UserRole,
     assignerId: string,
-    departmentId?: number,
-    teamId?: number,
-  ): Promise<Pick<User, 'id' | 'fullName' | 'email' | 'role'> & { departmentId: number | null; teamId: number | null }> {
-    const assigner = await this.usersRepository.findOne({
-      where: { id: assignerId },
-      relations: { department: true },
-    });
+  ): Promise<Pick<User, 'id' | 'fullName' | 'email' | 'role'>> {
+    const assigner = await this.usersRepository.findOneBy({ id: assignerId });
     if (!assigner) throw new NotFoundException('Assigning user not found');
 
     if (role === UserRole.MANAGING_DIRECTOR) {
@@ -47,74 +45,18 @@ export class UsersService {
       );
     }
 
-    let department: Department | null = null;
-    let team: Team | null = null;
-    if (role === UserRole.DEPARTMENT_HEAD) {
-      if (assigner.role !== UserRole.MANAGING_DIRECTOR) {
-        throw new BadRequestException(
-          'Only the managing director can assign the department head role',
-        );
-      }
-      if (teamId !== undefined) {
-        throw new BadRequestException(
-          'A team cannot be specified when assigning the department head role',
-        );
-      }
-      if (departmentId === undefined) {
-        throw new BadRequestException(
-          'A department is required when assigning the department head role',
-        );
-      }
-      department = await this.departmentsRepository.findOneBy({ id: departmentId });
-      if (!department) throw new NotFoundException('Department not found');
-    } else if (role === UserRole.TEAM_LEAD) {
-      if (departmentId !== undefined) {
-        throw new BadRequestException(
-          'Specify a team, not a department, when assigning the team lead role',
-        );
-      }
-      if (assigner.role !== UserRole.DEPARTMENT_HEAD) {
-        throw new BadRequestException(
-          'Only department heads can assign the team lead role',
-        );
-      }
-      if (!assigner.department) {
-        throw new BadRequestException(
-          'The assigning department head has no department',
-        );
-      }
-      if (teamId === undefined) {
-        throw new BadRequestException(
-          'A team is required when assigning the team lead role',
-        );
-      }
-      team = await this.teamsRepository.findOne({
-        where: { id: teamId },
-        relations: { department: true },
-      });
-      if (!team) throw new NotFoundException('Team not found');
-      if (!team.department) {
-        throw new BadRequestException(
-          'The selected team has no department assigned',
-        );
-      }
-      if (team.department.id !== assigner.department.id) {
-        throw new BadRequestException(
-          'The selected team must belong to the department head\'s department',
-        );
-      }
-      department = team.department;
-    } else {
-      if (departmentId !== undefined || teamId !== undefined) {
-        throw new BadRequestException(
-          'Department and team can only be set for department-based roles',
-        );
-      }
-      if (assigner.role !== UserRole.MANAGING_DIRECTOR) {
-        throw new BadRequestException(
-          'Only the managing director can assign this role',
-        );
-      }
+    if (role === UserRole.DEPARTMENT_HEAD && assigner.role !== UserRole.MANAGING_DIRECTOR) {
+      throw new BadRequestException(
+        'Only the managing director can assign the department head role',
+      );
+    }
+    if (role === UserRole.TEAM_LEAD && assigner.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new BadRequestException(
+        'Only department heads can assign the team lead role',
+      );
+    }
+    if (role === UserRole.LINE_MANAGER && assigner.role !== UserRole.MANAGING_DIRECTOR) {
+      throw new BadRequestException('Only the managing director can assign this role');
     }
 
     const user = await this.usersRepository.findOneBy({ id: userId });
@@ -128,8 +70,6 @@ export class UsersService {
     }
 
     user.role = role;
-    user.department = department;
-    user.team = team;
     await this.usersRepository.save(user);
 
     return {
@@ -137,8 +77,7 @@ export class UsersService {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
-      departmentId: user.department?.id ?? null,
-      teamId: user.team?.id ?? null,
     };
   }
+
 }
