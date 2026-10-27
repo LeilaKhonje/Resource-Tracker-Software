@@ -1,4 +1,4 @@
-import {Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Req, UseGuards} from '@nestjs/common';
+import {Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Req, UseGuards} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -95,5 +95,18 @@ export class ProjectsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.projectsService.assignTeams(id, assignProjectTeamsDto.teamIds, request.user!);
+  }
+
+  @ApiOperation({ summary: 'Delete a project by ID' })
+  @ApiResponse({ status: 200, description: 'Project deleted successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Not Found: Project does not exist' })
+  @Delete(':id')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD)
+  remove(@Param('id', ParseIntPipe) id: number, @Req() request: AuthenticatedRequest) {
+    return this.projectsService.remove(id, request.user!);
   }
 }

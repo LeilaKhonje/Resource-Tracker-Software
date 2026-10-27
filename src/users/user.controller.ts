@@ -49,4 +49,24 @@ assignRole(
    return this.usersService.getMyProfile(userId)
  }
 
+ @ApiOperation({summary: 'A user can be able to de-activate their account'})
+ @Patch('me/deactivate')
+ @UseGuards(JwtAuthGuard)
+ @ApiBearerAuth('access-token')
+ async deactivateMyAccount(@Req() req: AuthenticatedRequest){
+  const userId = req.user!.sub;
+
+  return this.usersService.deactivateMyAccount(userId);
+ }
+
+ @ApiOperation({summary: 'A user can be able to re-activate their account'})
+ @Patch('me/reactivate')
+ @UseGuards(JwtAuthGuard)
+ @ApiBearerAuth('access-token')
+ async reActivateMyAccount(@Req() req: AuthenticatedRequest){
+  const userId = req.user!.sub;
+
+  return this.usersService.reActivateMyAccount(userId);
+ }
+
 }

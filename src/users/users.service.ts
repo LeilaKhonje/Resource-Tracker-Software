@@ -26,9 +26,44 @@ export class UsersService {
     };
   }
 
+  async deactivateMyAccount(userId: string){
+    const user = await this.usersRepository.findOne({where: {id: userId},});
+    if(!user){
+      throw new NotFoundException('User Not Found');
+    }
+
+    if(!user.isActive){
+      throw new BadRequestException('User already deactivated');
+    }
+
+    user.isActive = false;
+
+    await this.usersRepository.save(user);
+
+    return 'Your account has been deactivated successfully';
+  }
+
   async createForRegistration(
     userData: Pick<User, 'fullName' | 'email' | 'passwordHash'>,): Promise<User> {const user = this.usersRepository.create({...userData, role: null, });
     return this.usersRepository.save(user);
+  }
+
+  async reActivateMyAccount(userId: string){
+    const user = await this.usersRepository.findOne({where: {id: userId},});
+
+    if(!user){
+      throw new NotFoundException('User not found')
+    }
+
+    if(user.isActive){
+      throw new BadRequestException('account is already active');
+    }
+    
+    user.isActive = true;
+
+    await this.usersRepository.save(user);
+
+    return 'Account successfully re-activated';
   }
 
   async assignRole(
