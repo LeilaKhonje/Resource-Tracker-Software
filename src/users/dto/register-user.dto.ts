@@ -9,7 +9,7 @@ export class RegisterUserDto {
   @ApiProperty({ type: String, example: 'alex@company.com', description: 'Company email address' })
   @IsEmail()
   @MaxLength(254)
-  @Matches(/@company.com$/, { message: 'Email must be a company email' })
+  @Matches(/@gmail.com$/, { message: 'Email must be a company email' })
   email: string;
 
   @IsString()

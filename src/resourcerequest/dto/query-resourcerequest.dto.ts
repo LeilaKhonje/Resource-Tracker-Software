@@ -1,13 +1,12 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { RequestStatus } from '../entities/resourcerequest.entity';
 
-
-export class UpdateStatusDto {
-  @IsEnum(RequestStatus)
-  status: RequestStatus;
-
-  
+export class QueryResourceRequestDto {
   @IsOptional()
   @IsString()
-  note?: string;
+  teamId?: string;
+
+  @IsOptional()
+  @IsEnum(RequestStatus)
+  status?: RequestStatus;
 }

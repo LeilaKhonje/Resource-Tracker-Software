@@ -16,20 +16,20 @@ services:
     container_name: resource-tracker-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: resourcepaasword
+      MYSQL_ROOT_PASSWORD: resourcepassword
       MYSQL_DATABASE: resource_tracker
       MYSQL_USER: resource_user
       MYSQL_PASSWORD: resourcepassword
     ports:
-      - "3307:3306"
+      - '3307:3306'
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 30s
+      retries: 30
+      start_period: 120s
 
 volumes:
   mysql_data:
