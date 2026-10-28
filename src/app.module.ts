@@ -5,14 +5,15 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+// cspell:ignore resourcerequest
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
-import { AuditLogsModule } from './auditlog/auditlog.module';
-import { LineManagerDashboardModule } from './line-manager-dashboard/line-manager-dashboard.module';
 import { ReportsModule } from './reports/reports.module';
+import { AuditLogModule } from './auditlog/auditlog.module';
+import { ResourcesModule } from './resources/resources.module';
 import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 
 @Module({
@@ -31,16 +32,15 @@ import { ResourceAllocationModule } from './resource-allocation/resource-allocat
     }),
     ResourcerequestModule,
     AuthModule,
-    ResourcerequestModule,
     NotificationsModule,
+    ResourcerequestModule,
     DepartmentsModule,
     TeamsModule,
     DashboardModule,
     ProjectsModule,
-    AuditLogsModule,
-    LineManagerDashboardModule,
+    AuditLogModule,
     ReportsModule,
-    ResourceAllocationModule,
+    ResourcesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
