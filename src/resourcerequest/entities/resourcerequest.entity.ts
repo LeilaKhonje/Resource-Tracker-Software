@@ -70,16 +70,16 @@ export class ResourceRequest {
 
  
   @Column({ type: 'text', nullable: true })
-  reviewNote: string; // reason for rejection or the query question
+  reviewNote: string | null; // reason for rejection or the query question
 
   @Column({ nullable: true })
-  reviewedBy: string;
+  reviewedBy: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  reviewedAt: Date;
+  reviewedAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  submittedAt: Date;
+  submittedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;
