@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Department } from './entities/department.entity';
@@ -7,6 +11,9 @@ import { UpdateDepartmentDto } from './dto/update-departments.dto';
 import { User } from '../users/user.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
+import { UserRole } from '../users/user-role.enum';
 
 @Injectable()
 export class DepartmentsService {
@@ -19,6 +26,8 @@ export class DepartmentsService {
     private readonly teamRepository: Repository<Team>,
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+    @InjectRepository(ResourceRequest)
+    private readonly resourceRequestRepository: Repository<ResourceRequest>,
   ) {}
 
   async create(createDepartmentDto: CreateDepartmentDto) {
@@ -55,6 +64,28 @@ export class DepartmentsService {
     return this.projectRepository.find({
       where: { teams: { department: { id } } },
       relations: { teams: true },
+    });
+  }
+
+  async findResourceRequests(id: number, user: AuthTokenPayload) {
+    if (user.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new ForbiddenException('Only department heads can view department requests');
+    }
+
+    const account = await this.userRepository.findOne({
+      where: { id: user.sub },
+      relations: { department: true },
+    });
+    if (!account?.department) {
+      throw new ForbiddenException('Your account is not assigned to a department');
+    }
+    if (account.department.id !== id) {
+      throw new NotFoundException(`Department with id ${id} not found`);
+    }
+
+    return this.resourceRequestRepository.find({
+      where: { departmentId: String(account.department.id) },
+      order: { createdAt: 'DESC' },
     });
   }
 

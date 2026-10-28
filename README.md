@@ -54,6 +54,19 @@ seed succeeds, start the API with `docker compose up -d app` or
 `npm run start:prod` as appropriate. Log in through `POST /auth/login` using
 the seeded email and password.
 
+If the API repeatedly reports that it cannot connect to MySQL, check
+`docker compose logs mysql` for the database-side error and make sure
+`DB_USERNAME`, `DB_PASSWORD`, and `DB_DATABASE` in `.env` match
+`MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` in `docker-compose.yml`.
+The `mysql_data` volume retains database users and passwords from its initial
+creation, so changing Compose environment values does not update an existing
+database automatically.
+
+MySQL is available to host applications on port `3307` by default, avoiding
+conflicts with a local MySQL server already using `3306`. Set `DB_HOST_PORT`
+in `.env` to another available host port if needed. The API container still
+connects to the MySQL service on its internal port `3306`.
+
 ## Role assignment
 
 Department heads can assign `team_lead` through `PATCH /users/:id/role` with a

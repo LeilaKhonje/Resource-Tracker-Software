@@ -5,18 +5,23 @@ import { Department } from './entities/department.entity';
 import { User } from '../users/user.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
 import { DepartmentsService } from './departments.service';
+import { UserRole } from '../users/user-role.enum';
 
 describe('DepartmentsService', () => {
   let service: DepartmentsService;
   let departmentRepository: jest.Mocked<
     Pick<Repository<Department>, 'findOne'>
   >;
-  let userRepository: jest.Mocked<Pick<Repository<User>, 'find'>>;
+  let userRepository: jest.Mocked<Pick<Repository<User>, 'find' | 'findOne'>>;
   let teamRepository: jest.Mocked<
     Pick<Repository<Team>, 'find' | 'findOne'>
   >;
   let projectRepository: jest.Mocked<Pick<Repository<Project>, 'find'>>;
+  let resourceRequestRepository: jest.Mocked<
+    Pick<Repository<ResourceRequest>, 'find'>
+  >;
 
   beforeEach(async () => {
     departmentRepository = {
@@ -24,12 +29,16 @@ describe('DepartmentsService', () => {
     };
     userRepository = {
       find: jest.fn(),
+      findOne: jest.fn(),
     };
     teamRepository = {
       find: jest.fn(),
       findOne: jest.fn(),
     };
     projectRepository = {
+      find: jest.fn(),
+    };
+    resourceRequestRepository = {
       find: jest.fn(),
     };
 
@@ -43,6 +52,10 @@ describe('DepartmentsService', () => {
         { provide: getRepositoryToken(User), useValue: userRepository },
         { provide: getRepositoryToken(Team), useValue: teamRepository },
         { provide: getRepositoryToken(Project), useValue: projectRepository },
+        {
+          provide: getRepositoryToken(ResourceRequest),
+          useValue: resourceRequestRepository,
+        },
       ],
     }).compile();
 
@@ -115,6 +128,30 @@ describe('DepartmentsService', () => {
     expect(projectRepository.find).toHaveBeenCalledWith({
       where: { teams: { id: 2 } },
       relations: { teams: true },
+    });
+  });
+
+  it('returns resource requests for the authenticated head department', async () => {
+    const department = { id: 4, name: 'Finance' };
+    const account = { id: 'head-1', department };
+    const requests = [{ id: 'request-1', departmentId: '4' }];
+    userRepository.findOne.mockResolvedValue(account as User);
+    resourceRequestRepository.find.mockResolvedValue(requests as ResourceRequest[]);
+
+    await expect(
+      service.findResourceRequests(4, {
+        sub: 'head-1',
+        email: 'head@example.com',
+        role: UserRole.DEPARTMENT_HEAD,
+      }),
+    ).resolves.toBe(requests);
+    expect(userRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'head-1' },
+      relations: { department: true },
+    });
+    expect(resourceRequestRepository.find).toHaveBeenCalledWith({
+      where: { departmentId: '4' },
+      order: { createdAt: 'DESC' },
     });
   });
 });

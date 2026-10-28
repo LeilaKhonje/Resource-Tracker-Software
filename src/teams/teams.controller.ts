@@ -1,10 +1,19 @@
 import {Body, Controller,Delete,Get,Param,Patch,
   Post,
+  ParseIntPipe,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamsService } from './teams.service';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/user-role.enum';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('Teams')
 @Controller('teams')
@@ -44,6 +53,20 @@ export class TeamsController {
   @ApiResponse({ status: 404, description: 'Team not found' })
   findProjects(@Param('id') id: string) {
     return this.teamsService.findProjects(Number(id));
+  }
+
+  @Get(':id/resource-requests')
+  @ApiOperation({ summary: 'List resource requests for a team' })
+  @ApiParam({ name: 'id', description: 'Team ID' })
+  @ApiResponse({ status: 200, description: 'Team resource requests returned' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER)
+  findResourceRequests(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.teamsService.findResourceRequests(id, request.user!);
   }
 
   @Get(':id')
