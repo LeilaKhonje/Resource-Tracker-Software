@@ -14,6 +14,7 @@ import { AuditLogsModule } from './auditlog/auditlog.module';
 import { LineManagerDashboardModule } from './line-manager-dashboard/line-manager-dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+import { UsersModule } from './users/users.module';
 
 
 @Module({
@@ -35,6 +36,7 @@ import { ResourceAllocationModule } from './resource-allocation/resource-allocat
     }),
 
     AuthModule,
+    UsersModule,
     ResourcerequestModule,
     NotificationsModule,
     DepartmentsModule,

@@ -8,7 +8,7 @@ export class ResourceAllocationController { constructor(private readonly resourc
 
 @Get()
 @ApiOperation({ summary: 'List resource allocations' })
-@ApiResponse({ status: 200, description: 'Resource allocations returned' })
+@ApiResponse({ status: 200, description: 'Empty response body; this controller currently returns undefined from the list handler', content: {} })
 findAll(){
     return
     this.resourceAllocationService.findAll();
@@ -16,8 +16,9 @@ findAll(){
 
 @Get('.:id')
 @ApiOperation({ summary: 'Get a resource allocation by ID' })
-@ApiParam({ name: 'id', description: 'Resource allocation ID' })
-@ApiResponse({ status: 200, description: 'Resource allocation returned' })
+@ApiParam({ name: 'id', description: 'Numeric resource allocation ID', type: Number })
+@ApiResponse({ status: 200, description: 'Empty response body; this controller currently returns undefined from the lookup handler', content: {} })
+@ApiResponse({ status: 404, description: 'Allocation not found' })
 findOne(@Param('id', ParseIntPipe) id: number){
     return
     this.resourceAllocationService.findOne(id);
@@ -25,7 +26,8 @@ findOne(@Param('id', ParseIntPipe) id: number){
 @Post()
 @ApiOperation({ summary: 'Create a resource allocation' })
 @ApiBody({ type: CreateResourceAllocationDto })
-@ApiResponse({ status: 201, description: 'Resource allocation created' })
+@ApiResponse({ status: 201, description: 'Empty response body; this controller currently returns undefined from the create handler', content: {} })
+@ApiResponse({ status: 400, description: 'IDs and quantity must be positive integers' })
 create(@Body() dto: 
 CreateResourceAllocationDto){
     return

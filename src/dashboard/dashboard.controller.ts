@@ -13,7 +13,8 @@ export class DashboardController {
   @Get()
   @ApiOperation({ summary: 'Get dashboard data' })
   @ApiQuery({ name: 'departmentId', required: false, type: Number, description: 'Restrict dashboard data to a department' })
-  @ApiResponse({ status: 200, description: 'Dashboard data returned' })
+  @ApiResponse({ status: 200, description: 'Dashboard data', schema: { type: 'object', properties: { summary: { type: 'object', properties: { totalRequests: { type: 'integer' }, pendingApprovals: { type: 'integer' }, approvedRequests: { type: 'integer' }, rejectedRequests: { type: 'integer' }, allocatedResources: { type: 'integer' } } }, recentActivity: { type: 'array', items: { type: 'object', additionalProperties: true } }, departmentSpending: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } } } } })
+  @ApiResponse({ status: 500, description: 'Invalid departmentId currently raises a generic server error' })
   getDashboard(
     @Query('departmentId') departmentId?: string,
   ) {
@@ -27,7 +28,8 @@ export class DashboardController {
   @Get('summary')
   @ApiOperation({ summary: 'Get dashboard summary metrics' })
   @ApiQuery({ name: 'departmentId', required: false, type: Number })
-  @ApiResponse({ status: 200, description: 'Summary metrics returned' })
+  @ApiResponse({ status: 200, description: 'Summary metrics', schema: { type: 'object', properties: { totalRequests: { type: 'integer' }, pendingApprovals: { type: 'integer' }, approvedRequests: { type: 'integer' }, rejectedRequests: { type: 'integer' }, allocatedResources: { type: 'integer' } } } })
+  @ApiResponse({ status: 500, description: 'Invalid departmentId currently raises a generic server error' })
   getSummary(
     @Query('departmentId') departmentId?: string,
   ) {
@@ -41,7 +43,8 @@ export class DashboardController {
   @Get('recent-activity')
   @ApiOperation({ summary: 'Get recent activity' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Maximum number of activity entries (defaults to 10)' })
-  @ApiResponse({ status: 200, description: 'Recent activity returned' })
+  @ApiResponse({ status: 200, description: 'Recent audit log rows', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, details: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } }, additionalProperties: true } } })
+  @ApiResponse({ status: 400, description: 'limit must be an integer' })
   getRecentActivity(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe)
     limit: number,
@@ -51,7 +54,7 @@ export class DashboardController {
 
   @Get('department-spending')
   @ApiOperation({ summary: 'Get spending by department' })
-  @ApiResponse({ status: 200, description: 'Department spending returned' })
+  @ApiResponse({ status: 200, description: 'Department spending rows', schema: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } } })
   getDepartmentSpending() {
     return this.dashboardService.getDepartmentSpending();
   }
