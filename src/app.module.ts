@@ -14,7 +14,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { ReportsModule } from './reports/reports.module';
 import { AuditLogModule } from './auditlog/auditlog.module';
 import { ResourcesModule } from './resources/resources.module';
-import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+//import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 
 @Module({
   imports: [

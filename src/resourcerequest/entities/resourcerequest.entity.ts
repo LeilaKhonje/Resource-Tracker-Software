@@ -72,7 +72,7 @@ export class ResourceRequest {
   @Column({ type: 'text', nullable: true })
   reviewNote: string | null; // reason for rejection or the query question
 
-  @Column({ nullable: true })
+  @Column({ type: "varchar", nullable: true })
   reviewedBy: string | null;
 
   @Column({ type: 'timestamp', nullable: true })

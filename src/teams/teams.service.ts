@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Team } from './entities/team.entity';
@@ -7,6 +11,9 @@ import { UpdateTeamDto } from './dto/update-team.dto';
 import { Department } from '../departments/entities/department.entity';
 import { User } from '../users/user.entity';
 import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
+import { UserRole } from '../users/user-role.enum';
 
 @Injectable()
 export class TeamsService {
@@ -19,6 +26,8 @@ export class TeamsService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+    @InjectRepository(ResourceRequest)
+    private readonly resourceRequestRepository: Repository<ResourceRequest>,
   ) {}
 
   async create(createTeamDto: CreateTeamDto) {
@@ -56,6 +65,32 @@ export class TeamsService {
     return this.projectRepository.find({
       where: { teams: { id } },
       relations: { teams: true },
+    });
+  }
+
+  async findResourceRequests(id: number, user: AuthTokenPayload) {
+    if (
+      user.role !== UserRole.TEAM_LEAD &&
+      user.role !== UserRole.TEAM_MEMBER
+    ) {
+      throw new ForbiddenException('Only team members can view team requests');
+    }
+
+    await this.findOne(id);
+    const account = await this.userRepository.findOne({
+      where: { id: user.sub },
+      relations: { team: true },
+    });
+    if (!account?.team) {
+      throw new ForbiddenException('Your account is not assigned to a team');
+    }
+    if (account.team.id !== id) {
+      throw new NotFoundException(`Team with id ${id} not found`);
+    }
+
+    return this.resourceRequestRepository.find({
+      where: { teamId: String(id) },
+      order: { createdAt: 'DESC' },
     });
   }
 
