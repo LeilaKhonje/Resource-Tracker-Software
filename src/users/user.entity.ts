@@ -1,11 +1,6 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import {Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn} from 'typeorm';
+import { Department } from '../departments/entities/department.entity';
+import { Team } from '../teams/entities/team.entity';
 import { UserRole } from './user-role.enum';
 
 @Entity('users')
@@ -22,12 +17,23 @@ export class User {
   @Column({ name: 'password_hash', length: 128, select: false })
   passwordHash: string;
 
+  @Column({default: true})
+  isActive: boolean;
+
   @Column({
     type: 'enum',
     enum: UserRole,
     nullable: true,
   })
   role: UserRole | null;
+
+  @ManyToOne(() => Department, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'department_id' })
+  department: Department | null;
+
+  @ManyToOne(() => Team, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'team_id' })
+  team: Team | null;
 
   @Index('IDX_users_single_managing_director', { unique: true })
   @Column({

@@ -73,7 +73,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    return this.createAuthResponse(user);
+    return this.loginUser(user);
   }
 
   private async createAuthResponse(user: User) {
@@ -85,8 +85,20 @@ export class AuthService {
 
     const accessToken = await this.jwtService.signAsync(payload);
 
-    return {accessToken,user: {id: user.id, fullName: user.fullName, email: user.email, role: user.role,},
+    return {user: {id: user.id, fullName: user.fullName, email: user.email, role: user.role,},
     };
+  }
+
+  private async loginUser(user: User){
+    const payload: AuthTokenPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    }
+
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    return {accessToken}
   }
 
   private async hashPassword(password: string): Promise<string> {

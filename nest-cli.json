@@ -4,6 +4,19 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
+<<<<<<< HEAD
     "plugins": ["@nestjs/swagger"]
+=======
+    "plugins": [
+      {
+        "name": "@nestjs/swagger/plugin",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true,
+          "dtoFileNameSuffix": [".dto.ts"]
+        }
+      }
+    ]
+>>>>>>> d021a452466f7260e9bea9d1ec07c7c8ecd65fff
   }
 }
