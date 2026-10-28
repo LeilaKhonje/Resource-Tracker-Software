@@ -1,3 +1,8 @@
+import { ConfigModule } from '@nestjs/config';
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -15,25 +20,21 @@ import { LineManagerDashboardModule } from './line-manager-dashboard/line-manage
 import { ReportsModule } from './reports/reports.module';
 import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
 
-
 @Module({
-  imports: 
-    [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+  imports: [
+  ConfigModule.forRoot({ isGlobal: true }),
 
     TypeOrmModule.forRoot({
-      type: process.env.DB_CONNECTION as any,
-      host: process.env.DB_HOST,
+      type: process.env.DB_CONNECTION as any,          
+      host:process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT ?? '3306'),
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_DATABASE,
-      autoLoadEntities: true,
-      synchronize: process.env.DB_SYNCHRONIZE === 'true', 
+      username: process.env.DB_USERNAME,       
+      password:  process.env.DB_PASSWORD, 
+      database:  process.env.DB_DATABASE, 
+      autoLoadEntities: true,    
+      synchronize: true,         
     }),
-
+    ResourcerequestModule,
     AuthModule,
     ResourcerequestModule,
     NotificationsModule,

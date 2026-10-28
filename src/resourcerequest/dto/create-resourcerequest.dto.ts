@@ -7,7 +7,6 @@ import {
   Min,
 } from 'class-validator';
 
-
 export class CreateResourceRequestDto {
   @IsString()
   @IsNotEmpty()
@@ -40,4 +39,13 @@ export class CreateResourceRequestDto {
   @IsString()
   @IsNotEmpty()
   lineManagerId: string;
+
+  
+  @IsString()
+  @IsNotEmpty()
+  teamId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  departmentId: string;
 }
