@@ -9,9 +9,10 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
-import { LineManagerDashboardModule } from './line-manager-dashboard/line-manager-dashboard.module';
-
-
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ProjectsModule } from './projects/projects.module';
+import { ReportsModule } from './reports/reports.module';
+import { AuditLogModule } from './auditlog/auditlog.module';
 @Module({
   imports: 
     [
@@ -33,11 +34,12 @@ import { LineManagerDashboardModule } from './line-manager-dashboard/line-manage
     AuthModule,
     NotificationsModule,
     ResourcerequestModule,
-    NotificationsModule,
     DepartmentsModule,
     TeamsModule,
-
-    LineManagerDashboardModule,
+    DashboardModule,
+    ProjectsModule,
+    AuditLogModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

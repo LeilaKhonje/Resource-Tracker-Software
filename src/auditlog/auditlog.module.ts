@@ -11,4 +11,4 @@ import {  AuditLogService } from './auditlog.service';
   providers: [ AuditLogService],
   exports: [ AuditLogService],
 })
-export class AuditLogsModule {}
+export class AuditLogModule {}

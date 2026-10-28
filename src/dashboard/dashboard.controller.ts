@@ -1,8 +1,9 @@
 
-import {Controller,Get,Query,ParseIntPipe, DefaultValuePipe,
-} from '@nestjs/common';
+import {Controller, Get, Query, ParseIntPipe, DefaultValuePipe} from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Dashboard')
 @Controller('dashboard')
 export class DashboardController {
   constructor(
@@ -10,6 +11,9 @@ export class DashboardController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'Get dashboard data' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number, description: 'Restrict dashboard data to a department' })
+  @ApiResponse({ status: 200, description: 'Dashboard data returned' })
   getDashboard(
     @Query('departmentId') departmentId?: string,
   ) {
@@ -21,6 +25,9 @@ export class DashboardController {
   }
 
   @Get('summary')
+  @ApiOperation({ summary: 'Get dashboard summary metrics' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Summary metrics returned' })
   getSummary(
     @Query('departmentId') departmentId?: string,
   ) {
@@ -32,6 +39,9 @@ export class DashboardController {
   }
 
   @Get('recent-activity')
+  @ApiOperation({ summary: 'Get recent activity' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Maximum number of activity entries (defaults to 10)' })
+  @ApiResponse({ status: 200, description: 'Recent activity returned' })
   getRecentActivity(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe)
     limit: number,
@@ -40,6 +50,8 @@ export class DashboardController {
   }
 
   @Get('department-spending')
+  @ApiOperation({ summary: 'Get spending by department' })
+  @ApiResponse({ status: 200, description: 'Department spending returned' })
   getDepartmentSpending() {
     return this.dashboardService.getDepartmentSpending();
   }
