@@ -1,8 +1,20 @@
-import {Body,Controller,Post,Param,Get,Patch,Delete} from '@nestjs/common';
+import {Body,Controller,Post,Param,Get,Patch,Delete,ParseIntPipe,Req,UseGuards} from '@nestjs/common';
 import {CreateDepartmentDto} from './dto/create-department.dto';
 import {UpdateDepartmentDto} from './dto/update-departments.dto';
 import { DepartmentsService } from './departments.service';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/user-role.enum';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 
 @ApiTags('Departments')
 @Controller('departments')
@@ -37,6 +49,19 @@ export class DepartmentsController {
      @Get(':id/projects')
      findProjects(@Param('id') id: string) {
         return this.departmentsService.findProjects(Number(id));
+     }
+     @Get(':id/resource-requests')
+     @ApiOperation({ summary: 'List resource requests for a department' })
+     @ApiParam({ name: 'id', description: 'Department ID' })
+     @ApiResponse({ status: 200, description: 'Department resource requests returned' })
+     @ApiBearerAuth('access-token')
+     @UseGuards(JwtAuthGuard, RolesGuard)
+     @Roles(UserRole.DEPARTMENT_HEAD)
+     findResourceRequests(
+        @Param('id', ParseIntPipe) id: number,
+        @Req() request: AuthenticatedRequest,
+     ) {
+        return this.departmentsService.findResourceRequests(id, request.user!);
      }
      @Get(':id/teams/:teamId/projects')
      findTeamProjects(
