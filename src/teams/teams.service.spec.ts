@@ -4,14 +4,19 @@ import { Repository } from 'typeorm';
 import { Department } from '../departments/entities/department.entity';
 import { User } from '../users/user.entity';
 import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
 import { Team } from './entities/team.entity';
 import { TeamsService } from './teams.service';
+import { UserRole } from '../users/user-role.enum';
 
 describe('TeamsService', () => {
   let service: TeamsService;
   let teamRepository: jest.Mocked<Pick<Repository<Team>, 'find' | 'findOne'>>;
-  let userRepository: jest.Mocked<Pick<Repository<User>, 'find'>>;
+  let userRepository: jest.Mocked<Pick<Repository<User>, 'find' | 'findOne'>>;
   let projectRepository: jest.Mocked<Pick<Repository<Project>, 'find'>>;
+  let resourceRequestRepository: jest.Mocked<
+    Pick<Repository<ResourceRequest>, 'find'>
+  >;
 
   beforeEach(async () => {
     teamRepository = {
@@ -20,8 +25,12 @@ describe('TeamsService', () => {
     };
     userRepository = {
       find: jest.fn(),
+      findOne: jest.fn(),
     };
     projectRepository = {
+      find: jest.fn(),
+    };
+    resourceRequestRepository = {
       find: jest.fn(),
     };
 
@@ -32,6 +41,10 @@ describe('TeamsService', () => {
         { provide: getRepositoryToken(Department), useValue: {} },
         { provide: getRepositoryToken(User), useValue: userRepository },
         { provide: getRepositoryToken(Project), useValue: projectRepository },
+        {
+          provide: getRepositoryToken(ResourceRequest),
+          useValue: resourceRequestRepository,
+        },
       ],
     }).compile();
 
@@ -93,6 +106,31 @@ describe('TeamsService', () => {
     expect(projectRepository.find).toHaveBeenCalledWith({
       where: { teams: { id: 2 } },
       relations: { teams: true },
+    });
+  });
+
+  it('returns requests for the team assigned to the authenticated team lead', async () => {
+    const team = { id: 2, name: 'Platform', department: { id: 3, name: 'IT' } };
+    const account = { id: 'lead-1', team };
+    const requests = [{ id: 'request-1', teamId: '2' }];
+    teamRepository.findOne.mockResolvedValue(team as Team);
+    userRepository.findOne.mockResolvedValue(account as User);
+    resourceRequestRepository.find.mockResolvedValue(requests as ResourceRequest[]);
+
+    await expect(
+      service.findResourceRequests(2, {
+        sub: 'lead-1',
+        email: 'lead@example.com',
+        role: UserRole.TEAM_LEAD,
+      }),
+    ).resolves.toBe(requests);
+    expect(userRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'lead-1' },
+      relations: { team: true },
+    });
+    expect(resourceRequestRepository.find).toHaveBeenCalledWith({
+      where: { teamId: '2' },
+      order: { createdAt: 'DESC' },
     });
   });
 });

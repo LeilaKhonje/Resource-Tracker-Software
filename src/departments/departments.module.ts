@@ -6,9 +6,14 @@ import { DepartmentsService } from './departments.service';
 import { User } from '../users/user.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { AuthSecurityModule } from '../auth/auth-security.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Department, User, Team, Project])],
+  imports: [
+    TypeOrmModule.forFeature([Department, User, Team, Project, ResourceRequest]),
+    AuthSecurityModule,
+  ],
   controllers: [DepartmentsController],
   providers: [DepartmentsService]
 })
