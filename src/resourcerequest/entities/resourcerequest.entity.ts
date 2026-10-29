@@ -71,8 +71,8 @@ export class ResourceRequest {
  @Column({ type: 'text', nullable: true })
 reviewNote: string | null;
 
-@Column({ type: 'varchar', nullable: true })
-reviewedBy: string | null;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  reviewedBy: string | null;
 
 @Column({ type: 'timestamp', nullable: true })
 reviewedAt: Date | null;

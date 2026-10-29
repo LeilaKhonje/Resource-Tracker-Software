@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Team } from '../teams/entities/team.entity';
@@ -7,6 +7,7 @@ import { UserRole } from '../users/user-role.enum';
 import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { Project } from './entities/project.entity';
+import { UpdateProjectDto } from './dto/update-project.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -75,6 +76,34 @@ export class ProjectsService {
     }
     project.teams = teams;
     return this.projectRepository.save(project);
+  }
+
+  async update(id: number, updateProjectDto: UpdateProjectDto, user: AuthTokenPayload) {
+    if (updateProjectDto.name === undefined && updateProjectDto.description === undefined) {
+      throw new BadRequestException('Provide a project name or description to update');
+    }
+    const project = await this.findOne(id, user);
+    Object.assign(project, updateProjectDto);
+    return this.projectRepository.save(project);
+  }
+
+  async findTeamMembers(id: number, user: AuthTokenPayload) {
+    const project = await this.findOne(id, user);
+    const teamIds = project.teams.map((team) => team.id);
+    if (teamIds.length === 0) return [];
+
+    const members = await this.users.find({
+      where: { team: { id: In(teamIds) } },
+      relations: { team: true },
+      select: { id: true, fullName: true, team: { id: true, name: true } },
+      order: { fullName: 'ASC' },
+    });
+    return members.map((member) => ({
+      id: member.id,
+      fullName: member.fullName,
+      teamId: member.team?.id,
+      teamName: member.team?.name,
+    }));
   }
 
   async remove(id: number, user: AuthTokenPayload) {

@@ -17,6 +17,18 @@ export class User {
   @Column({ name: 'password_hash', length: 128, select: false })
   passwordHash: string;
 
+  @Column({ name: 'phone_number', type: 'varchar', length: 30, nullable: true })
+  phoneNumber: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address: string | null;
+
+  @Column({ name: 'date_of_birth', type: 'date', nullable: true })
+  dateOfBirth: string | null;
+
+  @Column({ name: 'preferred_pronoun', type: 'varchar', length: 4, nullable: true })
+  preferredPronoun: string | null;
+
   @Column({default: true})
   isActive: boolean;
 
