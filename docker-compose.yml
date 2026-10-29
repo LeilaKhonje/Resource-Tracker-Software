@@ -16,7 +16,7 @@ services:
     container_name: resource-tracker-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: resourcepaasword
+      MYSQL_ROOT_PASSWORD: resourcepasword
       MYSQL_DATABASE: resource_tracker
       MYSQL_USER: resource_user
       MYSQL_PASSWORD: resourcepassword
