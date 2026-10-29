@@ -17,6 +17,9 @@ export class User {
   @Column({ name: 'password_hash', length: 128, select: false })
   passwordHash: string;
 
+  @Column({default: true})
+  isActive: boolean;
+
   @Column({
     type: 'enum',
     enum: UserRole,

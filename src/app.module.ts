@@ -5,16 +5,14 @@ import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+// cspell:ignore resourcerequest
 import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
-import { AuditLogsModule } from './auditlog/auditlog.module';
 import { ReportsModule } from './reports/reports.module';
-import { ResourcesModule } from './resources/resources.module';
-
-
+import { AuditLogModule } from './auditlog/auditlog.module';
 @Module({
   imports: 
     [
@@ -34,15 +32,14 @@ import { ResourcesModule } from './resources/resources.module';
     }),
 
     AuthModule,
-    ResourcerequestModule,
     NotificationsModule,
+    ResourcerequestModule,
     DepartmentsModule,
     TeamsModule,
     DashboardModule,
     ProjectsModule,
-    AuditLogsModule,
+    AuditLogModule,
     ReportsModule,
-    ResourcesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
