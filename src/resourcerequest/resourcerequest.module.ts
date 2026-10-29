@@ -3,11 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ResourcerequestController } from './resourcerequest.controller';
 import { ResourcerequestService } from './resourcerequest.service';
 import { ResourceRequest } from './entities/resourcerequest.entity';
-import { AuditLog } from '../auditlog/auditlog.entity';
+import { RequestAuditLog } from './entities/request-audit-log.entity';
 
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ResourceRequest, AuditLog])],
+  imports: [TypeOrmModule.forFeature([ResourceRequest, RequestAuditLog])],
   controllers: [ResourcerequestController],
   providers: [ResourcerequestService],
   exports: [ResourcerequestService],
