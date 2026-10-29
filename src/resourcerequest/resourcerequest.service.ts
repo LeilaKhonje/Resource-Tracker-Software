@@ -10,7 +10,7 @@ import {
   RequestStatus,
   ResourceRequest,
 } from './entities/resourcerequest.entity';
-import { AuditLog } from './entities/audit-log.entity';
+import { RequestAuditLog } from './entities/request-audit-log.entity';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
@@ -28,8 +28,8 @@ export class ResourcerequestService {
   constructor(
     @InjectRepository(ResourceRequest)
     private readonly requests: Repository<ResourceRequest>,
-    @InjectRepository(AuditLog)
-    private readonly audit: Repository<AuditLog>,
+       @InjectRepository(RequestAuditLog)
+    private readonly audit: Repository<RequestAuditLog>,
   ) {}
 
   // ---------------------------------------------------------------

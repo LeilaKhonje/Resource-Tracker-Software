@@ -68,19 +68,17 @@ export class ResourceRequest {
   @Column({ nullable: true })
   departmentId: string;
 
- 
-  @Column({ type: 'text', nullable: true })
-  reviewNote: string | null; // reason for rejection or the query question
+ @Column({ type: 'text', nullable: true })
+reviewNote: string | null;
 
-  @Column({ nullable: true })
-  reviewedBy: string | null;
+@Column({ type: 'varchar', nullable: true })
+reviewedBy: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
-  reviewedAt: Date | null;
+@Column({ type: 'timestamp', nullable: true })
+reviewedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
-  submittedAt: Date | null;
-
+@Column({ type: 'timestamp', nullable: true })
+submittedAt: Date | null;
   @CreateDateColumn()
   createdAt: Date;
 
