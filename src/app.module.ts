@@ -13,6 +13,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
 import { ReportsModule } from './reports/reports.module';
 import { AuditLogModule } from './auditlog/auditlog.module';
+import { ResourcesModule } from './resources/resources.module';
 @Module({
   imports: 
     [
@@ -40,6 +41,7 @@ import { AuditLogModule } from './auditlog/auditlog.module';
     ProjectsModule,
     AuditLogModule,
     ReportsModule,
+    ResourcesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
