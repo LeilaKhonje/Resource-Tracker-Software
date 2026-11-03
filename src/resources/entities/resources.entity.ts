@@ -39,6 +39,9 @@ export class Resources {
     @Column({type: 'varchar', length: 150, nullable: true})
     vendor: string | null;
 
+    @Column({ type: 'int', default: 1 })
+    quantity: number;
+
     @CreateDateColumn({name: 'created_at'})
     createdAt: Date;
 
