@@ -7,8 +7,10 @@ import { User } from '../users/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { AuthTokenPayload } from './interfaces/auth-token-payload.interface';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 const BCRYPT_ROUNDS = 12;
+const REFRESH_TOKEN_TTL = '7d';
 
 @Injectable()
 export class AuthService {
@@ -38,6 +40,37 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (!user.isActive) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    return this.loginUser(user);
+  }
+
+  async refresh(refreshTokenDto: RefreshTokenDto) {
+    let payload: AuthTokenPayload & { tokenUse?: string };
+    try {
+      payload = await this.jwtService.verifyAsync<
+        AuthTokenPayload & { tokenUse?: string }
+      >(refreshTokenDto.refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      payload.tokenUse !== 'refresh' ||
+      typeof payload.sub !== 'string'
+    ) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const user = await this.usersRepository.findOneBy({ id: payload.sub });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
     return this.loginUser(user);
   }
 
@@ -57,9 +90,15 @@ export class AuthService {
       role: user.role,
     }
 
-    const accessToken = await this.jwtService.signAsync(payload);
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload),
+      this.jwtService.signAsync(
+        { ...payload, tokenUse: 'refresh' },
+        { expiresIn: REFRESH_TOKEN_TTL },
+      ),
+    ]);
 
-    return {accessToken}
+    return { accessToken, refreshToken };
   }
 
   private async verifyPassword(password: string, passwordHash: string,): Promise<boolean> {

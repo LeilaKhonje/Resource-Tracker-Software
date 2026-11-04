@@ -42,17 +42,19 @@ async function bootstrap() {
       .addTag('Teams',
         'Allows users to create, view, update, and manage teams.'
       )
-      .addTag('Resource Allocations',
-        'Allows users to view and create allocations of resources.'
+      .addTag('Resources',
+        'Allows users to create, search, view, and update insourced and outsourced resources.'
       )
+     
       .addTag('Audit Logs',
         'Provides a record of system changes and activity for review.'
       )
-      .addTag('Line Manager',
-        'Allows line managers to review resource requests and manage approvals.'
-      )
+      
       .addTag('Reports',
         'Provides reports on resource requests, approvals, spending, and allocations.'
+      )
+      .addTag('resource-requests',
+        'Allows Team_leads to create and send reource requests to Line managers. Line managers approve, reject, or query a resource request. Managing directors can view all resource requests and their statuses.'
       )
     .setVersion('1.0')
     .addBearerAuth(

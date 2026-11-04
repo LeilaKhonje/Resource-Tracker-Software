@@ -11,7 +11,7 @@ import { UsersService } from './users.service';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-@Controller('users')
+@Controller('api/v1/users')
 @ApiTags('Users')
 export class UserController {
   constructor(private readonly usersService: UsersService) {}
@@ -53,7 +53,7 @@ assignRole(
 
 @Get('me')
 @ApiOperation({ summary: 'User must view his profile' })
-@ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) } } } })
+@ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) }, department: { type: 'string', nullable: true }, team: { type: 'string', nullable: true } } } })
 @ApiResponse({ status: 401, description: 'Authentication required' })
 @ApiResponse({ status: 404, description: 'User not found' })
 @ApiResponse({ status: 403, description: 'Insufficient permissions' })

@@ -3,7 +3,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ResourcesService } from './resources.service';
 import { Resources } from './entities/resources.entity';
 
-
 describe('ResourcesService', () => {
   let service: ResourcesService;
 
@@ -11,17 +10,15 @@ describe('ResourcesService', () => {
     create: jest.fn(),
     save: jest.fn(),
     find: jest.fn(),
-    findOne: jest.fn()
+    findOne: jest.fn(),
   };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ResourcesService, 
-        {
-          provide: getRepositoryToken(Resources),
-          useValue: mockRepository,
-        },
-      ],
+      providers: [ResourcesService, {
+        provide: getRepositoryToken(Resources),
+        useValue: mockRepository,
+      }],
     }).compile();
 
     service = module.get<ResourcesService>(ResourcesService);

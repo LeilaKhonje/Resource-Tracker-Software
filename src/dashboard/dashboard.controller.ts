@@ -4,13 +4,13 @@ import { DashboardService } from './dashboard.service';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Dashboard')
-@Controller('dashboard')
+@Controller('api/v1/dashboard')
 export class DashboardController {
   constructor(
     private readonly dashboardService: DashboardService,
   ) {}
 
-  @Get()
+  @Get('')
   @ApiOperation({ summary: 'Get dashboard data' })
   @ApiQuery({ name: 'departmentId', required: false, type: Number, description: 'Restrict dashboard data to a department' })
   @ApiResponse({ status: 200, description: 'Dashboard data', schema: { type: 'object', properties: { summary: { type: 'object', properties: { totalRequests: { type: 'integer' }, pendingApprovals: { type: 'integer' }, approvedRequests: { type: 'integer' }, rejectedRequests: { type: 'integer' }, allocatedResources: { type: 'integer' } } }, recentActivity: { type: 'array', items: { type: 'object', additionalProperties: true } }, departmentSpending: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } } } } })

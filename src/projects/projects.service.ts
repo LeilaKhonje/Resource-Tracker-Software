@@ -21,13 +21,11 @@ export class ProjectsService {
   ) {}
 
   async create(createProjectDto: CreateProjectDto, user: AuthTokenPayload) {
-    const departmentId = await this.getDepartmentHeadDepartmentId(user);
-    const { teamIds = [], ...projectDetails } = createProjectDto;
-    if (teamIds.length === 0) {
-      throw new UnprocessableEntityException('A project must be assigned to a team in your department');
+    if (user.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new ForbiddenException('Only department heads can create projects');
     }
+    const { teamIds = [], ...projectDetails } = createProjectDto;
     const teams = await this.findTeams(teamIds);
-    this.assertTeamsInDepartment(teams, departmentId);
     const project = this.projectRepository.create({
       ...projectDetails,
       teams,
@@ -46,6 +44,13 @@ export class ProjectsService {
     return this.projectRepository.find({
       where: { teams: { department: { id: departmentId } } },
       relations: { teams: { department: true } },
+    });
+  }
+
+  async findByDepartment(departmentId: number) {
+    return this.projectRepository.find({
+      where: { teams: { department: { id: departmentId } } },
+      select: { id: true, name: true, description: true },
     });
   }
 

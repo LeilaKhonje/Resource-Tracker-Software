@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException,} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Department } from './entities/department.entity';
@@ -117,5 +113,23 @@ export class DepartmentsService {
     const department = await this.findOne(id);
     await this.departmentRepository.remove(department);
     return department;
+  }
+
+  async assignDepartmentHead(departmentId: number, userId: string) {
+    const department = await this.findOne(departmentId);
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    if (user.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new ForbiddenException(
+        `User with id ${userId} is not a department head`,
+      );
+    }
+
+    user.department = department;
+    return this.userRepository.save(user);
   }
 }

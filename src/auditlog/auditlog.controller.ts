@@ -4,7 +4,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 
 
 @ApiTags('Audit Logs')
-@Controller('audit-logs')
+@Controller('api/v1/audit-logs')
 export class AuditLogsController {
   constructor(
     private readonly auditLogsService: AuditLogService,
@@ -12,7 +12,7 @@ export class AuditLogsController {
 
   @ApiOperation({ summary: 'Get all audit logs' })
   @ApiResponse({ status: 200, description: 'Audit log records', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } } })
-  @Get()
+  @Get('')
   getAllLogs() {
     return this.auditLogsService.getAllLogs();
   }

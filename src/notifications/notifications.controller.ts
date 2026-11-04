@@ -4,13 +4,13 @@ import { NotificationsService } from './notifications.service';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Notifications')
-@Controller('notifications')
+@Controller('api/v1/notifications')
 export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  @Get()
+  @Get('me')
   @ApiOperation({ summary: 'Get notifications for the authenticated user' })
   @ApiResponse({ status: 200, description: 'Notifications for the authenticated user', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
   @ApiResponse({ status: 401, description: 'Request must include an authenticated user' })
@@ -20,11 +20,7 @@ export class NotificationsController {
     );
   }
 
-  @Patch(':id/read')
-  @ApiOperation({ summary: 'Mark a notification as read' })
-  @ApiParam({ name: 'id', description: 'Notification ID', type: Number })
-  @ApiResponse({ status: 200, description: 'Notifications for the path user ID; current handler does not mark a notification read', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
-  @Get(':id')
+  @Get('users/:id')
   @ApiOperation({ summary: 'Get notifications for a user ID' })
   @ApiParam({ name: 'id', description: 'Numeric user ID', type: Number })
   @ApiResponse({ status: 200, description: 'Notifications for the specified user ID', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
@@ -34,7 +30,7 @@ export class NotificationsController {
     return this.notificationsService.getUserNotifications(id);
   }
 
-  @Patch('read/:id')
+  @Patch(':id/read')
   @ApiOperation({ summary: 'Mark a notification as read for a user' })
   @ApiParam({ name: 'id', description: 'Numeric notification ID', type: Number })
   @ApiBody({ schema: { type: 'object', required: ['userId'], properties: { userId: { type: 'integer', example: 15 } } } })
@@ -57,7 +53,7 @@ export class NotificationsController {
     );
   }
 
-  @Post()
+  @Post('')
   @ApiOperation({ summary: 'Create a notification' })
   @ApiBody({ schema: { type: 'object', required: ['userId', 'message'], properties: { userId: { type: 'integer' }, message: { type: 'string' } } } })
   @ApiResponse({ status: 201, description: 'Created notification', schema: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } })
@@ -76,7 +72,7 @@ export class NotificationsController {
     );
   }
 
-  @Delete(':userId/:notificationId')
+  @Delete('users/:userId/notifications/:notificationId')
   @ApiOperation({ summary: 'Delete a user notification' })
   @ApiParam({ name: 'userId', description: 'Numeric user ID', type: Number })
   @ApiParam({ name: 'notificationId', description: 'Numeric notification ID', type: Number })
