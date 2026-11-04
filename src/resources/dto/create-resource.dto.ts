@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsString,
+  IsInt,
   Min,
   ValidateIf,
 } from 'class-validator';
@@ -37,6 +38,10 @@ export class CreateResourceDto {
   @IsString()
   @IsNotEmpty()
   label?: string;
+
+  @IsInt()
+  @Min(0)
+  quantity: number;
 
   @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
   @IsString()

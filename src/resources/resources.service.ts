@@ -21,6 +21,7 @@ export class ResourcesService {
     const resource = dto.type === ResourceType.INSOURCED ? this.resourcesRepository.create({
         name: dto.name,
         type: dto.type,
+        quantity: dto.quantity,
         description: dto.description,
         department: dto.department,
     })
@@ -29,6 +30,7 @@ export class ResourcesService {
         type: dto.type,
         price: dto.price,
         label: dto.label,
+        quantity: dto.quantity,
         batchNumber: dto.batchNumber,
         vendor: dto.vendor,
     });
