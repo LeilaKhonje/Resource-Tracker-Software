@@ -27,17 +27,17 @@ export class UserController {
   }
 
 @Patch(':id/role')
-@ApiOperation({ summary: 'Update a user role' })
+@ApiOperation({ summary: 'Assign department_head or team_lead to a user' })
 @ApiParam({ name: 'id', description: 'User UUID' })
 @ApiBody({ type: AssignUserRoleDto })
-@ApiResponse({ status: 200, description: 'User assignment updated', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) } } } })
+@ApiResponse({ status: 200, description: 'User role updated', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: [UserRole.DEPARTMENT_HEAD, UserRole.TEAM_LEAD] } } } })
 @ApiResponse({ status: 401, description: 'Authentication required' })
 @ApiResponse({ status: 403, description: 'Insufficient permissions' })
 @ApiResponse({ status: 400, description: 'Invalid role value or role assignment is not permitted' })
 @ApiResponse({ status: 404, description: 'Target user or assigning user not found' })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-@Roles(UserRole.MANAGING_DIRECTOR, UserRole.DEPARTMENT_HEAD)
+@Roles(UserRole.MANAGING_DIRECTOR)
 @ApiBearerAuth('access-token')
 assignRole(
   @Param('id', ParseUUIDPipe) userId: string,
@@ -46,7 +46,7 @@ assignRole(
   ) {
     return this.usersService.assignRole(
       userId,
-      assignUserRoleDto.role,
+      assignUserRoleDto,
       request.user!.sub,
     );
   }

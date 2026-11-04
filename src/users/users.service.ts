@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -7,6 +7,7 @@ import { User } from './user.entity';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+import { AssignUserRoleDto } from './dto/assign-user-role.dto';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -45,8 +46,8 @@ export class UsersService {
   }
 
   async getMyProfile(userId: string){
-    const user = await this .usersRepository.findOne({where: {id: userId},});
-    
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+
     if(!user){
       throw new NotFoundException('User Not found');
     }
@@ -123,7 +124,7 @@ export class UsersService {
   }
 
   async deactivateMyAccount(userId: string){
-    const user = await this.usersRepository.findOne({where: {id: userId},});
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
     if(!user){
       throw new NotFoundException('User Not Found');
     }
@@ -140,7 +141,7 @@ export class UsersService {
   }
 
   async reActivateMyAccount(userId: string){
-    const user = await this.usersRepository.findOne({where: {id: userId},});
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
 
     if(!user){
       throw new NotFoundException('User not found')
@@ -149,7 +150,7 @@ export class UsersService {
     if(user.isActive){
       throw new BadRequestException('account is already active');
     }
-    
+
     user.isActive = true;
 
     await this.usersRepository.save(user);
@@ -159,30 +160,18 @@ export class UsersService {
 
   async assignRole(
     userId: string,
-    role: UserRole,
+    dto: AssignUserRoleDto,
     assignerId: string,
   ): Promise<Pick<User, 'id' | 'fullName' | 'email' | 'role'>> {
+    const { role } = dto;
+    if (role !== UserRole.DEPARTMENT_HEAD && role !== UserRole.TEAM_LEAD) {
+      throw new BadRequestException('Only department_head and team_lead roles can be assigned');
+    }
+
     const assigner = await this.usersRepository.findOneBy({ id: assignerId });
     if (!assigner) throw new NotFoundException('Assigning user not found');
-
-    if (role === UserRole.MANAGING_DIRECTOR) {
-      throw new BadRequestException(
-        'The managing director role cannot be assigned to another user',
-      );
-    }
-
-    if (role === UserRole.DEPARTMENT_HEAD && assigner.role !== UserRole.MANAGING_DIRECTOR) {
-      throw new BadRequestException(
-        'Only the managing director can assign the department head role',
-      );
-    }
-    if (role === UserRole.TEAM_LEAD && assigner.role !== UserRole.DEPARTMENT_HEAD) {
-      throw new BadRequestException(
-        'Only department heads can assign the team lead role',
-      );
-    }
-    if (role === UserRole.LINE_MANAGER && assigner.role !== UserRole.MANAGING_DIRECTOR) {
-      throw new BadRequestException('Only the managing director can assign this role');
+    if (assigner.role !== UserRole.MANAGING_DIRECTOR) {
+      throw new ForbiddenException('Only the managing director can assign user roles');
     }
 
     const user = await this.usersRepository.findOneBy({ id: userId });

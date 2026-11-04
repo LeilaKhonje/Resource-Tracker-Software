@@ -69,10 +69,11 @@ connects to the MySQL service on its internal port `3306`.
 
 ## Role assignment
 
-Department heads can assign `team_lead` through `PATCH /users/:id/role` with a
-JSON body such as `{"role":"team_lead","teamId":1}`. The Managing Director
-can assign `line_manager` and `department_head`. The Managing Director role
-cannot be assigned or changed through this endpoint.
+Only the Managing Director can assign `department_head` or `team_lead` through
+`PATCH /users/:id/role`, using a role-only JSON body such as
+`{"role":"department_head"}` or `{"role":"team_lead"}`. This endpoint changes
+only the user's role; it does not assign a department or team. The Managing
+Director role cannot be assigned or changed through this endpoint.
 
 Protect resource endpoints with `JwtAuthGuard` and apply `@Roles(...)` with
 `RolesGuard` to enforce role-specific access. A valid token is sent as
@@ -101,7 +102,7 @@ set a role.
 ### Users
 
 Users can register, view their own profile, and deactivate/reactivate their account.
-Authorized Managing Directors and Department Heads can assign eligible roles.
+Only Managing Directors can assign department-head and team-lead roles.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
@@ -113,7 +114,7 @@ Authorized Managing Directors and Department Heads can assign eligible roles.
 | `PATCH /users/me/password` | Changes the authenticated user's password. Body: `{"currentPassword":"current123","newPassword":"newSecure456"}`. The new password must be 8–12 characters and include a number. | `400` invalid new password or same password supplied; `401` missing/invalid token or current password is incorrect; `404` user not found. |
 | `PATCH /users/me/deactivate` | Deactivates the authenticated user's account. | `401` missing or invalid token; `404` user not found; `400` account is already deactivated. |
 | `PATCH /users/me/reactivate` | Reactivates the authenticated user's account. | `401` missing or invalid token; `404` user not found; `400` account is already active. |
-| `PATCH /users/:id/role` | Assigns an allowed role to the user identified by UUID. Body: `{"role":"team_lead"}` (or another supported role). | `400` invalid UUID/body/role, Managing Director role assignment attempted, or assignment violates role rules; `401` missing or invalid token; `403` caller lacks permission; `404` assigning account or target user not found. |
+| `PATCH /users/:id/role` | Assigns `department_head` or `team_lead` to the user identified by UUID. Body: `{"role":"department_head"}` or `{"role":"team_lead"}`. Only the Managing Director can call this endpoint; department/team associations are unchanged. | `400` invalid UUID/body/role or attempt to change the Managing Director role; `401` missing or invalid token; `403` caller lacks permission; `404` assigning account or target user not found. |
 
 ### Departments
 

@@ -1,0 +1,5351 @@
+﻿
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auditlog\dto\filter-Auditlog.dto.ts =====
+
+
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
+
+export class FilterAuditLogsDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  userId?: number;
+
+  @IsOptional()
+  @IsString()
+  actionType?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auditlog\auditlog.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { AuditlogController } from './auditlog.controller';
+
+describe('AuditlogController', () => {
+  let controller: AuditlogController;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [AuditlogController],
+    }).compile();
+
+    controller = module.get<AuditlogController>(AuditlogController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auditlog\auditlog.controller.ts =====
+
+import {Controller,Get, Param,  ParseIntPipe, Query, UseGuards,} from '@nestjs/common';
+import {AuditLogService } from './auditlog.service';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+
+
+@ApiTags('Audit Logs')
+@Controller('audit-logs')
+export class AuditLogsController {
+  constructor(
+    private readonly auditLogsService: AuditLogService,
+  ) {}
+
+  @ApiOperation({ summary: 'Get all audit logs' })
+  @ApiResponse({ status: 200, description: 'Audit log records', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } } })
+  @Get()
+  getAllLogs() {
+    return this.auditLogsService.getAllLogs();
+  }
+
+  @ApiOperation({ summary: 'Get audit logs for a specific record' })
+  @ApiResponse({ status: 200, description: 'Matching audit log records', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } } })
+  @ApiResponse({ status: 400, description: 'entityId must be an integer' })
+  @Get('record/:entityType/:entityId')
+  @ApiParam({ name: 'entityType', description: 'Type of the audited entity' })
+  @ApiParam({ name: 'entityId', description: 'ID of the audited record', type: Number })
+  getLogsForRecord(
+    @Param('entityType') entityType: string,
+    @Param('entityId', ParseIntPipe) entityId: number,
+  ) {
+    return this.auditLogsService.getLogsForRecord(
+      entityType,
+      entityId,
+    );
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auditlog\auditlog.entity.ts =====
+
+import{Entity,PrimaryGeneratedColumn,Column,CreateDateColumn} from 'typeorm';
+
+@Entity('audit_logs')
+export class AuditLog{
+    @PrimaryGeneratedColumn()
+    id:number;
+
+    @Column({length : 100})
+    actionType:string;
+
+    @Column({length : 100})
+    entityType:string;
+
+    @Column({type: 'text',nullable:true})
+    details:string | null;
+
+    // Resource request workflow audit fields. These are nullable so existing
+    // generic audit records can continue using userId/entityId/details.
+    @Column({ type: 'varchar', length: 36, nullable: true })
+    requestId: string | null;
+
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    action: string | null;
+
+    @Column({ type: 'varchar', length: 36, nullable: true })
+    performedBy: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    note: string | null;
+
+    @CreateDateColumn()
+    createdAt:Date;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auditlog\auditlog.module.ts =====
+
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLog } from './auditlog.entity';
+import { AuditLogsController } from './auditlog.controller';
+import {  AuditLogService } from './auditlog.service';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([AuditLog])],
+  controllers: [AuditLogsController],
+  providers: [ AuditLogService],
+  exports: [ AuditLogService],
+})
+export class AuditLogModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auditlog\auditlog.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { AuditlogService } from './auditlog.service';
+
+describe('AuditlogService', () => {
+  let service: AuditlogService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [AuditlogService],
+    }).compile();
+
+    service = module.get<AuditlogService>(AuditlogService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auditlog\auditlog.service.ts =====
+
+
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { AuditLog } from './auditlog.entity';
+
+@Injectable()
+export class AuditLogService {
+  constructor(
+    @InjectRepository(AuditLog)
+    private readonly auditLogRepository: Repository<AuditLog>,
+  ) {}
+
+  async recordAction(data: {
+    userId: number;
+    actionType: string;
+    entityType: string;
+    entityId: number;
+    details?: string;
+  }): Promise<AuditLog> {
+    const auditLog = this.auditLogRepository.create(data);
+
+    return this.auditLogRepository.save(auditLog);
+  }
+
+  async getAllLogs(): Promise<AuditLog[]> {
+    return this.auditLogRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getLogsForRecord(
+    entityType: string,
+    entityId: number,
+  ): Promise<AuditLog[]> {
+    return this.auditLogRepository.find({
+      where: { entityType, entityId } as any,
+      order: { createdAt: 'DESC' },
+    });
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\decorators\roles.decorator.ts =====
+
+import { SetMetadata } from '@nestjs/common';
+import { UserRole } from '../../users/user-role.enum';
+
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\dto\forgot-password.dto.ts =====
+
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, MaxLength } from 'class-validator';
+
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'alex@company.com' })
+  @IsEmail()
+  @MaxLength(254)
+  email: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\dto\login.dto.ts =====
+
+import { IsEmail, IsString, Matches,MaxLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class LoginDto {
+  @ApiProperty({ type: String, example: 'alex@company.com' })
+  @IsEmail()
+  @MaxLength(254)
+  email: string;
+
+  @IsString()
+  @ApiProperty({ type: String, example: 'secure123', maxLength: 12, description: 'Must contain at least one number' })
+  @MaxLength(12)
+  @Matches(/\d/, { message: 'Password must contain at least one number' })
+  password: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\guards\jwt-auth.guard.ts =====
+
+import {CanActivate, ExecutionContext, Injectable, UnauthorizedException,} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { UserRole } from '../../users/user-role.enum';
+import { AuthenticatedRequest } from '../interfaces/authenticated-request.interface';
+import { AuthTokenPayload } from '../interfaces/auth-token-payload.interface';
+
+@Injectable()
+export class JwtAuthGuard implements CanActivate {
+  constructor(private readonly jwtService: JwtService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request =
+      context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const authorization = request.headers.authorization;
+    const parts = authorization?.split(' ') ?? [];
+    const [scheme, token] = parts;
+
+    if (parts.length !== 2 || scheme !== 'Bearer' || !token) {
+      throw new UnauthorizedException('A bearer access token is required');
+    }
+
+    let payload: AuthTokenPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<AuthTokenPayload>(token);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        ['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(
+          error.name,
+        )
+      ) {
+        throw new UnauthorizedException('The access token is invalid or expired');
+      }
+      throw error;
+    }
+
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      typeof payload.sub !== 'string' ||
+      typeof payload.email !== 'string' ||
+      (payload.role !== null &&
+        !Object.values(UserRole).includes(payload.role))
+    ) {
+      throw new UnauthorizedException('The access token is invalid');
+    }
+
+    request.user = payload;
+    return true;
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\guards\roles.guard.ts =====
+
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { UserRole } from '../../users/user-role.enum';
+import { ROLES_KEY } from '../decorators/roles.decorator';
+import { AuthenticatedRequest } from '../interfaces/authenticated-request.interface';
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(
+      ROLES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (!requiredRoles?.length) {
+      return true;
+    }
+
+    const { user } =
+      context.switchToHttp().getRequest<AuthenticatedRequest>();
+    if (!user) {
+      throw new UnauthorizedException('Authentication is required');
+    }
+
+    return user.role !== null && requiredRoles.includes(user.role);
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\interfaces\auth-token-payload.interface.ts =====
+
+import { UserRole } from '../../users/user-role.enum';
+
+export interface AuthTokenPayload {
+  sub: string;
+  email: string;
+  role: UserRole | null;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\interfaces\authenticated-request.interface.ts =====
+
+import { Request } from 'express';
+import { AuthTokenPayload } from './auth-token-payload.interface';
+
+export interface AuthenticatedRequest extends Request {
+  user?: AuthTokenPayload;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\auth-security.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+
+@Module({
+  imports: [
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret || secret.length < 16) {
+          throw new Error('JWT_SECRET must contain at least 16 characters');
+        }
+        return {
+          secret,
+          signOptions: { expiresIn: '1h' },
+        };
+      },
+    }),
+  ],
+  providers: [JwtAuthGuard, RolesGuard],
+  exports: [JwtModule, JwtAuthGuard, RolesGuard],
+})
+export class AuthSecurityModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\auth.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+
+describe('AuthController', () => {
+  let controller: AuthController;
+  const authService = {
+    register: jest.fn(),
+    login: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [AuthController],
+      providers: [{ provide: AuthService, useValue: authService }],
+    }).compile();
+
+    controller = module.get<AuthController>(AuthController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\auth.controller.ts =====
+
+import {Body, Controller, HttpCode, HttpStatus, Post,} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+
+@ApiTags('Authentication')
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @ApiOperation({ summary: 'Login a user' })
+  @ApiResponse({ status: 200, description: 'User logged in successfully', schema: { type: 'object', properties: { accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' } }, required: ['accessToken'] } })
+  @ApiResponse({ status: 400, description: 'Invalid email or password field format' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid credentials' })
+  @ApiBody({ 
+    schema: {
+      type: 'object',
+      required: ['email', 'password'],
+       properties:{
+        email:{
+          type: 'string',
+          example:'johndoe@company.com'
+        },
+        password:{
+          type: 'string',
+          example:'password123'
+        },
+       },
+    },
+  })
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
+  @ApiOperation({ summary: 'Request a password reset' })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset request accepted',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'If an account exists for this email, password reset instructions will be sent.',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid email format' })
+  @ApiBody({ type: ForgotPasswordDto })
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\auth.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { User } from '../users/user.entity';
+import { AuthSecurityModule } from './auth-security.module';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([User]),
+    AuthSecurityModule,
+  ],
+  controllers: [AuthController],
+  providers: [AuthService],
+})
+export class AuthModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\auth.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
+import { scryptSync } from 'node:crypto';
+import { AuthService } from './auth.service';
+import { UserRole } from '../users/user-role.enum';
+import { User } from '../users/user.entity';
+
+describe('AuthService', () => {
+  let service: AuthService;
+  let queryResult: User | null;
+  let usersRepository: {
+    findOneBy: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
+  let queryBuilder: {
+    addSelect: jest.Mock;
+    where: jest.Mock;
+    getOne: jest.Mock;
+  };
+  let jwtService: { signAsync: jest.Mock };
+
+  beforeEach(async () => {
+    queryResult = null;
+    queryBuilder = {
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getOne: jest.fn(() => Promise.resolve(queryResult)),
+    };
+    usersRepository = {
+      findOneBy: jest.fn().mockResolvedValue(null),
+      create: jest.fn((fields: Partial<User>) =>
+        Object.assign(new User(), fields),
+      ),
+      save: jest.fn(async (user: User) =>
+        Object.assign(user, { id: 'user-id' }),
+      ),
+      createQueryBuilder: jest.fn(() => queryBuilder),
+    };
+    jwtService = { signAsync: jest.fn().mockResolvedValue('signed-token') };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: getRepositoryToken(User), useValue: usersRepository },
+        { provide: JwtService, useValue: jwtService },
+      ],
+    }).compile();
+
+    service = module.get<AuthService>(AuthService);
+  });
+
+  it('registers users without a role and returns no password data', async () => {
+    const result = await service.register({
+      fullName: '  Leila Khonje ',
+      email: ' LEILA@example.com ',
+      password: 'a-long-password-123',
+    });
+
+    expect(usersRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fullName: 'Leila Khonje',
+        email: 'leila@example.com',
+        role: null,
+        passwordHash: expect.stringMatching(/^\$2[aby]\$12\$/),
+      }),
+    );
+    expect(result).toEqual({
+      accessToken: 'signed-token',
+      user: {
+        id: 'user-id',
+        fullName: 'Leila Khonje',
+        email: 'leila@example.com',
+        role: null,
+      },
+    });
+    expect(result.user).not.toHaveProperty('passwordHash');
+    expect(jwtService.signAsync).toHaveBeenCalledWith({
+      sub: 'user-id',
+      email: 'leila@example.com',
+      role: null,
+    });
+  });
+
+  it('rejects a duplicate email address', async () => {
+    usersRepository.findOneBy.mockResolvedValue(new User());
+
+    await expect(
+      service.register({
+        fullName: 'Leila Khonje',
+        email: 'leila@example.com',
+        password: 'a-long-password-123',
+      }),
+    ).rejects.toThrow('An account with this email already exists');
+    expect(usersRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('authenticates a user with the correct password', async () => {
+    await service.register({
+      fullName: 'Leila Khonje',
+      email: 'leila@example.com',
+      password: 'a-long-password-123',
+    });
+    queryResult = await usersRepository.save.mock.results[0].value;
+
+    const result = await service.login({
+      email: 'LEILA@example.com',
+      password: 'a-long-password-123',
+    });
+
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith('user.passwordHash');
+    expect(queryBuilder.where).toHaveBeenCalledWith('user.email = :email', {
+      email: 'leila@example.com',
+    });
+    expect(result.accessToken).toBe('signed-token');
+  });
+
+  it('rejects incorrect credentials with a generic error', async () => {
+    await service.register({
+      fullName: 'Leila Khonje',
+      email: 'leila@example.com',
+      password: 'a-long-password-123',
+    });
+    queryResult = await usersRepository.save.mock.results[0].value;
+
+    await expect(
+      service.login({
+        email: 'leila@example.com',
+        password: 'a-different-password',
+      }),
+    ).rejects.toThrow('Invalid email or password');
+  });
+
+  it('upgrades a legacy scrypt hash to bcrypt after successful login', async () => {
+    const salt = Buffer.from('0123456789abcdef');
+    const key = scryptSync('legacy-password', salt, 64);
+    queryResult = Object.assign(new User(), {
+      id: 'legacy-user',
+      fullName: 'Legacy User',
+      email: 'legacy@example.com',
+      role: UserRole.TEAM_LEAD,
+      passwordHash: `scrypt$${salt.toString('base64url')}$${key.toString('base64url')}`,
+    });
+
+    await service.login({
+      email: 'legacy@example.com',
+      password: 'legacy-password',
+    });
+
+    expect(usersRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passwordHash: expect.stringMatching(/^\$2[aby]\$12\$/),
+      }),
+    );
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\auth\auth.service.ts =====
+
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../users/user.entity';
+import { LoginDto } from './dto/login.dto';
+import { AuthTokenPayload } from './interfaces/auth-token-payload.interface';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+
+const BCRYPT_ROUNDS = 12;
+
+@Injectable()
+export class AuthService {
+  constructor(
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+    private readonly jwtService: JwtService,
+  ) {}
+
+  async login(loginDto: LoginDto) {
+    const email = loginDto.email.trim().toLowerCase();
+
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.email = :email', { email })
+      .getOne();
+
+    if (!user) {
+      await bcrypt.hash(loginDto.password, BCRYPT_ROUNDS);
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const passwordMatches = await this.verifyPassword(loginDto.password, user.passwordHash,);
+
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    return this.loginUser(user);
+  }
+
+  async forgotPassword(_forgotPasswordDto: ForgotPasswordDto) {
+    // Keep the response independent of whether the email belongs to an account.
+    // Password reset delivery can be connected here when an email provider is configured.
+    return {
+      message:
+        'If an account exists for this email, password reset instructions will be sent.',
+    };
+  }
+
+  private async loginUser(user: User){
+    const payload: AuthTokenPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    }
+
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    return {accessToken}
+  }
+
+  private async verifyPassword(password: string, passwordHash: string,): Promise<boolean> {
+    return bcrypt.compare(password, passwordHash);
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\dashboard\dto\dashboeard.dto.ts =====
+
+
+import {
+  IsDateString,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+
+export class DashboardFilterDto {
+  @IsOptional()
+  @IsString()
+  department?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\dashboard\dashboard.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { DashboardController } from './dashboard.controller';
+
+describe('DashboardController', () => {
+  let controller: DashboardController;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [DashboardController],
+    }).compile();
+
+    controller = module.get<DashboardController>(DashboardController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\dashboard\dashboard.controller.ts =====
+
+
+import {Controller, Get, Query, ParseIntPipe, DefaultValuePipe} from '@nestjs/common';
+import { DashboardService } from './dashboard.service';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+@ApiTags('Dashboard')
+@Controller('dashboard')
+export class DashboardController {
+  constructor(
+    private readonly dashboardService: DashboardService,
+  ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Get dashboard data' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number, description: 'Restrict dashboard data to a department' })
+  @ApiResponse({ status: 200, description: 'Dashboard data', schema: { type: 'object', properties: { summary: { type: 'object', properties: { totalRequests: { type: 'integer' }, pendingApprovals: { type: 'integer' }, approvedRequests: { type: 'integer' }, rejectedRequests: { type: 'integer' }, allocatedResources: { type: 'integer' } } }, recentActivity: { type: 'array', items: { type: 'object', additionalProperties: true } }, departmentSpending: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } } } } })
+  @ApiResponse({ status: 500, description: 'Invalid departmentId currently raises a generic server error' })
+  getDashboard(
+    @Query('departmentId') departmentId?: string,
+  ) {
+    return this.dashboardService.getDashboard(
+      departmentId === undefined
+        ? undefined
+        : this.parseDepartmentId(departmentId),
+    );
+  }
+
+  @Get('summary')
+  @ApiOperation({ summary: 'Get dashboard summary metrics' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Summary metrics', schema: { type: 'object', properties: { totalRequests: { type: 'integer' }, pendingApprovals: { type: 'integer' }, approvedRequests: { type: 'integer' }, rejectedRequests: { type: 'integer' }, allocatedResources: { type: 'integer' } } } })
+  @ApiResponse({ status: 500, description: 'Invalid departmentId currently raises a generic server error' })
+  getSummary(
+    @Query('departmentId') departmentId?: string,
+  ) {
+    return this.dashboardService.getSummary(
+      departmentId === undefined
+        ? undefined
+        : this.parseDepartmentId(departmentId),
+    );
+  }
+
+  @Get('recent-activity')
+  @ApiOperation({ summary: 'Get recent activity' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Maximum number of activity entries (defaults to 10)' })
+  @ApiResponse({ status: 200, description: 'Recent audit log rows', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, details: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } }, additionalProperties: true } } })
+  @ApiResponse({ status: 400, description: 'limit must be an integer' })
+  getRecentActivity(
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe)
+    limit: number,
+  ) {
+    return this.dashboardService.getRecentActivity(limit);
+  }
+
+  @Get('department-spending')
+  @ApiOperation({ summary: 'Get spending by department' })
+  @ApiResponse({ status: 200, description: 'Department spending rows', schema: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } } })
+  getDepartmentSpending() {
+    return this.dashboardService.getDepartmentSpending();
+  }
+
+  private parseDepartmentId(value: string): number {
+    const id = Number(value);
+
+    if (!Number.isInteger(id) || id < 1) {
+      throw new Error('departmentId must be a positive integer');
+    }
+
+    return id;
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\dashboard\dashboard.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { DashboardController } from './dashboard.controller';
+import { DashboardService } from './dashboard.service';
+
+@Module({
+  controllers: [DashboardController],
+  providers: [DashboardService],
+})
+export class DashboardModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\dashboard\dashboard.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { DashboardService } from './dashboard.service';
+
+describe('DashboardService', () => {
+  let service: DashboardService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [DashboardService],
+    }).compile();
+
+    service = module.get<DashboardService>(DashboardService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\dashboard\dashboard.service.ts =====
+
+
+import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+
+@Injectable()
+export class DashboardService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  // Summary cards
+  async getSummary(departmentId?: number) {
+    const params: any[] = [];
+    let departmentCondition = '';
+
+    if (departmentId !== undefined) {
+      departmentCondition = 'WHERE department_id = ?';
+      params.push(departmentId);
+    }
+
+    const [result] = await this.dataSource.query(
+      `SELECT
+         COUNT(*) AS totalRequests,
+         COALESCE(SUM(status = 'PENDING'), 0) AS pendingApprovals,
+         COALESCE(SUM(status = 'APPROVED'), 0) AS approvedRequests,
+         COALESCE(SUM(status = 'REJECTED'), 0) AS rejectedRequests
+       FROM resource_requests
+       ${departmentCondition}`,
+      params,
+    );
+
+    const allocationParams: any[] = [];
+    let allocationCondition = '';
+
+    if (departmentId !== undefined) {
+      allocationCondition = 'WHERE department_id = ?';
+      allocationParams.push(departmentId);
+    }
+
+    const [allocationResult] = await this.dataSource.query(
+      `SELECT COUNT(*) AS allocatedResources
+       FROM resource_allocations
+       ${allocationCondition}`,
+      allocationParams,
+    );
+
+    return {
+      totalRequests: Number(result.totalRequests),
+      pendingApprovals: Number(result.pendingApprovals),
+      approvedRequests: Number(result.approvedRequests),
+      rejectedRequests: Number(result.rejectedRequests),
+      allocatedResources: Number(
+        allocationResult.allocatedResources,
+      ),
+    };
+  }
+
+  // Recent audit activity
+  async getRecentActivity(limit = 10) {
+    const safeLimit = Math.min(Math.max(limit, 1), 50);
+
+    return this.dataSource.query(
+      `SELECT *
+       FROM audit_logs
+       ORDER BY created_at DESC
+       LIMIT ${safeLimit}`,
+    );
+  }
+
+  // Spending summary grouped by department
+  async getDepartmentSpending() {
+    return this.dataSource.query(
+      `SELECT
+         d.id AS departmentId,
+         d.name AS departmentName,
+         COALESCE(SUM(
+           CASE
+             WHEN r.status = 'APPROVED' THEN r.total_cost
+             ELSE 0
+           END
+         ), 0) AS totalSpending
+       FROM departments d
+       LEFT JOIN resource_requests r
+         ON r.department_id = d.id
+       GROUP BY d.id, d.name
+       ORDER BY totalSpending DESC`,
+    );
+  }
+
+  // Complete dashboard data
+  async getDashboard(departmentId?: number) {
+    return {
+      summary: await this.getSummary(departmentId),
+      recentActivity: await this.getRecentActivity(),
+      departmentSpending: await this.getDepartmentSpending(),
+    };
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\dto\create-department.dto.ts =====
+
+import { IsNotEmpty, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class CreateDepartmentDto {
+  @ApiProperty({ type: String, example: 'Finance', minLength: 3, maxLength: 100 })
+  @IsString()
+  @IsNotEmpty()
+  @Length(3, 100)
+  name: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'FIN', minLength: 2, maxLength: 20 })
+  @IsString()
+  @Length(2, 20)
+  @Matches(/^[A-Z0-9_-]+$/, {
+    message: 'code must contain only uppercase letters, numbers, underscore, or hyphen',
+  })
+  code?: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Finance and accounting', maxLength: 500 })
+  @IsString()
+  @Length(0, 500)
+  description?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\dto\update-departments.dto.ts =====
+
+import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export class UpdateDepartmentDto {
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Finance', minLength: 3, maxLength: 100 })
+  @IsString()
+  @Length(3, 100)
+  name?: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'FIN', minLength: 2, maxLength: 20 })
+  @IsString()
+  @Length(2, 20)
+  @Matches(/^[A-Z0-9_-]+$/, {
+    message: 'code must contain only uppercase letters, numbers, underscore, or hyphen',
+  })
+  code?: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Finance and accounting', maxLength: 500 })
+  @IsString()
+  @Length(0, 500)
+  description?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\entities\department.entity.ts =====
+
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+
+@Entity()
+export class Department {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column({ nullable: true })
+  code?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: false })
+  description: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\departments.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { DepartmentsController } from './departments.controller';
+import { DepartmentsService } from './departments.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { JwtService } from '@nestjs/jwt';
+import { UserRole } from '../users/user-role.enum';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+
+describe('DepartmentsController', () => {
+  let controller: DepartmentsController;
+  const departmentsService = {
+    findOne: jest.fn(),
+    findUsers: jest.fn(),
+    findTeams: jest.fn(),
+    findProjects: jest.fn(),
+    findResourceRequests: jest.fn(),
+    findTeamProjects: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    departmentsService.findOne.mockReset();
+    departmentsService.findUsers.mockReset();
+    departmentsService.findTeams.mockReset();
+    departmentsService.findProjects.mockReset();
+    departmentsService.findResourceRequests.mockReset();
+    departmentsService.findTeamProjects.mockReset();
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [DepartmentsController],
+      providers: [
+        { provide: DepartmentsService, useValue: departmentsService },
+        {
+          provide: JwtAuthGuard,
+          useValue: { canActivate: jest.fn(() => true) },
+        },
+        {
+          provide: RolesGuard,
+          useValue: { canActivate: jest.fn(() => true) },
+        },
+        { provide: JwtService, useValue: { verifyAsync: jest.fn() } },
+      ],
+    }).compile();
+
+    controller = module.get<DepartmentsController>(DepartmentsController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  it('passes the department id to the single department lookup', async () => {
+    await controller.findOne('4');
+
+    expect(departmentsService.findOne).toHaveBeenCalledWith(4);
+  });
+
+  it('passes the department id to the user lookup', async () => {
+    await controller.findUsers('4');
+
+    expect(departmentsService.findUsers).toHaveBeenCalledWith(4);
+  });
+
+  it('passes the department id to the team lookup', async () => {
+    await controller.findTeams('4');
+
+    expect(departmentsService.findTeams).toHaveBeenCalledWith(4);
+  });
+
+  it('passes the department id to the project lookup', async () => {
+    await controller.findProjects('4');
+
+    expect(departmentsService.findProjects).toHaveBeenCalledWith(4);
+  });
+
+  it('passes the department id and authenticated user to the request lookup', async () => {
+    const user = {
+      sub: 'user-1',
+      email: 'head@example.com',
+      role: UserRole.DEPARTMENT_HEAD,
+    };
+
+    await controller.findResourceRequests(
+      4,
+      { user } as AuthenticatedRequest,
+    );
+
+    expect(departmentsService.findResourceRequests).toHaveBeenCalledWith(4, user);
+  });
+
+  it('passes department and team ids to the project lookup', async () => {
+    await controller.findTeamProjects('4', '2');
+
+    expect(departmentsService.findTeamProjects).toHaveBeenCalledWith(4, 2);
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\departments.controller.ts =====
+
+import {Body,Controller,Post,Param,Get,Patch,Delete,ParseIntPipe,Req,UseGuards} from '@nestjs/common';
+import {CreateDepartmentDto} from './dto/create-department.dto';
+import {UpdateDepartmentDto} from './dto/update-departments.dto';
+import { DepartmentsService } from './departments.service';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/user-role.enum';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+
+@ApiTags('Departments')
+@Controller('departments')
+export class DepartmentsController {
+    constructor(private readonly departmentsService: DepartmentsService) {}
+
+    @Post()
+    @ApiOperation({ summary: 'Create a department' })
+    @ApiBody({ type: CreateDepartmentDto })
+    @ApiResponse({ status: 201, description: 'Created department record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, code: { type: 'string', nullable: true }, description: { type: 'string' } } } })
+    @ApiResponse({ status: 400, description: 'Invalid department fields' })
+    create(@Body() createDepartmentDto : CreateDepartmentDto) {
+        return this.departmentsService.create (createDepartmentDto);
+    }
+    @Get()
+    @ApiOperation({ summary: 'List departments' })
+    @ApiResponse({ status: 200, description: 'Array of department records', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, code: { type: 'string', nullable: true }, description: { type: 'string' } } } } })
+     findAll(){
+        return this.departmentsService.findAll();
+     }
+     @Get(':id')
+     @ApiOperation({ summary: 'Get a department by ID' })
+     @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
+     @ApiResponse({ status: 200, description: 'Department record with numeric ID, name, optional code, and description', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, code: { type: 'string', nullable: true }, description: { type: 'string' } } } })
+     @ApiResponse({ status: 404, description: 'Department not found' })
+     findOne(@Param('id') id: string) {
+        return this.departmentsService.findOne(Number(id));
+     }
+     @Get(':id/users')
+     @ApiOperation({ summary: 'List users in a department' })
+     @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
+     @ApiResponse({ status: 200, description: 'Array of users assigned to the department', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true } } } } })
+     @ApiResponse({ status: 404, description: 'Department not found' })
+     findUsers(@Param('id') id: string) {
+        return this.departmentsService.findUsers(Number(id));
+     }
+     @Get(':id/teams')
+     @ApiOperation({ summary: 'List teams in a department' })
+     @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
+     @ApiResponse({ status: 200, description: 'Array of department teams', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object' } } } } })
+     @ApiResponse({ status: 404, description: 'Department not found' })
+     findTeams(@Param('id') id: string) {
+        return this.departmentsService.findTeams(Number(id));
+     }
+     @Get(':id/projects')
+     @ApiOperation({ summary: 'List projects in a department' })
+     @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
+     @ApiResponse({ status: 200, description: 'Array of department projects and associated teams', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object' } } } } } })
+     @ApiResponse({ status: 404, description: 'Department not found' })
+     findProjects(@Param('id') id: string) {
+        return this.departmentsService.findProjects(Number(id));
+     }
+     @Get(':id/resource-requests')
+     @ApiOperation({ summary: 'List resource requests for a department' })
+     @ApiParam({ name: 'id', description: 'Department ID' })
+     @ApiResponse({ status: 200, description: 'Department resource requests returned' })
+     @ApiBearerAuth('access-token')
+     @UseGuards(JwtAuthGuard, RolesGuard)
+     @Roles(UserRole.DEPARTMENT_HEAD)
+     findResourceRequests(
+        @Param('id', ParseIntPipe) id: number,
+        @Req() request: AuthenticatedRequest,
+     ) {
+        return this.departmentsService.findResourceRequests(id, request.user!);
+     }
+     @Get(':id/teams/:teamId/projects')
+     @ApiOperation({ summary: 'List projects assigned to a team in a department' })
+     @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
+     @ApiParam({ name: 'teamId', description: 'Numeric team ID in the department', type: Number, example: 2 })
+     @ApiResponse({ status: 200, description: 'Array of team project records', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object' } } } } } })
+     @ApiResponse({ status: 404, description: 'Department or team in that department not found' })
+     findTeamProjects(
+        @Param('id') id: string,
+        @Param('teamId') teamId: string,
+     ) {
+        return this.departmentsService.findTeamProjects(
+            Number(id),
+            Number(teamId),
+        );
+     }
+     @Patch(':id')
+     @ApiOperation({ summary: 'Update a department' })
+     @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
+     @ApiBody({ type: UpdateDepartmentDto })
+     @ApiResponse({ status: 200, description: 'Updated department record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, code: { type: 'string', nullable: true }, description: { type: 'string' } } } })
+     @ApiResponse({ status: 400, description: 'Invalid department fields' })
+     @ApiResponse({ status: 404, description: 'Department not found' })
+     update(@Param('id') id: string,@Body() updateDepartmentDto:UpdateDepartmentDto) {
+        return this.departmentsService.update(Number(id), updateDepartmentDto)
+
+       }
+    @Delete(':id')
+        @ApiOperation({ summary: 'Delete a department' })
+        @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
+        @ApiResponse({ status: 200, description: 'Deleted department record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, code: { type: 'string', nullable: true }, description: { type: 'string' } } } })
+        @ApiResponse({ status: 404, description: 'Department not found' })
+        remove(@Param('id') id:string){
+         return this.departmentsService.remove(Number(id));
+         }
+    }
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\departments.module.ts =====
+
+import { Module } from '@nestjs/common';
+import {TypeOrmModule}from '@nestjs/typeorm';
+import { Department } from './entities/department.entity';
+import { DepartmentsController } from './departments.controller';
+import { DepartmentsService } from './departments.service';
+import { User } from '../users/user.entity';
+import { Team } from '../teams/entities/team.entity';
+import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { AuthSecurityModule } from '../auth/auth-security.module';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([Department, User, Team, Project, ResourceRequest]),
+    AuthSecurityModule,
+  ],
+  controllers: [DepartmentsController],
+  providers: [DepartmentsService]
+})
+export class DepartmentsModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\departments.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Department } from './entities/department.entity';
+import { User } from '../users/user.entity';
+import { Team } from '../teams/entities/team.entity';
+import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { DepartmentsService } from './departments.service';
+import { UserRole } from '../users/user-role.enum';
+
+describe('DepartmentsService', () => {
+  let service: DepartmentsService;
+  let departmentRepository: jest.Mocked<
+    Pick<Repository<Department>, 'findOne'>
+  >;
+  let userRepository: jest.Mocked<Pick<Repository<User>, 'find' | 'findOne'>>;
+  let teamRepository: jest.Mocked<
+    Pick<Repository<Team>, 'find' | 'findOne'>
+  >;
+  let projectRepository: jest.Mocked<Pick<Repository<Project>, 'find'>>;
+  let resourceRequestRepository: jest.Mocked<
+    Pick<Repository<ResourceRequest>, 'find'>
+  >;
+
+  beforeEach(async () => {
+    departmentRepository = {
+      findOne: jest.fn(),
+    };
+    userRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+    };
+    teamRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+    };
+    projectRepository = {
+      find: jest.fn(),
+    };
+    resourceRequestRepository = {
+      find: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DepartmentsService,
+        {
+          provide: getRepositoryToken(Department),
+          useValue: departmentRepository,
+        },
+        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: getRepositoryToken(Team), useValue: teamRepository },
+        { provide: getRepositoryToken(Project), useValue: projectRepository },
+        {
+          provide: getRepositoryToken(ResourceRequest),
+          useValue: resourceRequestRepository,
+        },
+      ],
+    }).compile();
+
+    service = module.get<DepartmentsService>(DepartmentsService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  it('returns users belonging to the requested department', async () => {
+    const department = { id: 4, name: 'Finance' };
+    const users = [{ id: 'user-1', fullName: 'Alex Example' }];
+    departmentRepository.findOne.mockResolvedValue(department as Department);
+    userRepository.find.mockResolvedValue(users as User[]);
+
+    await expect(service.findUsers(4)).resolves.toBe(users);
+    expect(departmentRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 4 },
+    });
+    expect(userRepository.find).toHaveBeenCalledWith({
+      where: { department: { id: 4 } },
+    });
+  });
+
+  it('returns teams belonging to the requested department', async () => {
+    const department = { id: 4, name: 'Finance' };
+    const teams = [{ id: 2, name: 'Accounts' }];
+    departmentRepository.findOne.mockResolvedValue(department as Department);
+    teamRepository.find.mockResolvedValue(teams as Team[]);
+
+    await expect(service.findTeams(4)).resolves.toBe(teams);
+    expect(departmentRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 4 },
+    });
+    expect(teamRepository.find).toHaveBeenCalledWith({
+      where: { department: { id: 4 } },
+    });
+  });
+
+  it('returns projects assigned to teams in the requested department', async () => {
+    const department = { id: 4, name: 'Finance' };
+    const team = { id: 2, name: 'Accounts', department };
+    const projects = [{ id: 7, name: 'Budget System', teams: [team] }];
+    departmentRepository.findOne.mockResolvedValue(department as Department);
+    projectRepository.find.mockResolvedValue(projects as Project[]);
+
+    await expect(service.findProjects(4)).resolves.toBe(projects);
+    expect(departmentRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 4 },
+    });
+    expect(projectRepository.find).toHaveBeenCalledWith({
+      where: { teams: { department: { id: 4 } } },
+      relations: { teams: true },
+    });
+  });
+
+  it('returns projects for a team in the requested department', async () => {
+    const department = { id: 4, name: 'Finance' };
+    const team = { id: 2, name: 'Accounts', department };
+    const projects = [{ id: 7, name: 'Budget System', teams: [team] }];
+    departmentRepository.findOne.mockResolvedValue(department as Department);
+    teamRepository.findOne.mockResolvedValue(team as Team);
+    projectRepository.find.mockResolvedValue(projects as Project[]);
+
+    await expect(service.findTeamProjects(4, 2)).resolves.toBe(projects);
+    expect(teamRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 2, department: { id: 4 } },
+    });
+    expect(projectRepository.find).toHaveBeenCalledWith({
+      where: { teams: { id: 2 } },
+      relations: { teams: true },
+    });
+  });
+
+  it('returns resource requests for the authenticated head department', async () => {
+    const department = { id: 4, name: 'Finance' };
+    const account = { id: 'head-1', department };
+    const requests = [{ id: 'request-1', departmentId: '4' }];
+    userRepository.findOne.mockResolvedValue(account as User);
+    resourceRequestRepository.find.mockResolvedValue(requests as ResourceRequest[]);
+
+    await expect(
+      service.findResourceRequests(4, {
+        sub: 'head-1',
+        email: 'head@example.com',
+        role: UserRole.DEPARTMENT_HEAD,
+      }),
+    ).resolves.toBe(requests);
+    expect(userRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'head-1' },
+      relations: { department: true },
+    });
+    expect(resourceRequestRepository.find).toHaveBeenCalledWith({
+      where: { departmentId: '4' },
+      order: { createdAt: 'DESC' },
+    });
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\departments\departments.service.ts =====
+
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Department } from './entities/department.entity';
+import { CreateDepartmentDto } from './dto/create-department.dto';
+import { UpdateDepartmentDto } from './dto/update-departments.dto';
+import { User } from '../users/user.entity';
+import { Team } from '../teams/entities/team.entity';
+import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
+import { UserRole } from '../users/user-role.enum';
+
+@Injectable()
+export class DepartmentsService {
+  constructor(
+    @InjectRepository(Department)
+    private readonly departmentRepository: Repository<Department>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Team)
+    private readonly teamRepository: Repository<Team>,
+    @InjectRepository(Project)
+    private readonly projectRepository: Repository<Project>,
+    @InjectRepository(ResourceRequest)
+    private readonly resourceRequestRepository: Repository<ResourceRequest>,
+  ) {}
+
+  async create(createDepartmentDto: CreateDepartmentDto) {
+    const department = this.departmentRepository.create(createDepartmentDto);
+    return this.departmentRepository.save(department);
+  }
+
+  async findAll() {
+    return this.departmentRepository.find();
+  }
+
+  async findOne(id: number) {
+    const department = await this.departmentRepository.findOne({ where: { id } });
+
+    if (!department) {
+      throw new NotFoundException(`Department with id ${id} not found`);
+    }
+
+    return department;
+  }
+
+  async findUsers(id: number) {
+    await this.findOne(id);
+    return this.userRepository.find({ where: { department: { id } } });
+  }
+
+  async findTeams(id: number) {
+    await this.findOne(id);
+    return this.teamRepository.find({ where: { department: { id } } });
+  }
+
+  async findProjects(id: number) {
+    await this.findOne(id);
+    return this.projectRepository.find({
+      where: { teams: { department: { id } } },
+      relations: { teams: true },
+    });
+  }
+
+  async findResourceRequests(id: number, user: AuthTokenPayload) {
+    if (user.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new ForbiddenException('Only department heads can view department requests');
+    }
+
+    const account = await this.userRepository.findOne({
+      where: { id: user.sub },
+      relations: { department: true },
+    });
+    if (!account?.department) {
+      throw new ForbiddenException('Your account is not assigned to a department');
+    }
+    if (account.department.id !== id) {
+      throw new NotFoundException(`Department with id ${id} not found`);
+    }
+
+    return this.resourceRequestRepository.find({
+      where: { departmentId: String(account.department.id) },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findTeamProjects(departmentId: number, teamId: number) {
+    await this.findOne(departmentId);
+    const team = await this.teamRepository.findOne({
+      where: { id: teamId, department: { id: departmentId } },
+    });
+
+    if (!team) {
+      throw new NotFoundException(
+        `Team with id ${teamId} not found in department ${departmentId}`,
+      );
+    }
+
+    return this.projectRepository.find({
+      where: { teams: { id: teamId } },
+      relations: { teams: true },
+    });
+  }
+
+  async update(id: number, updateDepartmentDto: UpdateDepartmentDto) {
+    const department = await this.findOne(id);
+    Object.assign(department, updateDepartmentDto);
+    return this.departmentRepository.save(department);
+  }
+
+  async remove(id: number) {
+    const department = await this.findOne(id);
+    await this.departmentRepository.remove(department);
+    return department;
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\notifications\dto\create-notification.dto.ts =====
+
+
+import { IsInt, IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class CreateNotificationDto {
+    @ApiProperty({ type: Number, example: 15 })
+  @IsInt()
+  userId: number;
+
+  @ApiProperty({ type: String, example: 'Your request was approved.' })
+  @IsString()
+  @IsNotEmpty()
+  message: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\notifications\notification.entity.ts =====
+
+import{
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+} from 'typeorm';
+
+@Entity()
+export class Notification{
+    @PrimaryGeneratedColumn()
+    id:number;
+
+    @Column()
+    userId:number;
+
+    @Column()
+    message:string;
+
+    @Column({default:false})
+    isRead:boolean;
+     
+    @CreateDateColumn()
+    createdAt:Date;
+
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\notifications\notifications.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotificationsController } from './notifications.controller';
+import { NotificationsService } from './notifications.service';
+
+describe('NotificationsController', () => {
+  let controller: NotificationsController;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [NotificationsController],
+      providers: [
+        {
+          provide: NotificationsService,
+          useValue: {
+            getUserNotifications: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    controller = module.get<NotificationsController>(NotificationsController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\notifications\notifications.controller.ts =====
+
+
+import {Body,BadRequestException,Controller,Delete,Get,Param,ParseIntPipe,Patch, Post, Req} from '@nestjs/common';
+import { NotificationsService } from './notifications.service';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+@ApiTags('Notifications')
+@Controller('notifications')
+export class NotificationsController {
+  constructor(
+    private readonly notificationsService: NotificationsService,
+  ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Get notifications for the authenticated user' })
+  @ApiResponse({ status: 200, description: 'Notifications for the authenticated user', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
+  @ApiResponse({ status: 401, description: 'Request must include an authenticated user' })
+  getMyNotifications(@Req() req: any) {
+    return this.notificationsService.getUserNotifications(
+      req.user.id,
+    );
+  }
+
+  @Patch(':id/read')
+  @ApiOperation({ summary: 'Mark a notification as read' })
+  @ApiParam({ name: 'id', description: 'Notification ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Notifications for the path user ID; current handler does not mark a notification read', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
+  @Get(':id')
+  @ApiOperation({ summary: 'Get notifications for a user ID' })
+  @ApiParam({ name: 'id', description: 'Numeric user ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Notifications for the specified user ID', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
+  getUserNotifications(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.notificationsService.getUserNotifications(id);
+  }
+
+  @Patch('read/:id')
+  @ApiOperation({ summary: 'Mark a notification as read for a user' })
+  @ApiParam({ name: 'id', description: 'Numeric notification ID', type: Number })
+  @ApiBody({ schema: { type: 'object', required: ['userId'], properties: { userId: { type: 'integer', example: 15 } } } })
+  @ApiResponse({ status: 200, description: 'Updated notification', schema: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } })
+  @ApiResponse({ status: 404, description: 'Notification not found for the supplied user ID' })
+  @ApiResponse({ status: 400, description: 'Notification ID must be an integer and userId is required' })
+  markAsRead(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { userId: number },
+  ) {
+    if (!body || body.userId === undefined) {
+      throw new BadRequestException(
+        'Please provide userId in the request body',
+      );
+    }
+
+    return this.notificationsService.markAsRead(
+      id,
+      body.userId,
+    );
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create a notification' })
+  @ApiBody({ schema: { type: 'object', required: ['userId', 'message'], properties: { userId: { type: 'integer' }, message: { type: 'string' } } } })
+  @ApiResponse({ status: 201, description: 'Created notification', schema: { type: 'object', properties: { id: { type: 'integer' }, userId: { type: 'integer' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } })
+  @ApiResponse({ status: 400, description: 'userId and message are required' })
+  createNotification(
+    @Body() body: { userId: number; message: string },
+  ) {
+    if (!body || body.userId === undefined || !body.message) {
+      throw new BadRequestException(
+        'Please provide userId and message',
+      );
+    }
+    return this.notificationsService.createNotification(
+      body.userId,
+      body.message,
+    );
+  }
+
+  @Delete(':userId/:notificationId')
+  @ApiOperation({ summary: 'Delete a user notification' })
+  @ApiParam({ name: 'userId', description: 'Numeric user ID', type: Number })
+  @ApiParam({ name: 'notificationId', description: 'Numeric notification ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Deletion result', schema: { type: 'object', properties: { message: { type: 'string', example: 'Notification deleted successfully' } } } })
+  @ApiResponse({ status: 404, description: 'Notification not found for the supplied user ID' })
+  @ApiResponse({ status: 400, description: 'Both path IDs must be integers' })
+  deleteNotification(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Param('notificationId', ParseIntPipe)
+    notificationId: number,
+  ) {
+    return this.notificationsService.deleteNotification(
+      userId,
+      notificationId,
+    );
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\notifications\notifications.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { NotificationsController } from './notifications.controller';
+import { NotificationsService } from './notifications.service';
+import { Notification } from './notification.entity';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([Notification])],
+  controllers: [NotificationsController],
+  providers: [NotificationsService],
+  exports: [NotificationsService],
+})
+export class NotificationsModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\notifications\notifications.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { NotificationsService } from './notifications.service';
+import { Notification } from './notification.entity';
+
+describe('NotificationsService', () => {
+  let service: NotificationsService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        NotificationsService,
+        {
+          provide: getRepositoryToken(Notification),
+          useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
+            find: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<NotificationsService>(NotificationsService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\notifications\notifications.service.ts =====
+
+import { Injectable,NotFoundException } from "@nestjs/common";
+import {InjectRepository} from '@nestjs/typeorm';
+import {Repository} from 'typeorm';
+import {Notification} from './notification.entity';
+
+@Injectable()
+export class NotificationsService{
+  constructor(
+    @InjectRepository(Notification)
+    private readonly notificationRepository: Repository<Notification>,
+  ){}
+  async createNotification(
+    userId:number,
+    message:string,
+  ): Promise<Notification>{
+    const notification = this.notificationRepository.create({
+      userId,
+      message,
+    });
+    return this.notificationRepository.save(notification);
+  
+  }
+  async getUserNotifications(
+    userId: number,
+  ):Promise<Notification[]>{
+    return this.notificationRepository.find({
+      where:{userId},
+      order:{createdAt:'DESC'},
+    });
+  }
+  
+  async markAsRead(
+    notificationId:number,
+    userId:number,
+  ): Promise<Notification>{
+    const notification = await this.notificationRepository.findOne({
+      where:{id: notificationId, userId},
+     
+    });
+    if (!notification){
+      throw new NotFoundException('Notification not found');
+    }
+    notification.isRead = true;
+    return this.notificationRepository.save(notification);
+  }
+
+  async deleteNotification(userId:number, notificationId:number){
+    const notification =await this.notificationRepository.findOne({
+      where:{
+        id:notificationId,
+        userId,
+      },
+    });
+    if(!notification){
+      throw new NotFoundException('Notification not found');
+    }
+    await this.notificationRepository.remove(notification);
+    return{
+      message:'Notification deleted successfully',
+    };
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\dto\assign-project-teams.dto.ts =====
+
+import { ArrayMaxSize, ArrayUnique, IsArray, IsInt, Min } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class AssignProjectTeamsDto {
+  @ApiProperty({ type: [Number], example: [1], description: 'Replacement list of team IDs' })
+  @IsArray()
+  @ArrayMaxSize(1)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  teamIds: number[];
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\dto\create-project.dto.ts =====
+
+import {ArrayMaxSize, ArrayUnique, IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Length, MaxLength, Min} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class CreateProjectDto {
+  @ApiProperty({ type: String, example: 'Office Modernization', maxLength: 150 })
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 150)
+  name: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Upgrade shared office equipment', maxLength: 1000 })
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
+
+  @IsOptional()
+  @ApiProperty({ type: [Number], example: [1], description: 'At least one team ID in the department is required by the create operation' })
+  @IsArray()
+  @ArrayMaxSize(1)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  teamIds?: number[];
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\dto\update-project.dto.ts =====
+
+import { IsNotEmpty, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export class UpdateProjectDto {
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Office Modernization', maxLength: 150 })
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 150)
+  name?: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Upgrade shared office equipment', maxLength: 1000 })
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\entities\project.entity.ts =====
+
+import {Column, CreateDateColumn, Entity, JoinTable, ManyToMany, PrimaryGeneratedColumn, UpdateDateColumn} from 'typeorm';
+import { Team } from '../../teams/entities/team.entity';
+
+@Entity()
+export class Project {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ type: 'varchar', length: 150 })
+  name: string;
+
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  description?: string;
+
+  @ManyToMany(() => Team)
+  @JoinTable()
+  teams: Team[];
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\projects.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { ProjectsController } from './projects.controller';
+
+describe('ProjectsController', () => {
+  let controller: ProjectsController;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [ProjectsController],
+    }).compile();
+
+    controller = module.get<ProjectsController>(ProjectsController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\projects.controller.ts =====
+
+import {Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Req, UseGuards} from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/user-role.enum';
+import { AssignProjectTeamsDto } from './dto/assign-project-teams.dto';
+import { CreateProjectDto } from './dto/create-project.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
+import { ProjectsService } from './projects.service';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam } from '@nestjs/swagger';
+
+@ApiTags('Projects')
+@Controller('projects')
+export class ProjectsController {
+  constructor(private readonly projectsService: ProjectsService) {}
+
+  @ApiOperation({ summary: 'Create a new project' })
+  @ApiResponse({ status: 201, description: 'Created project', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
+  @ApiResponse({ status: 400, description: 'Invalid project fields' })
+  @ApiResponse({ status: 422, description: 'At least one valid team is required' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+        required: ['name', 'teamIds'],
+      properties: {
+        name: {
+          type: 'string',
+          example: 'New Project'
+        },
+        description: { type: 'string', maxLength: 1000, example: 'Upgrade office equipment' },
+        teamIds: { type: 'array', items: { type: 'integer', minimum: 1 }, example: [1] }
+      }
+    }
+  })
+  @Post()
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD)
+  create(@Body() createProjectDto: CreateProjectDto, @Req() request: AuthenticatedRequest) {
+    return this.projectsService.create(createProjectDto, request.user!);
+  }
+
+  @ApiOperation({ summary: 'Get all projects' })
+  @ApiResponse({ status: 200, description: 'Projects visible to the caller', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, department: { type: 'object' } } } } } } } })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
+  @Get()
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD, UserRole.MANAGING_DIRECTOR)
+  findAll(@Req() request: AuthenticatedRequest) {
+    return this.projectsService.findAll(request.user!);
+  }
+
+  @ApiOperation({ summary: 'Get a specific project by ID' })
+  @ApiResponse({ status: 200, description: 'Project record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, department: { type: 'object' } } } } } } })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Not Found: Project does not exist' })
+  @Get(':id')
+  @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD, UserRole.MANAGING_DIRECTOR)
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() request: AuthenticatedRequest) {
+    return this.projectsService.findOne(id, request.user!);
+  }
+
+  @ApiOperation({ summary: 'Assign teams to a project' })
+  @ApiResponse({ status: 200, description: 'Updated project record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
+  @ApiResponse({ status: 400, description: 'Invalid team IDs' })
+  @ApiResponse({ status: 422, description: 'Team IDs are missing/unknown or no team remains assigned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Not Found: Project does not exist' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['teamIds'],
+      properties: {
+        teamIds: {
+          type: 'array',
+          items: {
+            type: 'integer',
+            example: 1
+          },
+          example: [1, 2]
+        }
+      }
+    }
+  })
+  @Patch(':id/teams')
+  @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD)
+  assignTeams(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() assignProjectTeamsDto: AssignProjectTeamsDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.projectsService.assignTeams(id, assignProjectTeamsDto.teamIds, request.user!);
+  }
+
+  @ApiOperation({ summary: 'Update a project name or description' })
+  @ApiResponse({ status: 200, description: 'Updated project record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
+  @ApiResponse({ status: 400, description: 'No project fields supplied' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions or department access' })
+  @ApiResponse({ status: 404, description: 'Project does not exist' })
+  @Patch(':id')
+  @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
+  @ApiBody({ type: UpdateProjectDto })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD)
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateProjectDto: UpdateProjectDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.projectsService.update(id, updateProjectDto, request.user!);
+  }
+
+  @ApiOperation({ summary: 'List team member names for a project' })
+  @ApiResponse({ status: 200, description: 'Project team members', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, teamId: { type: 'integer' }, teamName: { type: 'string' } } } } })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions or department access' })
+  @ApiResponse({ status: 404, description: 'Project does not exist' })
+  @Get(':id/team-members')
+  @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD, UserRole.MANAGING_DIRECTOR)
+  findTeamMembers(@Param('id', ParseIntPipe) id: number, @Req() request: AuthenticatedRequest) {
+    return this.projectsService.findTeamMembers(id, request.user!);
+  }
+
+  @ApiOperation({ summary: 'Delete a project by ID' })
+  @ApiResponse({ status: 200, description: 'Deletion confirmation', schema: { type: 'object', properties: { message: { type: 'string', example: 'Project with id 1 deleted successfully' } } } })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Not Found: Project does not exist' })
+  @Delete(':id')
+  @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD)
+  remove(@Param('id', ParseIntPipe) id: number, @Req() request: AuthenticatedRequest) {
+    return this.projectsService.remove(id, request.user!);
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\projects.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthSecurityModule } from '../auth/auth-security.module';
+import { Team } from '../teams/entities/team.entity';
+import { User } from '../users/user.entity';
+import { Project } from './entities/project.entity';
+import { ProjectsController } from './projects.controller';
+import { ProjectsService } from './projects.service';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([Project, Team, User]),
+    AuthSecurityModule,
+  ],
+  controllers: [ProjectsController],
+  providers: [ProjectsService],
+  exports: [ProjectsService, ProjectsModule],
+})
+export class ProjectsModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\projects.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { ProjectsService } from './projects.service';
+
+describe('ProjectsService', () => {
+  let service: ProjectsService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [ProjectsService],
+    }).compile();
+
+    service = module.get<ProjectsService>(ProjectsService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\projects\projects.service.ts =====
+
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
+import { Team } from '../teams/entities/team.entity';
+import { User } from '../users/user.entity';
+import { UserRole } from '../users/user-role.enum';
+import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
+import { CreateProjectDto } from './dto/create-project.dto';
+import { Project } from './entities/project.entity';
+import { UpdateProjectDto } from './dto/update-project.dto';
+
+@Injectable()
+export class ProjectsService {
+  constructor(
+    @InjectRepository(Project)
+    private readonly projectRepository: Repository<Project>,
+    @InjectRepository(Team)
+    private readonly teamRepository: Repository<Team>,
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
+  ) {}
+
+  async create(createProjectDto: CreateProjectDto, user: AuthTokenPayload) {
+    const departmentId = await this.getDepartmentHeadDepartmentId(user);
+    const { teamIds = [], ...projectDetails } = createProjectDto;
+    if (teamIds.length === 0) {
+      throw new UnprocessableEntityException('A project must be assigned to a team in your department');
+    }
+    const teams = await this.findTeams(teamIds);
+    this.assertTeamsInDepartment(teams, departmentId);
+    const project = this.projectRepository.create({
+      ...projectDetails,
+      teams,
+    });
+    return this.projectRepository.save(project);
+  }
+
+
+  async findAll(user: AuthTokenPayload) {
+    if (user.role === UserRole.MANAGING_DIRECTOR) {
+      return this.projectRepository.find({
+        relations: { teams: { department: true } },
+      });
+    }
+    const departmentId = await this.getDepartmentHeadDepartmentId(user);
+    return this.projectRepository.find({
+      where: { teams: { department: { id: departmentId } } },
+      relations: { teams: { department: true } },
+    });
+  }
+
+  async findOne(id: number, user: AuthTokenPayload) {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+      relations: { teams: { department: true } },
+    });
+    if (!project) {
+      throw new NotFoundException(`Project with id ${id} not found`);
+    }
+    if (user.role !== UserRole.MANAGING_DIRECTOR) {
+      const departmentId = await this.getDepartmentHeadDepartmentId(user);
+      if (!project.teams.some((team) => team.department?.id === departmentId)) {
+        throw new NotFoundException(`Project with id ${id} not found`);
+      }
+    }
+    return project;
+  }
+
+  async assignTeams(id: number, teamIds: number[], user: AuthTokenPayload) {
+    const departmentId = await this.getDepartmentHeadDepartmentId(user);
+    const project = await this.findOne(id, user);
+    const teams = await this.findTeams(teamIds);
+    this.assertTeamsInDepartment(teams, departmentId);
+    if (teams.length === 0) {
+      throw new UnprocessableEntityException('A project must remain assigned to a team in your department');
+    }
+    project.teams = teams;
+    return this.projectRepository.save(project);
+  }
+
+  async update(id: number, updateProjectDto: UpdateProjectDto, user: AuthTokenPayload) {
+    if (updateProjectDto.name === undefined && updateProjectDto.description === undefined) {
+      throw new BadRequestException('Provide a project name or description to update');
+    }
+    const project = await this.findOne(id, user);
+    Object.assign(project, updateProjectDto);
+    return this.projectRepository.save(project);
+  }
+
+  async findTeamMembers(id: number, user: AuthTokenPayload) {
+    const project = await this.findOne(id, user);
+    const teamIds = project.teams.map((team) => team.id);
+    if (teamIds.length === 0) return [];
+
+    const members = await this.users.find({
+      where: { team: { id: In(teamIds) } },
+      relations: { team: true },
+      select: { id: true, fullName: true, team: { id: true, name: true } },
+      order: { fullName: 'ASC' },
+    });
+    return members.map((member) => ({
+      id: member.id,
+      fullName: member.fullName,
+      teamId: member.team?.id,
+      teamName: member.team?.name,
+    }));
+  }
+
+  async remove(id: number, user: AuthTokenPayload) {
+    const project = await this.findOne(id, user);
+    await this.projectRepository.remove(project);
+    return { message: `Project with id ${id} deleted successfully` };
+  }
+
+  private async getDepartmentHeadDepartmentId(user: AuthTokenPayload): Promise<number> {
+    if (user.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new ForbiddenException('Only department heads can create or manage projects');
+    }
+    const account = await this.users.findOne({
+      where: { id: user.sub },
+      relations: { department: true },
+    });
+    if (!account?.department) {
+      throw new ForbiddenException('Your account is not assigned to a department');
+    }
+    return account.department.id;
+  }
+
+  private assertTeamsInDepartment(teams: Team[], departmentId: number) {
+    const invalidTeams = teams.filter((team) => team.department?.id !== departmentId);
+    if (invalidTeams.length > 0) {
+      throw new ForbiddenException('Projects can only be assigned to teams in your department');
+    }
+  }
+
+  private async findTeams(teamIds: number[]) {
+    if (teamIds.length === 0) return [];
+
+    const teams = await this.teamRepository.find({ where: { id: In(teamIds) } });
+    if (teams.length !== teamIds.length) {
+      const foundIds = new Set(teams.map((team) => team.id));
+      const missingIds = teamIds.filter((id) => !foundIds.has(id));
+      throw new UnprocessableEntityException(
+        `Team ids not found: ${missingIds.join(', ')}`,
+      );
+    }
+    return teams;
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\reports\dto\report-filter.dto.ts =====
+
+import { IsOptional, IsInt, IsDateString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ReportFilterDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  departmentId?: number;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\reports\reports.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { ReportsController } from './reports.controller';
+
+describe('ReportsController', () => {
+  let controller: ReportsController;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [ReportsController],
+    }).compile();
+
+    controller = module.get<ReportsController>(ReportsController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\reports\reports.controller.ts =====
+
+
+import {Controller,Get,Query,Param,ParseIntPipe,} from '@nestjs/common';
+import { ReportsService } from './reports.service';
+import { ReportFilterDto } from './dto/report-filter.dto';
+import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+@ApiTags('Reports')
+@Controller('reports')
+export class ReportsController {
+  constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('approval-history')
+  @ApiOperation({ summary: 'Get resource request approval history' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date', example: '2026-01-01', description: 'Inclusive start date (ISO 8601)' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date', example: '2026-01-31', description: 'Inclusive end date (ISO 8601)' })
+  @ApiResponse({ status: 200, description: 'Approval history rows', schema: { type: 'array', items: { type: 'object', properties: { department_id: { type: 'integer' } }, additionalProperties: true } } })
+  @ApiResponse({ status: 400, description: 'Invalid departmentId or date format' })
+  getApprovalHistory(@Query() filter: ReportFilterDto) {
+    return this.reportsService.getApprovalHistory(filter);
+  }
+
+  @Get('departmental-spending')
+  @ApiOperation({ summary: 'Get departmental spending' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date', example: '2026-01-01' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date', example: '2026-01-31' })
+  @ApiResponse({ status: 200, description: 'Departmental spending rows', schema: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } } })
+  @ApiResponse({ status: 400, description: 'Invalid departmentId or date format' })
+  getDepartmentalSpending(@Query() filter: ReportFilterDto) {
+    return this.reportsService.getDepartmentalSpending(filter);
+  }
+
+  @Get('allocation-history')
+  @ApiOperation({ summary: 'Get resource allocation history' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date', example: '2026-01-01' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date', example: '2026-01-31' })
+  @ApiResponse({ status: 200, description: 'Allocation history rows', schema: { type: 'array', items: { type: 'object', properties: { department_id: { type: 'integer' } }, additionalProperties: true } } })
+  @ApiResponse({ status: 400, description: 'Invalid departmentId or date format' })
+  getAllocationHistory(@Query() filter: ReportFilterDto) {
+    return this.reportsService.getAllocationHistory(filter);
+  }
+
+  @Get('department/:departmentId')
+  @ApiOperation({ summary: 'Get a report for one department' })
+  @ApiParam({ name: 'departmentId', description: 'Department ID', type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: String })
+  @ApiQuery({ name: 'endDate', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Department report', schema: { type: 'object', properties: { departmentId: { type: 'integer' }, approvals: { type: 'array', items: { type: 'object', additionalProperties: true } }, spending: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } }, allocations: { type: 'array', items: { type: 'object', additionalProperties: true } } } } })
+  @ApiResponse({ status: 400, description: 'Department ID must be an integer; date filters must use ISO 8601' })
+  getDepartmentReport(
+    @Param('departmentId', ParseIntPipe) departmentId: number,
+    @Query() filter: ReportFilterDto,
+  ) {
+    return this.reportsService.getDepartmentReport(
+      departmentId,
+      filter,
+    );
+  }
+
+  @Get('organization')
+  @ApiOperation({ summary: 'Get the organization report' })
+  @ApiQuery({ name: 'departmentId', required: false, type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: String })
+  @ApiQuery({ name: 'endDate', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Organization report', schema: { type: 'object', properties: { approvals: { type: 'array', items: { type: 'object', additionalProperties: true } }, spending: { type: 'array', items: { type: 'object', properties: { departmentId: { type: 'integer' }, departmentName: { type: 'string' }, totalSpending: { type: 'number' } } } }, allocations: { type: 'array', items: { type: 'object', additionalProperties: true } } } } })
+  @ApiResponse({ status: 400, description: 'Invalid departmentId or date format' })
+  getOrganizationReport(@Query() filter: ReportFilterDto) {
+    return this.reportsService.getOrganizationReport(filter);
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\reports\reports.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { ReportsController } from './reports.controller';
+import { ReportsService } from './reports.service';
+
+@Module({
+  controllers: [ReportsController],
+  providers: [ReportsService],
+  exports:[ReportsService],
+})
+export class ReportsModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\reports\reports.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { ReportsService } from './reports.service';
+
+describe('ReportsService', () => {
+  let service: ReportsService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [ReportsService],
+    }).compile();
+
+    service = module.get<ReportsService>(ReportsService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\reports\reports.service.ts =====
+
+
+import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { ReportFilterDto } from './dto/report-filter.dto';
+
+@Injectable()
+export class ReportsService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  // 1. Historical approval decisions
+  async getApprovalHistory(filter: ReportFilterDto) {
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (filter.departmentId) {
+      params.push(filter.departmentId);
+      conditions.push(`r.department_id = ?`);
+    }
+
+    if (filter.startDate) {
+      params.push(filter.startDate);
+      conditions.push(`a.created_at >= ?`);
+    }
+
+    if (filter.endDate) {
+      params.push(filter.endDate);
+      conditions.push(`a.created_at < DATE_ADD(?, INTERVAL 1 DAY)`);
+    }
+
+    const where = conditions.length
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
+
+    return this.dataSource.query(
+      `SELECT a.*, r.department_id
+       FROM approvals a
+       JOIN resource_requests r ON r.id = a.request_id
+       ${where}
+       ORDER BY a.created_at DESC`,
+      params,
+    );
+  }
+
+  // 2. Departmental spending patterns
+  async getDepartmentalSpending(filter: ReportFilterDto) {
+    const conditions: string[] = [
+      `r.status = 'APPROVED'`,
+    ];
+    const params: any[] = [];
+
+    if (filter.departmentId) {
+      params.push(filter.departmentId);
+      conditions.push(`r.department_id = ?`);
+    }
+
+    if (filter.startDate) {
+      params.push(filter.startDate);
+      conditions.push(`r.created_at >= ?`);
+    }
+
+    if (filter.endDate) {
+      params.push(filter.endDate);
+      conditions.push(
+        `r.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+      );
+    }
+
+    return this.dataSource.query(
+      `SELECT d.id AS departmentId,
+              d.name AS departmentName,
+              COALESCE(SUM(r.total_cost), 0) AS totalSpending
+       FROM departments d
+       LEFT JOIN resource_requests r
+         ON r.department_id = d.id
+         AND ${conditions.join(' AND ')}
+       GROUP BY d.id, d.name
+       ORDER BY totalSpending DESC`,
+      params,
+    );
+  }
+
+  // 3. Resource allocation history
+  async getAllocationHistory(filter: ReportFilterDto) {
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (filter.departmentId) {
+      params.push(filter.departmentId);
+      conditions.push(`r.department_id = ?`);
+    }
+
+    if (filter.startDate) {
+      params.push(filter.startDate);
+      conditions.push(`ra.created_at >= ?`);
+    }
+
+    if (filter.endDate) {
+      params.push(filter.endDate);
+      conditions.push(
+        `ra.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+      );
+    }
+
+    const where = conditions.length
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
+
+    return this.dataSource.query(
+      `SELECT ra.*, r.department_id
+       FROM resource_allocations ra
+       JOIN resource_requests r ON r.id = ra.request_id
+       ${where}
+       ORDER BY ra.created_at DESC`,
+      params,
+    );
+  }
+
+  async getDepartmentReport(
+    departmentId: number,
+    filter: ReportFilterDto,
+  ) {
+    return {
+      departmentId,
+      approvals: await this.getApprovalHistory({
+        ...filter,
+        departmentId,
+      }),
+      spending: await this.getDepartmentalSpending({
+        ...filter,
+        departmentId,
+      }),
+      allocations: await this.getAllocationHistory({
+        ...filter,
+        departmentId,
+      }),
+    };
+  }
+
+  // 5. Organization-wide report
+  async getOrganizationReport(filter: ReportFilterDto) {
+    const organizationFilter = {
+      startDate: filter.startDate,
+      endDate: filter.endDate,
+    };
+
+    return {
+      approvals: await this.getApprovalHistory(organizationFilter),
+      spending: await this.getDepartmentalSpending(organizationFilter),
+      allocations: await this.getAllocationHistory(organizationFilter),
+    };
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\dto\associate-department.dto.ts =====
+
+import { IsString, IsNotEmpty } from 'class-validator';
+
+export class AssociateDepartmentDto {
+  @IsString()
+  @IsNotEmpty()
+  departmentId: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\dto\create-resourcerequest.dto.ts =====
+
+import {
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  IsNumber,
+  IsPositive,
+  Min,
+} from 'class-validator';
+
+export class CreateResourceRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  itemDescription: string;
+
+  @IsString()
+  @IsNotEmpty()
+  manufacturerLabel: string;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  price: number;
+
+  @IsString()
+  @IsNotEmpty()
+  batchNumber: string;
+
+  @IsString()
+  @IsNotEmpty()
+  vendor: string;
+
+  @IsInt()
+  @Min(1)
+  quantity: number;
+
+  @IsString()
+  @IsNotEmpty()
+  projectId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lineManagerId: string;
+
+  
+  @IsString()
+  @IsNotEmpty()
+  teamId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  departmentId: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\dto\query-resourcerequest.dto.ts =====
+
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { RequestStatus } from '../entities/resourcerequest.entity';
+
+export class QueryResourceRequestDto {
+  @IsOptional()
+  @IsString()
+  teamId?: string;
+
+  @IsOptional()
+  @IsEnum(RequestStatus)
+  status?: RequestStatus;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\dto\update-resourcerequest.dto.ts =====
+
+import { PartialType } from '@nestjs/swagger';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { CreateResourceRequestDto } from './create-resourcerequest.dto';
+import { RequestStatus } from '../entities/resourcerequest.entity';
+
+export class UpdateResourceRequestDto extends PartialType(CreateResourceRequestDto) {
+  
+  @IsOptional()
+  @IsEnum(RequestStatus)
+  status?: RequestStatus;
+
+  
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\entities\audit-log.entity.ts =====
+
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+
+@Entity()
+export class AuditLog {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  requestId: string;
+
+  @Column()
+  action: string;
+
+  @Column()
+  performedBy: string;
+
+  @Column({ type: 'text', nullable: true })
+  note: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\entities\request-audit-log.entity.ts =====
+
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+
+// One row per action on a resource request. Insert-only.
+// Separate from the group's audit_logs table so the two never clash.
+@Entity('resource_request_audit')
+export class RequestAuditLog {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  requestId: string;
+
+  @Column()
+  action: string; // CREATED, SUBMITTED, APPROVED, ...
+
+  @Column()
+  performedBy: string;
+
+  @Column({ type: 'text', nullable: true })
+  note: string | null;
+
+  @CreateDateColumn()
+  createdAt: Date;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\entities\resourcerequest.entity.ts =====
+
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+
+export enum RequestStatus {
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  QUERIED = 'QUERIED',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+@Entity()
+export class ResourceRequest {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  
+  @Column({ type: 'text' })
+  itemDescription: string;
+
+  @Column()
+  manufacturerLabel: string;
+
+  
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  price: number;
+
+  @Column()
+  batchNumber: string;
+
+  @Column()
+  vendor: string;
+
+  @Column({ default: 1 })
+  quantity: number;
+
+  
+  @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.DRAFT })
+  status: RequestStatus;
+
+  
+  @Column()
+  requestedBy: string; 
+
+  @Column()
+  lineManagerId: string; 
+
+  @Column()
+  projectId: string; 
+
+  @Column({ nullable: true })
+  teamId: string;
+
+  @Column({ nullable: true })
+  departmentId: string;
+
+ @Column({ type: 'text', nullable: true })
+reviewNote: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  reviewedBy: string | null;
+
+@Column({ type: 'timestamp', nullable: true })
+reviewedAt: Date | null;
+
+@Column({ type: 'timestamp', nullable: true })
+submittedAt: Date | null;
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\resourcerequest.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { ResourcerequestController } from './resourcerequest.controller';
+
+describe('ResourcerequestController', () => {
+  let controller: ResourcerequestController;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [ResourcerequestController],
+    }).compile();
+
+    controller = module.get<ResourcerequestController>(ResourcerequestController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\resourcerequest.controller.ts =====
+
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ApiHeader, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ResourcerequestService } from './resourcerequest.service';
+import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
+import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
+import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
+import { AuthUser, UserRole } from './roles';
+
+
+
+@ApiTags('resource-requests')
+@ApiHeader({
+  name: 'x-user-id',
+  description: 'e.g. lead-1 or manager-1',
+  required: true,
+})
+@ApiHeader({ name: 'x-user-role', enum: UserRole, required: true })
+@Controller('resource-requests')
+export class ResourcerequestController {
+  constructor(private readonly service: ResourcerequestService) {}
+
+  
+  private currentUser(req: any): AuthUser {
+    if (req.user) return req.user as AuthUser;
+
+    const id = req.headers['x-user-id'];
+    const role = req.headers['x-user-role'];
+    if (!id || !Object.values(UserRole).includes(role)) {
+      throw new UnauthorizedException('No logged-in user');
+    }
+    return { id, role } as AuthUser;
+  }
+
+  
+  @Post()
+  create(@Body() dto: CreateResourceRequestDto, @Req() req: any) {
+    return this.service.create(dto, this.currentUser(req));
+  }
+
+ 
+  @Get()
+  findAll(@Query() query: QueryResourceRequestDto, @Req() req: any) {
+    return this.service.findAll(query, this.currentUser(req));
+  }
+
+  
+  @ApiQuery({ name: 'include', required: false, enum: ['audit'] })
+  @Get(':id')
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('include') include: string | undefined,
+    @Req() req: any,
+  ) {
+    return this.service.findOne(id, this.currentUser(req), include === 'audit');
+  }
+
+  
+  @Patch(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateResourceRequestDto,
+    @Req() req: any,
+  ) {
+    return this.service.update(id, dto, this.currentUser(req));
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\resourcerequest.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ResourcerequestController } from './resourcerequest.controller';
+import { ResourcerequestService } from './resourcerequest.service';
+import { ResourceRequest } from './entities/resourcerequest.entity';
+import { RequestAuditLog } from './entities/request-audit-log.entity';
+
+
+@Module({
+  imports: [TypeOrmModule.forFeature([ResourceRequest, RequestAuditLog])],
+  controllers: [ResourcerequestController],
+  providers: [ResourcerequestService],
+  exports: [ResourcerequestService],
+})
+export class ResourcerequestModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\resourcerequest.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { ResourcerequestService } from './resourcerequest.service';
+
+describe('ResourcerequestService', () => {
+  let service: ResourcerequestService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [ResourcerequestService],
+    }).compile();
+
+    service = module.get<ResourcerequestService>(ResourcerequestService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\resourcerequest.service.ts =====
+
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FindOptionsWhere, Not, Repository } from 'typeorm';
+import {
+  RequestStatus,
+  ResourceRequest,
+} from './entities/resourcerequest.entity';
+import { RequestAuditLog } from './entities/request-audit-log.entity';
+import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
+import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
+import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
+import { AuthUser, UserRole } from './roles';
+
+// The only statuses a line manager is allowed to set.
+const REVIEW_DECISIONS = [
+  RequestStatus.APPROVED,
+  RequestStatus.REJECTED,
+  RequestStatus.QUERIED,
+];
+
+@Injectable()
+export class ResourcerequestService {
+  constructor(
+    @InjectRepository(ResourceRequest)
+    private readonly requests: Repository<ResourceRequest>,
+       @InjectRepository(RequestAuditLog)
+    private readonly audit: Repository<RequestAuditLog>,
+  ) {}
+
+  // ---------------------------------------------------------------
+  // Create (team lead). Always starts as DRAFT.
+  // ---------------------------------------------------------------
+  async create(dto: CreateResourceRequestDto, user: AuthUser) {
+    if (user.role !== UserRole.TEAM_LEAD) {
+      throw new ForbiddenException('Only team leads can create requests');
+    }
+    // TODO: check teamId, departmentId and projectId against the
+    // organization module (they exist, and the team belongs to the department).
+    const request = this.requests.create({
+      ...dto,
+      requestedBy: user.id, // from the logged-in user, never from the body
+      status: RequestStatus.DRAFT,
+    });
+    const saved = await this.requests.save(request);
+    await this.log(saved.id, 'CREATED', user.id);
+    return saved;
+  }
+
+  // ---------------------------------------------------------------
+  // Read: one list endpoint, results depend on who is asking
+  //   team lead:    the requests they created
+  //   line manager: submitted requests routed to them (drafts hidden)
+  //   dept head / managing director: everything
+  // ---------------------------------------------------------------
+  async findAll(query: QueryResourceRequestDto, user: AuthUser) {
+    const where: FindOptionsWhere<ResourceRequest> = {};
+    if (query.status) where.status = query.status;
+    if (query.teamId) where.teamId = query.teamId;
+
+    if (user.role === UserRole.TEAM_LEAD) {
+      where.requestedBy = user.id;
+    } else if (user.role === UserRole.LINE_MANAGER) {
+      where.lineManagerId = user.id;
+      if (query.status === RequestStatus.DRAFT) return [];
+      if (!query.status) where.status = Not(RequestStatus.DRAFT);
+    }
+    // TODO: scope DEPARTMENT_HEAD to their own department once the
+    // organization module can tell us which department they head.
+
+    return this.requests.find({ where, order: { createdAt: 'DESC' } });
+  }
+
+  // One request. With includeAudit, the audit trail is attached too.
+  async findOne(id: string, user: AuthUser, includeAudit = false) {
+    const request = await this.getOrFail(id);
+    this.assertCanView(request, user);
+    if (!includeAudit) return request;
+
+    const auditTrail = await this.audit.find({
+      where: { requestId: id },
+      order: { createdAt: 'ASC' },
+    });
+    return { ...request, auditTrail };
+  }
+
+  // ---------------------------------------------------------------
+  // Write: one update endpoint
+  //   team lead: edit details, change team/department, status SUBMITTED
+  //   line manager: status APPROVED / REJECTED / QUERIED (with note)
+  // ---------------------------------------------------------------
+  async update(id: string, dto: UpdateResourceRequestDto, user: AuthUser) {
+    const request = await this.getOrFail(id);
+    const { status, note, ...fields } = dto;
+
+    // Keep only the fields that were actually sent.
+    const changes: Record<string, unknown> = Object.fromEntries(
+      Object.entries(fields).filter(([, value]) => value !== undefined),
+    );
+    const changedKeys = Object.keys(changes);
+
+    if (status === undefined && changedKeys.length === 0) {
+      throw new BadRequestException('Nothing to update');
+    }
+
+    // A review decision (line manager). It can't be mixed with edits.
+    if (status !== undefined && status !== RequestStatus.SUBMITTED) {
+      if (changedKeys.length > 0) {
+        throw new BadRequestException(
+          'A review decision cannot be combined with edits',
+        );
+      }
+      return this.review(request, status, note, user);
+    }
+
+    // Everything below is the team lead's: edits and submitting.
+    this.assertOwner(request, user);
+    this.assertEditable(request);
+    // TODO: when teamId or departmentId change, check them against the
+    // organization module (team exists, belongs to the department).
+    Object.assign(request, changes);
+
+    const submitting = status === RequestStatus.SUBMITTED;
+    if (submitting) {
+      // SRS rule: a request is only valid if it comes from a team that has
+      // a department, and it must be tied to a project and a line manager.
+      const missing: string[] = [];
+      if (!request.teamId) missing.push('team');
+      if (!request.departmentId) missing.push('department');
+      if (!request.projectId) missing.push('project');
+      if (!request.lineManagerId) missing.push('line manager');
+      if (missing.length > 0) {
+        throw new BadRequestException(
+          `Cannot submit: missing ${missing.join(', ')}`,
+        );
+      }
+      request.status = RequestStatus.SUBMITTED;
+      request.submittedAt = new Date();
+    }
+
+    const saved = await this.requests.save(request);
+
+    // One audit entry per kind of change.
+    if (changedKeys.includes('teamId')) {
+      await this.log(id, 'TEAM_CHANGED', user.id, request.teamId);
+    }
+    if (changedKeys.includes('departmentId')) {
+      await this.log(id, 'DEPARTMENT_CHANGED', user.id, request.departmentId);
+    }
+    if (changedKeys.some((key) => key !== 'teamId' && key !== 'departmentId')) {
+      await this.log(id, 'UPDATED', user.id);
+    }
+    if (submitting) {
+      await this.log(id, 'SUBMITTED', user.id);
+      // TODO: notification component:
+      //  - notify the line manager that a request arrived
+      //  - notify the team lead that the request was submitted
+    }
+    return saved;
+  }
+
+  // Line manager approves, rejects, or queries a SUBMITTED request.
+  private async review(
+    request: ResourceRequest,
+    status: RequestStatus,
+    note: string | undefined,
+    user: AuthUser,
+  ) {
+    if (user.role !== UserRole.LINE_MANAGER) {
+      throw new ForbiddenException(
+        'Only line managers can approve, reject, or query requests',
+      );
+    }
+    if (request.lineManagerId !== user.id) {
+      throw new ForbiddenException('This request is routed to another manager');
+    }
+    if (request.status !== RequestStatus.SUBMITTED) {
+      throw new BadRequestException(
+        `Only SUBMITTED requests can be reviewed (current: ${request.status})`,
+      );
+    }
+    if (!REVIEW_DECISIONS.includes(status)) {
+      throw new BadRequestException(
+        'Status must be SUBMITTED (team lead) or APPROVED, REJECTED, QUERIED (line manager)',
+      );
+    }
+    if (status !== RequestStatus.APPROVED && !note?.trim()) {
+      throw new BadRequestException(
+        'A note is required when rejecting or querying a request',
+      );
+    }
+
+    request.status = status;
+    request.reviewNote = note ?? null;
+    request.reviewedBy = user.id;
+    request.reviewedAt = new Date();
+    const saved = await this.requests.save(request);
+    await this.log(request.id, status, user.id, note);
+
+    // TODO: notification component: tell the team lead the outcome.
+    return saved;
+  }
+
+  // ---------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------
+  private async getOrFail(id: string) {
+    const request = await this.requests.findOne({ where: { id } });
+    if (!request) throw new NotFoundException(`Request ${id} not found`);
+    return request;
+  }
+
+  private assertOwner(request: ResourceRequest, user: AuthUser) {
+    if (request.requestedBy !== user.id) {
+      throw new ForbiddenException('You do not own this request');
+    }
+  }
+
+  // Requests can only be changed before review, or after a query.
+  private assertEditable(request: ResourceRequest) {
+    const editable = [RequestStatus.DRAFT, RequestStatus.QUERIED];
+    if (!editable.includes(request.status)) {
+      throw new BadRequestException(
+        `A ${request.status} request can no longer be changed`,
+      );
+    }
+  }
+
+  private assertCanView(request: ResourceRequest, user: AuthUser) {
+    const isOwner = request.requestedBy === user.id;
+    const isAssignedManager = request.lineManagerId === user.id;
+    const isOversight =
+      user.role === UserRole.DEPARTMENT_HEAD ||
+      user.role === UserRole.MANAGING_DIRECTOR;
+    // TODO: limit DEPARTMENT_HEAD to requests in their own department.
+    if (!isOwner && !isAssignedManager && !isOversight) {
+      throw new ForbiddenException('You cannot view this request');
+    }
+  }
+
+  private async log(
+    requestId: string,
+    action: string,
+    performedBy: string,
+    note?: string,
+  ) {
+    await this.audit.save(
+      this.audit.create({ requestId, action, performedBy, note }),
+    );
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resourcerequest\roles.ts =====
+
+
+export enum UserRole {
+  TEAM_LEAD = 'TEAM_LEAD',
+  LINE_MANAGER = 'LINE_MANAGER',
+  DEPARTMENT_HEAD = 'DEPARTMENT_HEAD',
+  MANAGING_DIRECTOR = 'MANAGING_DIRECTOR',
+}
+
+
+export interface AuthUser {
+  id: string;
+  role: UserRole;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\dto\create-resource.dto.ts =====
+
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsString,
+  IsInt,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+import { ResourceType } from '../enum/resource-type.enum';
+
+export class CreateResourceDto {
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @IsEnum(ResourceType)
+  type: ResourceType;
+
+  // ---- Required when type === available ----
+  @ValidateIf((o) => o.type === ResourceType.INSOURCED)
+  @IsString()
+  @IsNotEmpty()
+  description?: string;
+
+  @ValidateIf((o) => o.type === ResourceType.INSOURCED)
+  @IsString()
+  @IsNotEmpty()
+  department?: string;
+
+  // ---- Required when type === outsourced ----
+  @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  price?: number;
+
+  @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
+  @IsString()
+  @IsNotEmpty()
+  label?: string;
+
+  @IsInt()
+  @Min(0)
+  quantity: number;
+
+  @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
+  @IsString()
+  @IsNotEmpty()
+  batchNumber?: string;
+
+  @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
+  @IsString()
+  @IsNotEmpty()
+  vendor?: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\dto\query-resource.dto.ts =====
+
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { ResourceType } from '../enum/resource-type.enum';
+
+export class QueryResourceDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEnum(ResourceType)
+  type?: ResourceType;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\dto\update-resource.dto.ts =====
+
+import { OmitType, PartialType } from '@nestjs/mapped-types';
+import { CreateResourceDto } from './create-resource.dto';
+
+// All fields optional; `type` cannot be changed after creation.
+export class UpdateResourceDto extends PartialType(
+  OmitType(CreateResourceDto, ['type'] as const),
+) {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\entities\resources.entity.ts =====
+
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { ResourceType } from '../enum/resource-type.enum';
+
+@Entity('resources')
+export class Resources {
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
+
+    @Column({type: 'varchar', length: 150})
+    name: string;
+
+    @Column({type: 'enum', enum: ResourceType })
+    type: ResourceType;
+
+    @Column({type: 'text', nullable: true})
+    description: string | null;
+
+    @Column({type: 'varchar', length: 100, nullable: true})
+    department: string | null;
+
+    @Column({
+        type: 'decimal',
+        precision: 12,
+        scale: 2,
+        nullable: true,
+        transformer: {
+            to: (value?: number | null) => value,
+            from: (value?: string | null) => (value == null ? null : parseFloat(value)), 
+        },
+    })
+    price: number | null;
+
+    @Column({ type: 'varchar', length: 100, nullable: true})
+    label: string | null;
+
+    @Column({name: 'batch_number', type: 'varchar', length: 100, nullable: true})
+    batchNumber: string | null;
+
+    @Column({type: 'varchar', length: 150, nullable: true})
+    vendor: string | null;
+
+    @Column({ type: 'int', default: 1 })
+    quantity: number;
+
+    @CreateDateColumn({name: 'created_at'})
+    createdAt: Date;
+
+    @UpdateDateColumn({name: 'updated_at'})
+    updatedAt: Date;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\enum\resource-type.enum.ts =====
+
+export enum ResourceType {
+  INSOURCED = 'insourced',
+  OUTSOURCED = 'outsourced',
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\resource-response.ts =====
+
+import { Resources } from './entities/resources.entity';
+import { ResourceType } from './enum/resource-type.enum';
+
+export function toResourceResponse(resource: Resources) {
+  const base = {
+    id: resource.id,
+    name: resource.name,
+    type: resource.type,
+    quantity: resource.quantity,
+    createdAt: resource.createdAt,
+    updatedAt: resource.updatedAt,
+  };
+
+  if (resource.type === ResourceType.OUTSOURCED) {
+    return {
+      ...base,
+      price: resource.price,
+      label: resource.label,
+      batchNumber: resource.batchNumber,
+      vendor: resource.vendor,
+    };
+  }
+  return {
+    ...base,
+    description: resource.description,
+    department: resource.department,
+  };
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\resources.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { ResourcesController } from './resources.controller';
+import { ResourcesService } from './resources.service'
+
+describe('ResourcesController', () => {
+  let controller: ResourcesController;
+
+  const mockService = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn()
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [ResourcesController],
+      providers: [{ provide: ResourcesService, useValue: mockService}],
+    }).compile();
+    controller = module.get<ResourcesController>(ResourcesController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\resources.controller.ts =====
+
+import { toResourceResponse } from './resource-response';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, } from '@nestjs/common';
+import { ResourcesService } from './resources.service';
+import { CreateResourceDto } from './dto/create-resource.dto';
+import { UpdateResourceDto } from './dto/update-resource.dto';
+import { QueryResourceDto } from './dto/query-resource.dto';
+
+
+@Controller('resources')
+export class ResourcesController {
+  constructor(private readonly resourcesService: ResourcesService) {}
+
+
+@Post()
+async create(@Body() dto: CreateResourceDto) {
+  return toResourceResponse(await this.resourcesService.create(dto));
+}
+
+@Get()
+async findAll(@Query() query: QueryResourceDto) {
+  const resources = await this.resourcesService.findAll(query);
+  return resources.map(toResourceResponse);
+}
+
+@Get(':id')
+async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  return toResourceResponse(await this.resourcesService.findOne(id));
+}
+
+@Patch(':id')
+async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateResourceDto) {
+  return toResourceResponse(await this.resourcesService.update(id, dto));
+}
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\resources.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Resources } from './entities/resources.entity';
+import { ResourcesController } from './resources.controller';
+import { ResourcesService } from './resources.service';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([Resources])],
+  controllers: [ResourcesController],
+  providers: [ResourcesService],
+  exports: [ResourcesService]
+})
+export class ResourcesModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\resources.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { ResourcesService } from './resources.service';
+import { Resources } from './entities/resources.entity';
+
+
+describe('ResourcesService', () => {
+  let service: ResourcesService;
+
+  const mockRepository = {
+    create: jest.fn(),
+    save: jest.fn(),
+    find: jest.fn(),
+    findOne: jest.fn()
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [ResourcesService, 
+        {
+          provide: getRepositoryToken(Resources),
+          useValue: mockRepository,
+        },
+      ],
+    }).compile();
+
+    service = module.get<ResourcesService>(ResourcesService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\resources\resources.service.ts =====
+
+import { BadRequestException, Injectable, NotFoundException, } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FindOptionsWhere, ILike, Repository } from 'typeorm';
+import { CreateResourceDto } from './dto/create-resource.dto';
+import { UpdateResourceDto } from './dto/update-resource.dto';
+import { QueryResourceDto } from './dto/query-resource.dto';
+import { Resources } from './entities/resources.entity';
+import { ResourceType } from './enum/resource-type.enum';
+
+const INSOURCED_FIELDS = ['description', 'department'] as const;
+const OUTSOURCED_FIELDS = ['price', 'label', 'batchNumber', 'vendor'] as const;
+
+@Injectable()
+export class ResourcesService {
+  constructor(
+    @InjectRepository(Resources)
+    private readonly resourcesRepository: Repository<Resources>,
+  ) {}
+
+  async create(dto: CreateResourceDto): Promise<Resources>{
+    const resource = dto.type === ResourceType.INSOURCED ? this.resourcesRepository.create({
+        name: dto.name,
+        type: dto.type,
+        quantity: dto.quantity,
+        description: dto.description,
+        department: dto.department,
+    })
+    : this.resourcesRepository.create({
+        name: dto.name,
+        type: dto.type,
+        price: dto.price,
+        label: dto.label,
+        quantity: dto.quantity,
+        batchNumber: dto.batchNumber,
+        vendor: dto.vendor,
+    });
+    return this.resourcesRepository.save(resource);
+}
+async findAll(query: QueryResourceDto): Promise<Resources[]>{
+    const where: FindOptionsWhere<Resources> = {};
+    if (query.name) where.name = ILike(`%${query.name}%`);
+    if (query.type) where.type = query.type;
+
+    return this.resourcesRepository.find({ where, order: { createdAt: 'DESC'} });
+
+}
+async findOne(id: string): Promise<Resources>
+{
+    const resource = await this.resourcesRepository.findOne({ where: { id }});
+    if(!resource){
+        throw new NotFoundException('Resource with id "${id}" not found');
+    }
+    return resource;
+}
+async update(id: string, dto: UpdateResourceDto): Promise<Resources>{
+    const resource = await this.findOne(id);
+
+    const forbidden = resource.type === ResourceType.INSOURCED ? OUTSOURCED_FIELDS : INSOURCED_FIELDS;
+    const invalid = forbidden.filter(
+        (field) => (dto as Record<string, unknown>)[field] !== undefined,);
+        if(invalid.length){
+            throw new BadRequestException(
+                `'field(s)' [${invalid.join(',')}]) are not valid for ${resource.type} resources`,
+            );
+        }
+        Object.assign(resource, dto);
+        return this.resourcesRepository.save(resource);
+
+}
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\scripts\seed-managing-director.ts =====
+
+import 'dotenv/config';
+import * as bcrypt from 'bcrypt';
+import { DataSource } from 'typeorm';
+import { Department } from '../departments/entities/department.entity';
+import { Team } from '../teams/entities/team.entity';
+import { User } from '../users/user.entity';
+import { UserRole } from '../users/user-role.enum';
+
+const email = process.env.MANAGING_DIRECTOR_EMAIL?.trim().toLowerCase();
+const password = process.env.MANAGING_DIRECTOR_PASSWORD;
+const fullName = process.env.MANAGING_DIRECTOR_FULL_NAME?.trim();
+
+if (!email || !password || !fullName) {
+  console.error(
+    'Set MANAGING_DIRECTOR_EMAIL, MANAGING_DIRECTOR_PASSWORD, and MANAGING_DIRECTOR_FULL_NAME before running this command.',
+  );
+  process.exit(1);
+}
+
+if (password.length < 8) {
+  console.error('MANAGING_DIRECTOR_PASSWORD must be at least 8 characters.');
+  process.exit(1);
+}
+
+const directorEmail = email as string;
+const directorPassword = password as string;
+const directorFullName = fullName as string;
+
+const dataSource = new DataSource({
+  type: (process.env.DB_CONNECTION || 'mysql') as 'mysql',
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT || 3306),
+  username: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+  entities: [User, Department, Team],
+  synchronize: false,
+});
+
+async function seedManagingDirector() {
+  await dataSource.initialize();
+  await dataSource.transaction(async (manager) => {
+    const users = manager.getRepository(User);
+    const existingDirector = await users.findOneBy({
+      role: UserRole.MANAGING_DIRECTOR,
+    });
+    let user = await users.findOneBy({ email: directorEmail });
+
+    if (existingDirector && existingDirector.email !== directorEmail) {
+      existingDirector.role = null;
+      await users.save(existingDirector);
+    }
+
+    if (!user) {
+      user = users.create({
+        email: directorEmail,
+        fullName: directorFullName,
+        role: UserRole.MANAGING_DIRECTOR,
+      });
+    } else {
+      user.fullName = directorFullName;
+      user.role = UserRole.MANAGING_DIRECTOR;
+    }
+
+    user.passwordHash = await bcrypt.hash(directorPassword, 12);
+    await users.save(user);
+  });
+  console.log(`Managing Director account is ready for ${directorEmail}.`);
+}
+
+seedManagingDirector()
+  .catch((error: unknown) => {
+    console.error('Could not seed the Managing Director account.');
+    if (error instanceof Error) {
+      console.error(error.message);
+    }
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+  });
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\dto\create-team.dto.ts =====
+
+import { IsInt, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+export class CreateTeamDto {
+  @IsString()
+  @ApiProperty({ type: String, example: 'Procurement', minLength: 3, maxLength: 100 })
+  @IsNotEmpty()
+  @Length(3, 100)
+  name: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Sources equipment and supplies', maxLength: 500 })
+  @IsString()
+  @Length(0, 500)
+  description?: string;
+
+  @IsInt()
+  @ApiProperty({ type: Number, example: 2, minimum: 1 })
+  @Min(1)
+  departmentId: number;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\dto\update-team.dto.ts =====
+
+import { IsInt, IsOptional, IsString, Length, Min } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export class UpdateTeamDto {
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Procurement', minLength: 3, maxLength: 50 })
+  @IsString()
+  @Length(3, 50)
+  name?: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: String, example: 'Sources equipment and supplies', maxLength: 50 })
+  @IsString()
+  @Length(0, 50)
+  description?: string;
+
+  @IsOptional()
+  @ApiPropertyOptional({ type: Number, example: 2, minimum: 1 })
+  @IsInt()
+  @Min(1)
+  departmentId?: number;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\entities\team.entity.ts =====
+
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Department } from '../../departments/entities/department.entity';
+
+@Entity()
+export class Team {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ type: 'varchar', length: 100 })
+  name: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: false })
+  description?: string;
+
+  @ManyToOne(() => Department, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'department_id' })
+  department: Department | null;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\teams.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { TeamsController } from './teams.controller';
+import { TeamsService } from './teams.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { JwtService } from '@nestjs/jwt';
+import { UserRole } from '../users/user-role.enum';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+
+describe('TeamsController', () => {
+  let controller: TeamsController;
+  const teamsService = {
+    findUsers: jest.fn(),
+    findProjects: jest.fn(),
+    findResourceRequests: jest.fn(),
+    findOne: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    teamsService.findUsers.mockReset();
+    teamsService.findProjects.mockReset();
+    teamsService.findResourceRequests.mockReset();
+    teamsService.findOne.mockReset();
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [TeamsController],
+      providers: [
+        { provide: TeamsService, useValue: teamsService },
+        {
+          provide: JwtAuthGuard,
+          useValue: { canActivate: jest.fn(() => true) },
+        },
+        {
+          provide: RolesGuard,
+          useValue: { canActivate: jest.fn(() => true) },
+        },
+        { provide: JwtService, useValue: { verifyAsync: jest.fn() } },
+      ],
+    }).compile();
+
+    controller = module.get<TeamsController>(TeamsController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  it('passes the team id to the user lookup', async () => {
+    await controller.findUsers('4');
+
+    expect(teamsService.findUsers).toHaveBeenCalledWith(4);
+  });
+
+  it('passes the team id to the project lookup', async () => {
+    await controller.findProjects('4');
+
+    expect(teamsService.findProjects).toHaveBeenCalledWith(4);
+  });
+
+  it('passes the team id and authenticated user to the request lookup', async () => {
+    const user = {
+      sub: 'user-1',
+      email: 'lead@example.com',
+      role: UserRole.TEAM_LEAD,
+    };
+
+    await controller.findResourceRequests(
+      4,
+      { user } as AuthenticatedRequest,
+    );
+
+    expect(teamsService.findResourceRequests).toHaveBeenCalledWith(4, user);
+  });
+
+  it('passes the team id to the single-team lookup', async () => {
+    await controller.findOne('4');
+
+    expect(teamsService.findOne).toHaveBeenCalledWith(4);
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\teams.controller.ts =====
+
+import {Body, Controller,Delete,Get,Param,Patch,
+  Post,
+  ParseIntPipe,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { CreateTeamDto } from './dto/create-team.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
+import { TeamsService } from './teams.service';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/user-role.enum';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { ApiBearerAuth } from '@nestjs/swagger';
+
+@ApiTags('Teams')
+@Controller('teams')
+export class TeamsController {
+  constructor(private readonly teamsService: TeamsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a team' })
+  @ApiBody({ type: CreateTeamDto })
+  @ApiResponse({ status: 201, description: 'Created team record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } })
+  @ApiResponse({ status: 400, description: 'Invalid team fields' })
+  @ApiResponse({ status: 404, description: 'Department not found' })
+  create(@Body() createTeamDto: CreateTeamDto) {
+    return this.teamsService.create(createTeamDto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List teams' })
+  @ApiResponse({ status: 200, description: 'Team records', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true } } } } })
+  findAll() {
+    return this.teamsService.findAll();
+  }
+
+  @Get(':id/users')
+  @ApiOperation({ summary: 'List users assigned to a team' })
+  @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number, example: 1 })
+  @ApiResponse({ status: 200, description: 'Team members', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true } } } } })
+  @ApiResponse({ status: 404, description: 'Team not found' })
+  findUsers(@Param('id') id: string) {
+    return this.teamsService.findUsers(Number(id));
+  }
+
+  @Get(':id/projects')
+  @ApiOperation({ summary: 'List projects assigned to a team' })
+  @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number, example: 1 })
+  @ApiResponse({ status: 200, description: 'Team projects', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } } })
+  @ApiResponse({ status: 404, description: 'Team not found' })
+  findProjects(@Param('id') id: string) {
+    return this.teamsService.findProjects(Number(id));
+  }
+
+  @Get(':id/resource-requests')
+  @ApiOperation({ summary: 'List resource requests for a team' })
+  @ApiParam({ name: 'id', description: 'Team ID' })
+  @ApiResponse({ status: 200, description: 'Team resource requests returned' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER)
+  findResourceRequests(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.teamsService.findResourceRequests(id, request.user!);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a team by ID' })
+  @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number, example: 1 })
+  @ApiResponse({ status: 200, description: 'Team record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true } } } })
+  @ApiResponse({ status: 404, description: 'Team not found' })
+  findOne(@Param('id') id: string) {
+    return this.teamsService.findOne(Number(id));
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a team' })
+  @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number, example: 1 })
+  @ApiBody({ type: UpdateTeamDto })
+  @ApiResponse({ status: 200, description: 'Updated team record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true } } } })
+  @ApiResponse({ status: 400, description: 'Invalid team fields' })
+  @ApiResponse({ status: 404, description: 'Team or requested department not found' })
+  update(@Param('id') id: string, @Body() updateTeamDto: UpdateTeamDto) {
+    return this.teamsService.update(Number(id), updateTeamDto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a team' })
+  @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number, example: 1 })
+  @ApiResponse({ status: 200, description: 'Deleted team record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true } } } })
+  @ApiResponse({ status: 404, description: 'Team not found' })
+  remove(@Param('id') id: string) {
+    return this.teamsService.remove(Number(id));
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\teams.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Team } from './entities/team.entity';
+import { Department } from '../departments/entities/department.entity';
+import { User } from '../users/user.entity';
+import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { TeamsController } from './teams.controller';
+import { TeamsService } from './teams.service';
+import { AuthSecurityModule } from '../auth/auth-security.module';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([Team, Department, User, Project, ResourceRequest]),
+    AuthSecurityModule,
+  ],
+  controllers: [TeamsController],
+  providers: [TeamsService],
+})
+export class TeamsModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\teams.service.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Department } from '../departments/entities/department.entity';
+import { User } from '../users/user.entity';
+import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { Team } from './entities/team.entity';
+import { TeamsService } from './teams.service';
+import { UserRole } from '../users/user-role.enum';
+
+describe('TeamsService', () => {
+  let service: TeamsService;
+  let teamRepository: jest.Mocked<Pick<Repository<Team>, 'find' | 'findOne'>>;
+  let userRepository: jest.Mocked<Pick<Repository<User>, 'find' | 'findOne'>>;
+  let projectRepository: jest.Mocked<Pick<Repository<Project>, 'find'>>;
+  let resourceRequestRepository: jest.Mocked<
+    Pick<Repository<ResourceRequest>, 'find'>
+  >;
+
+  beforeEach(async () => {
+    teamRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+    };
+    userRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+    };
+    projectRepository = {
+      find: jest.fn(),
+    };
+    resourceRequestRepository = {
+      find: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        TeamsService,
+        { provide: getRepositoryToken(Team), useValue: teamRepository },
+        { provide: getRepositoryToken(Department), useValue: {} },
+        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: getRepositoryToken(Project), useValue: projectRepository },
+        {
+          provide: getRepositoryToken(ResourceRequest),
+          useValue: resourceRequestRepository,
+        },
+      ],
+    }).compile();
+
+    service = module.get<TeamsService>(TeamsService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  it('includes the department when listing teams', async () => {
+    const teams = [{ id: 1, name: 'Platform', department: { id: 3, name: 'IT' } }];
+    teamRepository.find.mockResolvedValue(teams as Team[]);
+
+    await expect(service.findAll()).resolves.toBe(teams);
+    expect(teamRepository.find).toHaveBeenCalledWith({
+      relations: { department: true },
+    });
+  });
+
+  it('includes the department when finding a team by id', async () => {
+    const team = { id: 1, name: 'Platform', department: { id: 3, name: 'IT' } };
+    teamRepository.findOne.mockResolvedValue(team as Team);
+
+    await expect(service.findOne(1)).resolves.toBe(team);
+    expect(teamRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1 },
+      relations: { department: true },
+    });
+  });
+
+  it('returns users belonging to the requested team', async () => {
+    const team = { id: 2, name: 'Platform', department: { id: 3, name: 'IT' } };
+    const users = [{ id: 'user-1', fullName: 'Alex Example' }];
+    teamRepository.findOne.mockResolvedValue(team as Team);
+    userRepository.find.mockResolvedValue(users as User[]);
+
+    await expect(service.findUsers(2)).resolves.toBe(users);
+    expect(teamRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 2 },
+      relations: { department: true },
+    });
+    expect(userRepository.find).toHaveBeenCalledWith({
+      where: { team: { id: 2 } },
+    });
+  });
+
+  it('returns projects belonging to the requested team', async () => {
+    const team = { id: 2, name: 'Platform', department: { id: 3, name: 'IT' } };
+    const projects = [{ id: 9, name: 'Website Redesign', teams: [team] }];
+    teamRepository.findOne.mockResolvedValue(team as Team);
+    projectRepository.find.mockResolvedValue(projects as Project[]);
+
+    await expect(service.findProjects(2)).resolves.toBe(projects);
+    expect(teamRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 2 },
+      relations: { department: true },
+    });
+    expect(projectRepository.find).toHaveBeenCalledWith({
+      where: { teams: { id: 2 } },
+      relations: { teams: true },
+    });
+  });
+
+  it('returns requests for the team assigned to the authenticated team lead', async () => {
+    const team = { id: 2, name: 'Platform', department: { id: 3, name: 'IT' } };
+    const account = { id: 'lead-1', team };
+    const requests = [{ id: 'request-1', teamId: '2' }];
+    teamRepository.findOne.mockResolvedValue(team as Team);
+    userRepository.findOne.mockResolvedValue(account as User);
+    resourceRequestRepository.find.mockResolvedValue(requests as ResourceRequest[]);
+
+    await expect(
+      service.findResourceRequests(2, {
+        sub: 'lead-1',
+        email: 'lead@example.com',
+        role: UserRole.TEAM_LEAD,
+      }),
+    ).resolves.toBe(requests);
+    expect(userRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'lead-1' },
+      relations: { team: true },
+    });
+    expect(resourceRequestRepository.find).toHaveBeenCalledWith({
+      where: { teamId: '2' },
+      order: { createdAt: 'DESC' },
+    });
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\teams\teams.service.ts =====
+
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Team } from './entities/team.entity';
+import { CreateTeamDto } from './dto/create-team.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
+import { Department } from '../departments/entities/department.entity';
+import { User } from '../users/user.entity';
+import { Project } from '../projects/entities/project.entity';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
+import { UserRole } from '../users/user-role.enum';
+
+@Injectable()
+export class TeamsService {
+  constructor(
+    @InjectRepository(Team)
+    private readonly teamRepository: Repository<Team>,
+    @InjectRepository(Department)
+    private readonly departmentRepository: Repository<Department>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Project)
+    private readonly projectRepository: Repository<Project>,
+    @InjectRepository(ResourceRequest)
+    private readonly resourceRequestRepository: Repository<ResourceRequest>,
+  ) {}
+
+  async create(createTeamDto: CreateTeamDto) {
+    const { departmentId, ...teamData } = createTeamDto;
+    const department = await this.departmentRepository.findOneBy({ id: departmentId });
+    if (!department) throw new NotFoundException(`Department with id ${departmentId} not found`);
+    const team = this.teamRepository.create({ ...teamData, department });
+    return this.teamRepository.save(team);
+  }
+
+  async findAll() {
+    return this.teamRepository.find({ relations: { department: true } });
+  }
+
+  async findOne(id: number) {
+    const team = await this.teamRepository.findOne({
+      where: { id },
+      relations: { department: true },
+    });
+
+    if (!team) {
+      throw new NotFoundException(`Team with id ${id} not found`);
+    }
+
+    return team;
+  }
+
+  async findUsers(id: number) {
+    await this.findOne(id);
+    return this.userRepository.find({ where: { team: { id } } });
+  }
+
+  async findProjects(id: number) {
+    await this.findOne(id);
+    return this.projectRepository.find({
+      where: { teams: { id } },
+      relations: { teams: true },
+    });
+  }
+
+  async findResourceRequests(id: number, user: AuthTokenPayload) {
+    if (
+      user.role !== UserRole.TEAM_LEAD &&
+      user.role !== UserRole.TEAM_MEMBER
+    ) {
+      throw new ForbiddenException('Only team members can view team requests');
+    }
+
+    await this.findOne(id);
+    const account = await this.userRepository.findOne({
+      where: { id: user.sub },
+      relations: { team: true },
+    });
+    if (!account?.team) {
+      throw new ForbiddenException('Your account is not assigned to a team');
+    }
+    if (account.team.id !== id) {
+      throw new NotFoundException(`Team with id ${id} not found`);
+    }
+
+    return this.resourceRequestRepository.find({
+      where: { teamId: String(id) },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async update(id: number, updateTeamDto: UpdateTeamDto) {
+    const team = await this.findOne(id);
+    const { departmentId, ...teamData } = updateTeamDto;
+    Object.assign(team, teamData);
+    if (departmentId !== undefined) {
+      const department = await this.departmentRepository.findOneBy({ id: departmentId });
+      if (!department) throw new NotFoundException(`Department with id ${departmentId} not found`);
+      team.department = department;
+    }
+    return this.teamRepository.save(team);
+  }
+
+  async remove(id: number) {
+    const team = await this.findOne(id);
+    await this.teamRepository.remove(team);
+    return team;
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\dto\assign-user-role.dto.ts =====
+
+import { IsEnum } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { UserRole } from '../user-role.enum';
+
+export class AssignUserRoleDto {
+  @ApiProperty({ enum: UserRole, example: UserRole.TEAM_LEAD })
+  @IsEnum(UserRole)
+  role: UserRole;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\dto\change-password.dto.ts =====
+
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'current123' })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(12)
+  currentPassword: string;
+
+  @ApiProperty({
+    example: 'newSecure456',
+    minLength: 8,
+    maxLength: 12,
+    description: 'Must contain at least one number',
+  })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(12)
+  @Matches(/\d/, { message: 'Password must contain at least one number' })
+  newPassword: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\dto\register-user.dto.ts =====
+
+import { Transform } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+
+export class RegisterUserDto {
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @ApiProperty({ type: String, example: 'alex@company.com', description: 'Company email address' })
+  @IsEmail()
+  @MaxLength(254)
+  @Matches(/@gmail.com$/, { message: 'Email must be a company email' })
+  email: string;
+
+  @IsString()
+  @ApiProperty({ type: String, example: 'Alex' })
+  firstName: string;
+
+  @IsString()
+  @ApiProperty({ type: String, example: 'Morgan' })
+  lastName: string;
+
+  @IsString()
+  @ApiProperty({ type: String, example: 'secure123', minLength: 8, maxLength: 12, description: 'Must include a number' })
+  @MinLength(8)
+  @MaxLength(12)
+  @Matches(/\d/, { message: 'Password must contain at least one number' })
+  password: string;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\dto\update-my-profile.dto.ts =====
+
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsDateString, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+
+export class UpdateMyProfileDto {
+  @ApiPropertyOptional({ example: '+265991234567', maxLength: 30 })
+  @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @MaxLength(30)
+  @Matches(/^\+?[0-9 ()-]{10}$/, { message: 'Phone number must contain 7 to 30 digits and may include +, spaces, parentheses, or hyphens' })
+  phoneNumber?: string;
+
+  @ApiPropertyOptional({ example: 'Lilongwe, Malawi', maxLength: 255 })
+  @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @MaxLength(255)
+  address?: string;
+
+  @ApiPropertyOptional({ example: '1990-05-20', format: 'date' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Date of birth must use YYYY-MM-DD format' })
+  dateOfBirth?: string;
+
+  @ApiPropertyOptional({ enum: ['Mr.', 'Mrs.'], example: 'Mrs.' })
+  @IsOptional()
+  @IsIn(['Mr.', 'Mrs.', 'Miss'])
+  preferredPronoun?: 'Mr.' | 'Mrs.' | 'Miss';
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\user-role.enum.ts =====
+
+export enum UserRole {
+  TEAM_LEAD = 'team_lead',
+  LINE_MANAGER = 'line_manager',
+  DEPARTMENT_HEAD = 'department_head',
+  MANAGING_DIRECTOR = 'managing_director',
+  TEAM_MEMBER = 'team_member'
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\user.controller.ts =====
+
+import { Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from './user-role.enum';
+import { AssignUserRoleDto } from './dto/assign-user-role.dto';
+import { RegisterUserDto } from './dto/register-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+import { UsersService } from './users.service';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+@Controller('users')
+@ApiTags('Users')
+export class UserController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Post('register')
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiBody({ type: RegisterUserDto })
+  @ApiResponse({ status: 201, description: 'User registered successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid fields, email format, company email domain, or password requirements' })
+  @ApiResponse({ status: 409, description: 'Conflict: Email already exists' })
+  register(@Body() registerDto: RegisterUserDto) {
+    return this.usersService.register(registerDto);
+  }
+
+@Patch(':id/role')
+@ApiOperation({ summary: 'Update a user role' })
+@ApiParam({ name: 'id', description: 'User UUID' })
+@ApiBody({ type: AssignUserRoleDto })
+@ApiResponse({ status: 200, description: 'User assignment updated', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) } } } })
+@ApiResponse({ status: 401, description: 'Authentication required' })
+@ApiResponse({ status: 403, description: 'Insufficient permissions' })
+@ApiResponse({ status: 400, description: 'Invalid role value or role assignment is not permitted' })
+@ApiResponse({ status: 404, description: 'Target user or assigning user not found' })
+@UseGuards(JwtAuthGuard, RolesGuard)
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+@Roles(UserRole.MANAGING_DIRECTOR, UserRole.DEPARTMENT_HEAD)
+@ApiBearerAuth('access-token')
+assignRole(
+  @Param('id', ParseUUIDPipe) userId: string,
+  @Body() assignUserRoleDto: AssignUserRoleDto,
+  @Req() request: AuthenticatedRequest,
+  ) {
+    return this.usersService.assignRole(
+      userId,
+      assignUserRoleDto.role,
+      request.user!.sub,
+    );
+  }
+
+@Get('me')
+@ApiOperation({ summary: 'User must view his profile' })
+@ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) } } } })
+@ApiResponse({ status: 401, description: 'Authentication required' })
+@ApiResponse({ status: 404, description: 'User not found' })
+@ApiResponse({ status: 403, description: 'Insufficient permissions' })
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth('access-token')
+ async getMyProfile(@Req() req: AuthenticatedRequest){
+   const userId = req.user!.sub;
+
+   return this.usersService.getMyProfile(userId)
+ }
+
+ @Patch('me/profile')
+ @ApiOperation({ summary: 'Update the authenticated user profile details' })
+ @ApiBody({ type: UpdateMyProfileDto })
+ @ApiResponse({ status: 200, description: 'Updated user profile details' })
+ @ApiResponse({ status: 400, description: 'Invalid profile details or no fields supplied' })
+ @ApiResponse({ status: 401, description: 'Authentication required' })
+ @ApiResponse({ status: 404, description: 'User not found' })
+ @UseGuards(JwtAuthGuard)
+ @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+ @ApiBearerAuth('access-token')
+ updateMyProfile(
+   @Req() req: AuthenticatedRequest,
+   @Body() updateMyProfileDto: UpdateMyProfileDto,
+ ) {
+   return this.usersService.updateMyProfile(req.user!.sub, updateMyProfileDto);
+ }
+
+ @Patch('me/password')
+ @ApiOperation({ summary: 'Change the authenticated user password' })
+ @ApiBody({ type: ChangePasswordDto })
+ @ApiResponse({ status: 200, description: 'Password changed successfully' })
+ @ApiResponse({ status: 400, description: 'Invalid new password or new password matches the current password' })
+ @ApiResponse({ status: 401, description: 'Authentication required or current password is incorrect' })
+ @ApiResponse({ status: 404, description: 'User not found' })
+ @UseGuards(JwtAuthGuard)
+ @ApiBearerAuth('access-token')
+ changeMyPassword(
+   @Req() req: AuthenticatedRequest,
+   @Body() changePasswordDto: ChangePasswordDto,
+ ) {
+   return this.usersService.changeMyPassword(req.user!.sub, changePasswordDto);
+ }
+
+ @ApiOperation({summary: 'A user can be able to de-activate their account'})
+ @Patch('me/deactivate')
+ @ApiOperation({ summary: 'Deactivate the authenticated user account' })
+ @ApiResponse({ status: 200, description: 'Success message', schema: { type: 'string', example: 'Your account has been deactivated successfully' } })
+ @ApiResponse({ status: 401, description: 'Authentication required' })
+ @ApiResponse({ status: 400, description: 'Account is already deactivated' })
+ @ApiResponse({ status: 404, description: 'User not found' })
+ @UseGuards(JwtAuthGuard)
+ @ApiBearerAuth('access-token')
+ async deactivateMyAccount(@Req() req: AuthenticatedRequest){
+  const userId = req.user!.sub;
+
+  return this.usersService.deactivateMyAccount(userId);
+ }
+
+ @ApiOperation({summary: 'A user can be able to re-activate their account'})
+ @Patch('me/reactivate')
+ @ApiOperation({ summary: 'Reactivate the authenticated user account' })
+ @ApiResponse({ status: 200, description: 'Success message', schema: { type: 'string', example: 'Account successfully re-activated' } })
+ @ApiResponse({ status: 401, description: 'Authentication required' })
+ @ApiResponse({ status: 400, description: 'Account is already active' })
+ @ApiResponse({ status: 404, description: 'User not found' })
+ @UseGuards(JwtAuthGuard)
+ @ApiBearerAuth('access-token')
+ async reActivateMyAccount(@Req() req: AuthenticatedRequest){
+  const userId = req.user!.sub;
+
+  return this.usersService.reActivateMyAccount(userId);
+ }
+
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\user.entity.ts =====
+
+import {Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn} from 'typeorm';
+import { Department } from '../departments/entities/department.entity';
+import { Team } from '../teams/entities/team.entity';
+import { UserRole } from './user-role.enum';
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'full_name', length: 120 })
+  fullName: string;
+
+  @Column({ unique: true, length: 254 })
+  email: string;
+
+  @Column({ name: 'password_hash', length: 128, select: false })
+  passwordHash: string;
+
+  @Column({ name: 'phone_number', type: 'varchar', length: 30, nullable: true })
+  phoneNumber: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address: string | null;
+
+  @Column({ name: 'date_of_birth', type: 'date', nullable: true })
+  dateOfBirth: string | null;
+
+  @Column({ name: 'preferred_pronoun', type: 'varchar', length: 4, nullable: true })
+  preferredPronoun: string | null;
+
+  @Column({default: true})
+  isActive: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    nullable: true,
+  })
+  role: UserRole | null;
+
+  @ManyToOne(() => Department, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'department_id' })
+  department: Department | null;
+
+  @ManyToOne(() => Team, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'team_id' })
+  team: Team | null;
+
+  @Index('IDX_users_single_managing_director', { unique: true })
+  @Column({
+    name: 'managing_director_unique_role',
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+    asExpression:
+      "CASE WHEN role = 'managing_director' THEN 'managing_director' ELSE NULL END",
+    generatedType: 'VIRTUAL',
+    select: false,
+  })
+  managingDirectorUniqueRole: string | null;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\users.module.ts =====
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from './user.entity';
+import { Department } from '../departments/entities/department.entity';
+import { Team } from '../teams/entities/team.entity';
+import { UsersService } from './users.service';
+import { UserController } from './user.controller';
+import { AuthSecurityModule } from '../auth/auth-security.module';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([User, Department, Team]), AuthSecurityModule],
+  controllers: [UserController],
+  providers: [UsersService],
+  exports: [UsersService],
+})
+export class UsersModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\users\users.service.ts =====
+
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import { UserRole } from './user-role.enum';
+import { User } from './user.entity';
+import { RegisterUserDto } from './dto/register-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+
+const BCRYPT_ROUNDS = 12;
+
+@Injectable()
+export class UsersService {
+  constructor(
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+  ) {}
+
+  async register(registerDto: RegisterUserDto) {
+    const email = registerDto.email.trim().toLowerCase();
+    const existingUser = await this.usersRepository.findOneBy({ email });
+    if (existingUser) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
+    try {
+      const user = await this.usersRepository.save(this.usersRepository.create({
+        fullName: `${registerDto.firstName} ${registerDto.lastName}`.trim(),
+        email,
+        passwordHash: await bcrypt.hash(registerDto.password, BCRYPT_ROUNDS),
+        role: null,
+      }));
+      return { user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role } };
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        typeof error.driverError === 'object' && error.driverError !== null &&
+        'code' in error.driverError && error.driverError.code === 'ER_DUP_ENTRY'
+      ) {
+        throw new ConflictException('An account with this email already exists');
+      }
+      throw error;
+    }
+  }
+
+  async getMyProfile(userId: string){
+    const user = await this .usersRepository.findOne({where: {id: userId},});
+    
+    if(!user){
+      throw new NotFoundException('User Not found');
+    }
+
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      phoneNumber: user.phoneNumber,
+      address: user.address,
+      dateOfBirth: user.dateOfBirth,
+      preferredPronoun: user.preferredPronoun
+    };
+  }
+
+  async updateMyProfile(userId: string, dto: UpdateMyProfileDto) {
+    if (Object.keys(dto).length === 0) {
+      throw new BadRequestException('Provide at least one profile field to update');
+    }
+    if (dto.dateOfBirth && new Date(`${dto.dateOfBirth}T00:00:00Z`) > new Date()) {
+      throw new BadRequestException('Date of birth cannot be in the future');
+    }
+
+    const user = await this.usersRepository.findOneBy({ id: userId });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    Object.assign(user, dto);
+    await this.usersRepository.save(user);
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      phoneNumber: user.phoneNumber,
+      address: user.address,
+      dateOfBirth: user.dateOfBirth,
+      preferredPronoun: user.preferredPronoun,
+    };
+  }
+
+  async changeMyPassword(userId: string, changePasswordDto: ChangePasswordDto) {
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const currentPasswordMatches = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.passwordHash,
+    );
+    if (!currentPasswordMatches) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    if (changePasswordDto.currentPassword === changePasswordDto.newPassword) {
+      throw new BadRequestException('New password must be different from the current password');
+    }
+
+    user.passwordHash = await bcrypt.hash(
+      changePasswordDto.newPassword,
+      BCRYPT_ROUNDS,
+    );
+    await this.usersRepository.save(user);
+
+    return { message: 'Password changed successfully' };
+  }
+
+  async deactivateMyAccount(userId: string){
+    const user = await this.usersRepository.findOne({where: {id: userId},});
+    if(!user){
+      throw new NotFoundException('User Not Found');
+    }
+
+    if(!user.isActive){
+      throw new BadRequestException('User already deactivated');
+    }
+
+    user.isActive = false;
+
+    await this.usersRepository.save(user);
+
+    return 'Your account has been deactivated successfully';
+  }
+
+  async reActivateMyAccount(userId: string){
+    const user = await this.usersRepository.findOne({where: {id: userId},});
+
+    if(!user){
+      throw new NotFoundException('User not found')
+    }
+
+    if(user.isActive){
+      throw new BadRequestException('account is already active');
+    }
+    
+    user.isActive = true;
+
+    await this.usersRepository.save(user);
+
+    return 'Account successfully re-activated';
+  }
+
+  async assignRole(
+    userId: string,
+    role: UserRole,
+    assignerId: string,
+  ): Promise<Pick<User, 'id' | 'fullName' | 'email' | 'role'>> {
+    const assigner = await this.usersRepository.findOneBy({ id: assignerId });
+    if (!assigner) throw new NotFoundException('Assigning user not found');
+
+    if (role === UserRole.MANAGING_DIRECTOR) {
+      throw new BadRequestException(
+        'The managing director role cannot be assigned to another user',
+      );
+    }
+
+    if (role === UserRole.DEPARTMENT_HEAD && assigner.role !== UserRole.MANAGING_DIRECTOR) {
+      throw new BadRequestException(
+        'Only the managing director can assign the department head role',
+      );
+    }
+    if (role === UserRole.TEAM_LEAD && assigner.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new BadRequestException(
+        'Only department heads can assign the team lead role',
+      );
+    }
+    if (role === UserRole.LINE_MANAGER && assigner.role !== UserRole.MANAGING_DIRECTOR) {
+      throw new BadRequestException('Only the managing director can assign this role');
+    }
+
+    const user = await this.usersRepository.findOneBy({ id: userId });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.role === UserRole.MANAGING_DIRECTOR) {
+      throw new BadRequestException(
+        'The managing director role cannot be changed through this endpoint',
+      );
+    }
+
+    user.role = role;
+    await this.usersRepository.save(user);
+
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+    };
+  }
+
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\app.controller.spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
+describe('AppController', () => {
+  let appController: AppController;
+
+  beforeEach(async () => {
+    const app: TestingModule = await Test.createTestingModule({
+      controllers: [AppController],
+      providers: [AppService],
+    }).compile();
+
+    appController = app.get<AppController>(AppController);
+  });
+
+  describe('root', () => {
+    it('should return "Hello World!"', () => {
+      expect(appController.getHello()).toBe('Hello World!');
+    });
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\app.controller.ts =====
+
+import { Controller, Get } from '@nestjs/common';
+import { AppService } from './app.service';
+import { ApiExcludeEndpoint } from '@nestjs/swagger';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\app.module.ts =====
+
+import { ConfigModule } from '@nestjs/config';
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
+import { NotificationsModule } from './notifications/notifications.module';
+// cspell:ignore resourcerequest
+import { ResourcerequestModule } from './resourcerequest/resourcerequest.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { TeamsModule } from './teams/teams.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ProjectsModule } from './projects/projects.module';
+import { ReportsModule } from './reports/reports.module';
+import { AuditLogModule } from './auditlog/auditlog.module';
+import { ResourcesModule } from './resources/resources.module';
+import { UsersModule } from './users/users.module';
+//import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+
+@Module({
+  imports: [
+  ConfigModule.forRoot({ isGlobal: true }),
+
+    TypeOrmModule.forRoot({
+      type: process.env.DB_CONNECTION as any,          
+      host:process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT ?? '3306'),
+      username: process.env.DB_USERNAME,       
+      password:  process.env.DB_PASSWORD, 
+      database:  process.env.DB_DATABASE, 
+      autoLoadEntities: true,    
+      synchronize: true,         
+    }),
+
+    AuthModule,
+    UsersModule,
+    NotificationsModule,
+    ResourcerequestModule,
+    DepartmentsModule,
+    TeamsModule,
+    DashboardModule,
+    ProjectsModule,
+    AuditLogModule,
+    ReportsModule,
+    ResourcesModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\app.service.ts =====
+
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+ 
+
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\src\main.ts =====
+
+import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  app.useGlobalPipes(new ValidationPipe());
+  
+  const config = new DocumentBuilder()
+    .setTitle('Resource Tracker API')
+    .setDescription(
+      'API document for resource tracker system. This api supports user registration and login, resource requests, resource tracking, and department, teams, and projects.')
+    .addTag(
+      'Authentication',
+      'Allows users log in to access the resource tracker.')
+      .addTag('Users',
+        'Users section allows users to register their accounts into the system and allow them to modify some their stored information. Users section also allows higher authorities to modify user roles'
+      )
+      .addTag('Notifications',
+        'Notifications allows users to get notifications sent to them, they can also delete notifications'
+      )
+      .addTag('Departments',
+        'This section allows creation of a deprtment, deletion of a department, viewing departments'
+      )
+      .addTag('Projects',
+        'This section allows creation of projects, viewing projects, deleting projects'
+      )
+      .addTag('Dashboard',
+        'Provides an overview of resource tracker activity, summary metrics, and recent activity.'
+      )
+      .addTag('Teams',
+        'Allows users to create, view, update, and manage teams.'
+      )
+      .addTag('Resource Allocations',
+        'Allows users to view and create allocations of resources.'
+      )
+      .addTag('Audit Logs',
+        'Provides a record of system changes and activity for review.'
+      )
+      .addTag('Line Manager',
+        'Allows line managers to review resource requests and manage approvals.'
+      )
+      .addTag('Reports',
+        'Provides reports on resource requests, approvals, spending, and allocations.'
+      )
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+      'access-token'
+    )
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document, {
+    jsonDocumentUrl: 'api/docs-json',
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
+
+  await app.listen(process.env.PORT ?? 3000);
+}
+
+void bootstrap();
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\test\app.e2e-spec.ts =====
+
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { AppModule } from './../src/app.module';
+
+describe('AppController (e2e)', () => {
+  let app: INestApplication<App>;
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+  });
+
+  it('/ (GET)', () => {
+    return request(app.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect('Hello World!');
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+});
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\test\jest-e2e.json =====
+
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\.oxlintrc.json =====
+
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "rules": {
+    "typescript/no-explicit-any": "off",
+    "typescript/no-floating-promises": "error"
+  },
+  "env": {
+    "node": true
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\jest.config.ts =====
+
+import type { Config } from 'jest';
+import { pathsToModuleNameMapper } from 'ts-jest';
+import ts from 'typescript';
+
+// Path aliases (e.g. the ones added by `nest g library`) live in tsconfig.json,
+// so they are read from there instead of being duplicated here.
+const { config: tsconfig } = ts.readConfigFile(
+  './tsconfig.json',
+  ts.sys.readFile,
+);
+const paths = tsconfig?.compilerOptions?.paths ?? {};
+
+const config: Config = {
+  moduleFileExtensions: ['js', 'json', 'ts'],
+  rootDir: '.',
+  testRegex: '.*\\.spec\\.ts$',
+  transform: {
+    '^.+\\.(t|j)s$': 'ts-jest',
+  },
+  moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
+  collectCoverageFrom: [
+    'src/**/*.(t|j)s',
+    'libs/**/*.(t|j)s',
+    'apps/**/*.(t|j)s',
+  ],
+  coverageDirectory: './coverage',
+  testEnvironment: 'node',
+};
+
+export default config;
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\main.ts =====
+
+import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './src/app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  const config = new DocumentBuilder()
+    .setTitle('Resource Tracker API')
+    .setDescription('Resource request endpoints')
+    .setVersion('1.0')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
+  await app.listen(process.env.PORT ?? 3000);
+}
+
+void bootstrap();
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\nest-cli.json =====
+
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "plugins": ["@nestjs/swagger"]
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\package.json =====
+
+{
+  "name": "resource-tracker-software",
+  "version": "0.0.1",
+  "description": "",
+  "author": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "deploy": "nest deploy",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "seed:managing-director": "npm run build && node dist/scripts/seed-managing-director.js",
+    "lint": "oxlint --type-aware src/ test/",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
+    "test:cov": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --coverage",
+    "test:debug": "node --inspect-brk --experimental-vm-modules -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+    "test:e2e": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.1.3",
+    "@nestjs/config": "^12.0.1",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/jwt": "^12.0.2",
+    "@nestjs/mapped-types": "^12.0.0",
+    "@nestjs/observe": "^0.3.0",
+    "@nestjs/platform-express": "^12.0.1",
+    "@nestjs/swagger": "^12.0.5",
+    "@nestjs/typeorm": "^12.0.2",
+    "bcrypt": "^6.0.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "mysql2": "^3.24.6",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typeorm": "^1.1.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/mau": "^0.2.6",
+    "@nestjs/schematics": "^12.0.0",
+    "@nestjs/testing": "^12.0.1",
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "@types/supertest": "^7.0.0",
+    "jest": "^30.0.0",
+    "oxlint": "^1.58.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "prettier": "^3.4.2",
+    "source-map-support": "^0.5.21",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.4.0",
+    "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^6.0.2"
+  }
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\tsconfig.build.json =====
+
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+}
+
+
+===== FILE: C:\Users\Chaku\Documents\Resource-Tracker-Software\tsconfig.json =====
+
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2023",
+    "types": ["node", "jest"],
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictPropertyInitialization": false
+  }
+}
