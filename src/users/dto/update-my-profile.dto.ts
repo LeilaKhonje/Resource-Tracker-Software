@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsDateString, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsDateString, IsIn, IsNumberString, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class UpdateMyProfileDto {
   @ApiPropertyOptional({ example: '+265991234567', maxLength: 30 })
@@ -8,7 +8,7 @@ export class UpdateMyProfileDto {
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
   @MaxLength(30)
-  @Matches(/^\+?[0-9 ()-]{10}$/, { message: 'Phone number must contain 7 to 30 digits and may include +, spaces, parentheses, or hyphens' })
+  @IsNumberString({},{ message: 'Phone number must contain only digits' })
   phoneNumber?: string;
 
   @ApiPropertyOptional({ example: 'Lilongwe, Malawi', maxLength: 255 })

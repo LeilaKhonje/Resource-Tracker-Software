@@ -14,6 +14,7 @@ import { Project } from '../projects/entities/project.entity';
 import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
 import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
 import { UserRole } from '../users/user-role.enum';
+import { AssignTeamLeadDto } from './dto/assign-team-lead.dto';
 
 @Injectable()
 export class TeamsService {
@@ -53,6 +54,38 @@ export class TeamsService {
     }
 
     return team;
+  }
+
+  async assignTeamLead(id: number, dto: AssignTeamLeadDto, user: AuthTokenPayload) {
+    if (user.role !== UserRole.DEPARTMENT_HEAD) {
+      throw new ForbiddenException('Only the department head can assign a team lead');
+    }
+
+    const team = await this.findOne(id);
+    if (!team.department) {
+      throw new ForbiddenException('This team is not assigned to a department');
+    }
+
+    const departmentHead = await this.userRepository.findOne({
+      where: { id: user.sub },
+      relations: { department: true },
+    });
+    if (departmentHead?.department?.id !== team.department.id) {
+      throw new ForbiddenException('Only the department head of this team\'s department can assign its team lead');
+    }
+
+    const teamLead = await this.userRepository.findOneBy({ id: dto.userId });
+    if (!teamLead) {
+      throw new NotFoundException(`User with id ${dto.userId} not found`);
+    }
+    if (teamLead.role !== UserRole.TEAM_LEAD) {
+      throw new ForbiddenException('The assigned user must have the team lead role');
+    }
+
+    teamLead.team = team;
+    teamLead.department = team.department;
+    await this.userRepository.save(teamLead);
+    return this.findOne(id);
   }
 
   async findUsers(id: number) {

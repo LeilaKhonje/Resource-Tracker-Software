@@ -12,20 +12,20 @@ import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-requ
 import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam } from '@nestjs/swagger';
 
 @ApiTags('Projects')
-@Controller('projects')
+@Controller('api/v1/projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @ApiOperation({ summary: 'Create a new project' })
   @ApiResponse({ status: 201, description: 'Created project', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
   @ApiResponse({ status: 400, description: 'Invalid project fields' })
-  @ApiResponse({ status: 422, description: 'At least one valid team is required' })
+  @ApiResponse({ status: 422, description: 'One or more team IDs do not exist' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
   @ApiBody({
     schema: {
       type: 'object',
-        required: ['name', 'teamIds'],
+        required: ['name'],
       properties: {
         name: {
           type: 'string',
@@ -36,7 +36,7 @@ export class ProjectsController {
       }
     }
   })
-  @Post()
+  @Post('')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DEPARTMENT_HEAD)
@@ -48,12 +48,26 @@ export class ProjectsController {
   @ApiResponse({ status: 200, description: 'Projects visible to the caller', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, department: { type: 'object' } } } } } } } })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
-  @Get()
+  @Get('')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DEPARTMENT_HEAD, UserRole.MANAGING_DIRECTOR)
   findAll(@Req() request: AuthenticatedRequest) {
     return this.projectsService.findAll(request.user!);
+  }
+
+  @ApiOperation({ summary: 'Get all projects in a department' })
+  @ApiParam({ name: 'departmentId', type: Number, description: 'Numeric department ID' })
+  @ApiResponse({ status: 200, description: 'Projects assigned to teams in the specified department' })
+  @ApiResponse({ status: 400, description: 'Department ID must be an integer' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
+  @ApiResponse({ status: 403, description: 'Only managing directors can view projects by department' })
+  @Get('department/:departmentId')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGING_DIRECTOR)
+  findByDepartment(@Param('departmentId', ParseIntPipe) departmentId: number) {
+    return this.projectsService.findByDepartment(departmentId);
   }
 
   @ApiOperation({ summary: 'Get a specific project by ID' })
