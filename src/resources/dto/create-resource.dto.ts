@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsString,
+  IsInt,
   Min,
   ValidateIf,
 } from 'class-validator';
@@ -45,7 +46,10 @@ export class CreateResourceDto {
   @IsNotEmpty()
   label?: string;
 
-  @ApiProperty({ required: false, description: 'Required when type is "outsourced".', example: 'BATCH-2026-041' })
+  @IsInt()
+  @Min(0)
+  quantity: number;
+
   @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
   @IsString()
   @IsNotEmpty()
