@@ -11,7 +11,6 @@ import { AuthUser, UserRole } from './roles';
 // decorators below.
 
 @ApiTags('Resource Requests')
-@ApiBearerAuth('access-token')
 @ApiHeader({
   name: 'x-user-id',
   description: 'Legacy caller ID used when no JWT user is attached.',
