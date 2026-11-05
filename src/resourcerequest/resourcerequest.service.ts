@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Not, Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import {
   RequestStatus,
   ResourceRequest,
@@ -28,12 +28,12 @@ export class ResourcerequestService {
   constructor(
     @InjectRepository(ResourceRequest)
     private readonly requests: Repository<ResourceRequest>,
-       @InjectRepository(RequestAuditLog)
+    @InjectRepository(RequestAuditLog)
     private readonly audit: Repository<RequestAuditLog>,
   ) {}
 
   // ---------------------------------------------------------------
-  // Create (team lead). Always starts as DRAFT.
+  // Create (team lead). The request is sent to the line manager at once.
   // ---------------------------------------------------------------
   async create(dto: CreateResourceRequestDto, user: AuthUser) {
     if (user.role !== UserRole.TEAM_LEAD) {
@@ -44,17 +44,22 @@ export class ResourcerequestService {
     const request = this.requests.create({
       ...dto,
       requestedBy: user.id, // from the logged-in user, never from the body
-      status: RequestStatus.DRAFT,
+      status: RequestStatus.SUBMITTED,
+      submittedAt: new Date(),
     });
     const saved = await this.requests.save(request);
-    await this.log(saved.id, 'CREATED', user.id);
+    await this.log(saved.id, 'SUBMITTED', user.id);
+
+    // TODO: notification component:
+    //  - notify the line manager that a request arrived
+    //  - notify the team lead that the request was submitted
     return saved;
   }
 
   // ---------------------------------------------------------------
   // Read: one list endpoint, results depend on who is asking
   //   team lead:    the requests they created
-  //   line manager: submitted requests routed to them (drafts hidden)
+  //   line manager: the requests routed to them
   //   dept head / managing director: everything
   // ---------------------------------------------------------------
   async findAll(query: QueryResourceRequestDto, user: AuthUser) {
@@ -66,8 +71,6 @@ export class ResourcerequestService {
       where.requestedBy = user.id;
     } else if (user.role === UserRole.LINE_MANAGER) {
       where.lineManagerId = user.id;
-      if (query.status === RequestStatus.DRAFT) return [];
-      if (!query.status) where.status = Not(RequestStatus.DRAFT);
     }
     // TODO: scope DEPARTMENT_HEAD to their own department once the
     // organization module can tell us which department they head.
@@ -90,7 +93,7 @@ export class ResourcerequestService {
 
   // ---------------------------------------------------------------
   // Write: one update endpoint
-  //   team lead: edit details, change team/department, status SUBMITTED
+  //   team lead: edit a QUERIED request and resubmit it (status SUBMITTED)
   //   line manager: status APPROVED / REJECTED / QUERIED (with note)
   // ---------------------------------------------------------------
   async update(id: string, dto: UpdateResourceRequestDto, user: AuthUser) {
@@ -117,17 +120,17 @@ export class ResourcerequestService {
       return this.review(request, status, note, user);
     }
 
-    // Everything below is the team lead's: edits and submitting.
+    // Everything below is the team lead's: editing and resubmitting.
     this.assertOwner(request, user);
     this.assertEditable(request);
     // TODO: when teamId or departmentId change, check them against the
     // organization module (team exists, belongs to the department).
     Object.assign(request, changes);
 
-    const submitting = status === RequestStatus.SUBMITTED;
-    if (submitting) {
-      // SRS rule: a request is only valid if it comes from a team that has
-      // a department, and it must be tied to a project and a line manager.
+    const resubmitting = status === RequestStatus.SUBMITTED;
+    if (resubmitting) {
+      // A request must stay tied to a team, a department, a project and a
+      // line manager (this also catches a field being set to null).
       const missing: string[] = [];
       if (!request.teamId) missing.push('team');
       if (!request.departmentId) missing.push('department');
@@ -135,7 +138,7 @@ export class ResourcerequestService {
       if (!request.lineManagerId) missing.push('line manager');
       if (missing.length > 0) {
         throw new BadRequestException(
-          `Cannot submit: missing ${missing.join(', ')}`,
+          `Cannot resubmit: missing ${missing.join(', ')}`,
         );
       }
       request.status = RequestStatus.SUBMITTED;
@@ -154,11 +157,9 @@ export class ResourcerequestService {
     if (changedKeys.some((key) => key !== 'teamId' && key !== 'departmentId')) {
       await this.log(id, 'UPDATED', user.id);
     }
-    if (submitting) {
-      await this.log(id, 'SUBMITTED', user.id);
-      // TODO: notification component:
-      //  - notify the line manager that a request arrived
-      //  - notify the team lead that the request was submitted
+    if (resubmitting) {
+      await this.log(id, 'RESUBMITTED', user.id);
+      // TODO: notification component: tell the line manager it is back.
     }
     return saved;
   }
@@ -220,12 +221,11 @@ export class ResourcerequestService {
     }
   }
 
-  // Requests can only be changed before review, or after a query.
+  // A request can only be edited after the line manager has queried it.
   private assertEditable(request: ResourceRequest) {
-    const editable = [RequestStatus.DRAFT, RequestStatus.QUERIED];
-    if (!editable.includes(request.status)) {
+    if (request.status !== RequestStatus.QUERIED) {
       throw new BadRequestException(
-        `A ${request.status} request can no longer be changed`,
+        `A ${request.status} request cannot be edited. A request can only be edited after the line manager queries it.`,
       );
     }
   }

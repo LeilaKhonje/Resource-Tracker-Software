@@ -51,8 +51,11 @@ async function bootstrap() {
       .addTag('Line Manager',
         'Allows line managers to review resource requests and manage approvals.'
       )
-      .addTag('Reports',
+            .addTag('Reports',
         'Provides reports on resource requests, approvals, spending, and allocations.'
+      )
+      .addTag('Resource Requests',
+        'Allows team leads to create resource requests, edit them, and submit them for approval. Line managers can approve, reject, or query the requests routed to them, and everyone can track the status and history of a request.'
       )
     .setVersion('1.0')
     .addBearerAuth(
