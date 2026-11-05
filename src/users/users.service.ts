@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { UserRole } from './user-role.enum';
 import { User } from './user.entity';
@@ -18,40 +18,26 @@ export class UsersService {
   ) {}
 
   async register(registerDto: RegisterUserDto) {
-    const email = registerDto.email.trim().toLowerCase();
-    const existingUser = await this.usersRepository.findOneBy({ email });
-    if (existingUser) {
-      throw new ConflictException('An account with this email already exists');
-    }
-
-    try {
-      const user = await this.usersRepository.save(this.usersRepository.create({
+    const user = await this.usersRepository.save(this.usersRepository.create({
         fullName: `${registerDto.firstName} ${registerDto.lastName}`.trim(),
-        email,
         passwordHash: await bcrypt.hash(registerDto.password, BCRYPT_ROUNDS),
+        email: registerDto.email,
         role: null,
       }));
-      return { user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role } };
-    } catch (error) {
-      if (
-        error instanceof QueryFailedError &&
-        typeof error.driverError === 'object' && error.driverError !== null &&
-        'code' in error.driverError && error.driverError.code === 'ER_DUP_ENTRY'
-      ) {
-        throw new ConflictException('An account with this email already exists');
-      }
-      throw error;
-    }
+    return { user: { id: user.id, fullName: user.fullName, role: user.role } };
   }
 
   async getMyProfile(userId: string){
-    const user = await this .usersRepository.findOne({where: {id: userId},});
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: { department: true, team: true },
+    });
     
     if(!user){
       throw new NotFoundException('User Not found');
     }
 
-    return {
+    const baseProfile ={
       id: user.id,
       fullName: user.fullName,
       email: user.email,
@@ -59,8 +45,49 @@ export class UsersService {
       phoneNumber: user.phoneNumber,
       address: user.address,
       dateOfBirth: user.dateOfBirth,
-      preferredPronoun: user.preferredPronoun
-    };
+      preferredPronoun: user.preferredPronoun,
+    }
+
+    switch(user.role){
+      case UserRole.TEAM_LEAD:
+        return{
+          ...baseProfile,
+          profile:{
+            department: user.department?.name,
+            team: user.team?.name,
+          }
+        }
+      
+      case UserRole.LINE_MANAGER:
+        return{
+          ...baseProfile,
+      }
+
+      case UserRole.DEPARTMENT_HEAD:
+        return{
+          ...baseProfile,
+          profile:{
+            department: user.department?.name,
+          }
+        }
+      
+      case UserRole.MANAGING_DIRECTOR:
+        return{
+          ...baseProfile,
+        }
+
+      case UserRole.TEAM_MEMBER:
+        return{
+          ...baseProfile,
+          profile:{
+            department: user.department?.name,
+            team: user.team?.name,
+          }
+        }
+
+    
+    }
+
   }
 
   async updateMyProfile(userId: string, dto: UpdateMyProfileDto) {
@@ -81,7 +108,6 @@ export class UsersService {
     return {
       id: user.id,
       fullName: user.fullName,
-      email: user.email,
       role: user.role,
       phoneNumber: user.phoneNumber,
       address: user.address,
@@ -161,7 +187,7 @@ export class UsersService {
     userId: string,
     role: UserRole,
     assignerId: string,
-  ): Promise<Pick<User, 'id' | 'fullName' | 'email' | 'role'>> {
+  ): Promise<Pick<User, 'id' | 'fullName' | 'role'>> {
     const assigner = await this.usersRepository.findOneBy({ id: assignerId });
     if (!assigner) throw new NotFoundException('Assigning user not found');
 
@@ -201,7 +227,6 @@ export class UsersService {
     return {
       id: user.id,
       fullName: user.fullName,
-      email: user.email,
       role: user.role,
     };
   }
