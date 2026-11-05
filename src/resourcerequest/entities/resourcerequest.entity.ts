@@ -7,8 +7,8 @@ import {
 } from 'typeorm';
 
 
+
 export enum RequestStatus {
-  DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',
   QUERIED = 'QUERIED',
   APPROVED = 'APPROVED',
@@ -49,7 +49,7 @@ export class ResourceRequest {
   quantity: number;
 
   
-  @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.DRAFT })
+    @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.SUBMITTED })
   status: RequestStatus;
 
   

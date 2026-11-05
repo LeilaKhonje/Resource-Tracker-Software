@@ -6,9 +6,12 @@ import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
 import { AuthUser, UserRole } from './roles';
 
+// TODO: once the auth guard is connected, add @UseGuards(...) at class level
+// and delete the header fallback in currentUser() plus the two @ApiHeader
+// decorators below.
 
-
-@ApiTags('resource-requests')
+@ApiTags('Resource Requests')
+@ApiBearerAuth('access-token')
 @ApiHeader({
   name: 'x-user-id',
   description: 'Legacy caller ID used when no JWT user is attached.',
@@ -19,7 +22,9 @@ import { AuthUser, UserRole } from './roles';
 export class ResourcerequestController {
   constructor(private readonly service: ResourcerequestService) {}
 
-  
+  // Reads the logged-in user. The real auth guard puts it on req.user.
+  // Until it is connected, the two test headers are used instead.
+  // REMOVE the header fallback before the final submission.
   private currentUser(req: any): AuthUser {
     if (req.user) return req.user as AuthUser;
 
