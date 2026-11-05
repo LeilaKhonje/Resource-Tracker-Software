@@ -164,16 +164,73 @@ are for Department Heads, while Managing Directors can also list and view.
 | `GET /projects/:id/team-members` | Lists names and team details for members of the project's teams. | `400` ID is not an integer; `401` missing/invalid token; `403` caller lacks role/department; `404` project does not exist or is outside the caller's department. |
 | `DELETE /projects/:id` | Deletes a project. | `400` ID is not an integer; `401` missing/invalid token; `403` wrong role/no department; `404` project does not exist or is outside the caller's department. |
 
+### Resources
+
+The resources API manages catalog records. It does not track inventory quantities.
+These routes currently do not declare authentication guards. Resource IDs are
+UUIDs. The returned fields depend on the resource `type`:
+
+- `insourced`: `id`, `name`, `type`, `description`, `department`, `createdAt`, `updatedAt`
+- `outsourced`: `id`, `name`, `type`, `price`, `label`, `batchNumber`, `vendor`, `createdAt`, `updatedAt`
+
+| Method and path | Request | What it does | Possible errors |
+| --- | --- | --- | --- |
+| `POST /resources` | JSON resource object; see examples below. | Creates a catalog resource. `type` is `insourced` or `outsourced`; insourced requires `description` and `department`, outsourced requires `price`, `label`, `batchNumber`, and `vendor`. | `400` invalid or missing type-specific fields; database errors. |
+| `GET /resources?name=lap&type=insourced` | Optional `name` substring and `type` filters. | Lists matching catalog resources, newest first. `name` matching is case-insensitive. | `400` invalid `type`; database errors. |
+| `GET /resources/:id` | `:id` is a resource UUID. | Returns one catalog resource. | `400` malformed UUID; `404` resource not found. |
+| `PATCH /resources/:id` | JSON containing one or more editable fields. `type` cannot be changed. | Updates the resource catalog record. Fields belonging to the other resource type are rejected. | `400` malformed UUID or invalid fields; `404` resource not found; database errors. |
+
+Create an insourced resource:
+
+```json
+{
+  "name": "Laptop",
+  "type": "insourced",
+  "description": "Standard staff laptop",
+  "department": "IT"
+}
+```
+
+Create an outsourced resource:
+
+```json
+{
+  "name": "Laptop",
+  "type": "outsourced",
+  "price": 1200,
+  "label": "ThinkPad T14",
+  "batchNumber": "LOT-2026-04",
+  "vendor": "Example Supplies"
+}
+```
+
+Example `GET /resources/:id` response for an outsourced resource:
+
+```json
+{
+  "id": "2a24af18-e5ee-4afb-a3f9-c8e99b00128a",
+  "name": "Laptop",
+  "type": "outsourced",
+  "price": 1200,
+  "label": "ThinkPad T14",
+  "batchNumber": "LOT-2026-04",
+  "vendor": "Example Supplies",
+  "createdAt": "2026-11-04T10:00:00.000Z",
+  "updatedAt": "2026-11-04T10:00:00.000Z"
+}
+```
+
 ### Resource requests
 
-Resource requests represent a team's request for an item or service, with
-submission, review, and status tracking handled by the request service. The
-service contains these operations, but `ResourcerequestController` currently
-has no route handlers, so there are no `/resourcerequest` endpoints available
-through HTTP yet. When exposed, service-level errors include `400` for edits to
-requests that are not drafts/queried, incomplete submission, or invalid review
-decisions; `403` for ownership, role, or access violations; and `404` when the
-request ID does not exist.
+| Method and path | What it does | Possible errors |
+| --- | --- | --- |
+| `POST /resource-requests` | Creates a draft; body includes item details, `quantity`, and team/project/department/manager IDs. | `400` invalid fields/references; `403` caller is not a team lead. |
+| `GET /resource-requests` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing caller identity. |
+| `GET /resource-requests/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
+| `PATCH /resource-requests/:id` | Team lead edits a draft/queried request or submits with `{"status":"SUBMITTED"}`. Assigned line manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`. Rejection/query requires a `note`. | `400` invalid status/state or missing required submit fields; `403` wrong owner/role/manager; `404` request not found. |
+
+The request controller currently accepts `x-user-id` and uppercase `x-user-role`
+headers when no authenticated request user is attached.
 
 ### Resource allocations
 
@@ -250,7 +307,6 @@ authentication guards.
 | `GET /line-manager/requests?status=...` | Lists requests, optionally filtered by allocation status. | Invalid status may be rejected by validation if enabled for the query; database errors. |
 | `GET /line-manager/requests/:id` | Intended to return request details. | Currently throws a generic unimplemented error (`500`). |
 | `PATCH /line-manager/requests/:id/review` | Marks a request as queried for follow-up. | Database errors; ID conversion/update failures. |
-| `PATCH /line-manager/requests/:id/approve` | Marks a request approved. | Database errors; ID conversion/update failures. |
 | `PATCH /line-manager/requests/:id/reject` | Marks a request rejected; DTO expects a `reason`. | `400` invalid/missing reason when DTO validation is applied; database errors; ID conversion/update failures. |
 
 ## Error response notes

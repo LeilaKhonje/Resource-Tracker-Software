@@ -19,9 +19,11 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('A bearer access token is required');
     }
 
-    let payload: AuthTokenPayload;
+    let payload: AuthTokenPayload & { tokenUse?: string };
     try {
-      payload = await this.jwtService.verifyAsync<AuthTokenPayload>(token);
+      payload = await this.jwtService.verifyAsync<
+        AuthTokenPayload & { tokenUse?: string }
+      >(token);
     } catch (error) {
       if (
         error instanceof Error &&
@@ -37,6 +39,7 @@ export class JwtAuthGuard implements CanActivate {
     if (
       typeof payload !== 'object' ||
       payload === null ||
+      payload.tokenUse === 'refresh' ||
       typeof payload.sub !== 'string' ||
       typeof payload.email !== 'string' ||
       (payload.role !== null &&

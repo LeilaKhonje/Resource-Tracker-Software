@@ -15,7 +15,7 @@ import { ReportsModule } from './reports/reports.module';
 import { AuditLogModule } from './auditlog/auditlog.module';
 import { ResourcesModule } from './resources/resources.module';
 import { UsersModule } from './users/users.module';
-//import { ResourceAllocationModule } from './resource-allocation/resource-allocation.module';
+
 
 @Module({
   imports: [
@@ -43,6 +43,7 @@ import { UsersModule } from './users/users.module';
     AuditLogModule,
     ReportsModule,
     ResourcesModule,
+  
   ],
   controllers: [AppController],
   providers: [AppService],
