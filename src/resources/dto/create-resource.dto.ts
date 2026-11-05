@@ -24,9 +24,9 @@ export class CreateResourceDto {
   description?: string;
 
   @ValidateIf((o) => o.type === ResourceType.INSOURCED)
-  @IsString()
-  @IsNotEmpty()
-  department?: string;
+  @IsInt()
+  @Min(1)
+  departmentId?: number;
 
   // ---- Required when type === outsourced ----
   @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
