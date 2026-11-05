@@ -7,8 +7,8 @@ import {
 } from 'typeorm';
 
 
+
 export enum RequestStatus {
-  DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',
   QUERIED = 'QUERIED',
   APPROVED = 'APPROVED',
@@ -49,7 +49,7 @@ export class ResourceRequest {
   quantity: number;
 
   
-  @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.DRAFT })
+    @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.SUBMITTED })
   status: RequestStatus;
 
   
@@ -68,19 +68,17 @@ export class ResourceRequest {
   @Column({ nullable: true })
   departmentId: string;
 
- 
-  @Column({ type: 'text', nullable: true })
-  reviewNote: string | null; // reason for rejection or the query question
+ @Column({ type: 'text', nullable: true })
+reviewNote: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   reviewedBy: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
-  reviewedAt: Date | null;
+@Column({ type: 'timestamp', nullable: true })
+reviewedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
-  submittedAt: Date | null;
-
+@Column({ type: 'timestamp', nullable: true })
+submittedAt: Date | null;
   @CreateDateColumn()
   createdAt: Date;
 
