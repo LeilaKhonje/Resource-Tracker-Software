@@ -15,6 +15,7 @@ import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
 import { AuthUser, UserRole } from './roles';
+import { AuditLog } from '../auditlog/auditlog.entity';
 import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
@@ -172,7 +173,7 @@ export class ResourcerequestService {
     if (changedKeys.some((key) => key !== 'teamId' && key !== 'departmentId')) {
       await this.log(id, 'UPDATED', user.id);
     }
-    if (resubmitting) {
+    if (submitting) {
       await this.log(id, 'RESUBMITTED', user.id);
       // TODO: notification component: tell the line manager it is back.
     }
