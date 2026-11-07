@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -9,55 +10,47 @@ import {
   Query,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiHeader,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ResourcerequestService } from './resourcerequest.service';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
 import { AuthUser, UserRole } from './roles';
 
-// TODO: once the auth guard is connected, add @UseGuards(...) at class level
-// and delete the header fallback in currentUser() plus the two @ApiHeader
-// decorators below.
-
 @ApiTags('Resource Requests')
 @ApiBearerAuth('access-token')
-@ApiHeader({
-  name: 'x-user-id',
-  description: 'Temporary test login: e.g. lead-1 or manager-1',
-  required: true,
-})
-@ApiHeader({
-  name: 'x-user-role',
-  description: 'Temporary test login: the role of the user',
-  enum: UserRole,
-  required: true,
-})
+@UseGuards(JwtAuthGuard)
 @Controller('resource-requests')
 export class ResourcerequestController {
   constructor(private readonly service: ResourcerequestService) {}
 
-  // Reads the logged-in user. The real auth guard puts it on req.user.
-  // Until it is connected, the two test headers are used instead.
-  // REMOVE the header fallback before the final submission.
+  
   private currentUser(req: any): AuthUser {
-    if (req.user) return req.user as AuthUser;
+    const user = req.user;
+    if (!user) throw new UnauthorizedException('Not logged in');
 
-    const id = req.headers['x-user-id'];
-    const role = req.headers['x-user-role'];
-    if (!id || !Object.values(UserRole).includes(role)) {
-      throw new UnauthorizedException('No logged-in user');
+    const id = user.sub ?? user.id ?? user.userId;
+    const role = String(user.role ?? '')
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+
+    if (id === undefined || !Object.values(UserRole).includes(role as UserRole)) {
+      throw new ForbiddenException(
+        'Your account role cannot use resource requests',
+      );
     }
-    return { id, role } as AuthUser;
+    return { id: String(id), role: role as UserRole };
   }
 
   @ApiOperation({
@@ -67,7 +60,8 @@ export class ResourcerequestController {
       'manager in one step. It must include the item details (description, ' +
       'manufacturer label, price, batch number, vendor, quantity), the ' +
       'project, the line manager who will review it, and the team and ' +
-      'department it comes from. The request starts with status SUBMITTED.',
+      'department it comes from. The request starts with status SUBMITTED. ' +
+      'The requester and their role come from the login token.',
   })
   @ApiResponse({
     status: 201,
