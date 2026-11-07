@@ -15,8 +15,8 @@ export class Resources {
     @Column({type: 'text', nullable: true})
     description: string | null;
 
-    @Column({type: 'varchar', length: 100, nullable: true})
-    department: string | null;
+    @Column({ name: 'department_id', type: 'int', nullable: true})
+    departmentId: number | null;
 
     @Column({
         type: 'decimal',

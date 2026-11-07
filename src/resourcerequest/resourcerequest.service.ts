@@ -15,6 +15,10 @@ import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
 import { AuthUser, UserRole } from './roles';
+import { AuditLog } from '../auditlog/auditlog.entity';
+import { Department } from '../departments/entities/department.entity';
+import { Team } from '../teams/entities/team.entity';
+import { Project } from '../projects/entities/project.entity';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -28,8 +32,14 @@ export class ResourcerequestService {
   constructor(
     @InjectRepository(ResourceRequest)
     private readonly requests: Repository<ResourceRequest>,
-    @InjectRepository(RequestAuditLog)
-    private readonly audit: Repository<RequestAuditLog>,
+    @InjectRepository(AuditLog)
+    private readonly audit: Repository<AuditLog>,
+    @InjectRepository(Department)
+    private readonly departments: Repository<Department>,
+    @InjectRepository(Team)
+    private readonly teams: Repository<Team>,
+    @InjectRepository(Project)
+    private readonly projects: Repository<Project>,
   ) {}
 
   // ---------------------------------------------------------------
@@ -39,8 +49,7 @@ export class ResourcerequestService {
     if (user.role !== UserRole.TEAM_LEAD) {
       throw new ForbiddenException('Only team leads can create requests');
     }
-    // TODO: check teamId, departmentId and projectId against the
-    // organization module (they exist, and the team belongs to the department).
+    await this.assertOrganizationReferences(dto);
     const request = this.requests.create({
       ...dto,
       requestedBy: user.id, // from the logged-in user, never from the body
@@ -123,14 +132,21 @@ export class ResourcerequestService {
     // Everything below is the team lead's: editing and resubmitting.
     this.assertOwner(request, user);
     this.assertEditable(request);
-    // TODO: when teamId or departmentId change, check them against the
-    // organization module (team exists, belongs to the department).
     Object.assign(request, changes);
 
-    const resubmitting = status === RequestStatus.SUBMITTED;
-    if (resubmitting) {
-      // A request must stay tied to a team, a department, a project and a
-      // line manager (this also catches a field being set to null).
+    if (
+      changedKeys.includes('teamId') ||
+      changedKeys.includes('departmentId') ||
+      changedKeys.includes('projectId') ||
+      status === RequestStatus.SUBMITTED
+    ) {
+      await this.assertOrganizationReferences(request);
+    }
+
+    const submitting = status === RequestStatus.SUBMITTED;
+    if (submitting) {
+      // SRS rule: a request is only valid if it comes from a team that has
+      // a department, and it must be tied to a project and a line manager.
       const missing: string[] = [];
       if (!request.teamId) missing.push('team');
       if (!request.departmentId) missing.push('department');
@@ -157,7 +173,7 @@ export class ResourcerequestService {
     if (changedKeys.some((key) => key !== 'teamId' && key !== 'departmentId')) {
       await this.log(id, 'UPDATED', user.id);
     }
-    if (resubmitting) {
+    if (submitting) {
       await this.log(id, 'RESUBMITTED', user.id);
       // TODO: notification component: tell the line manager it is back.
     }
@@ -213,6 +229,43 @@ export class ResourcerequestService {
     const request = await this.requests.findOne({ where: { id } });
     if (!request) throw new NotFoundException(`Request ${id} not found`);
     return request;
+  }
+
+  private async assertOrganizationReferences(reference: {
+    teamId?: string;
+    departmentId?: string;
+    projectId?: string;
+  }) {
+    const departmentId = this.parseOrganizationId(reference.departmentId, 'departmentId');
+    const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
+    const projectId = this.parseOrganizationId(reference.projectId, 'projectId');
+
+    const [department, team, project] = await Promise.all([
+      this.departments.findOne({ where: { id: departmentId } }),
+      this.teams.findOne({ where: { id: teamId }, relations: { department: true } }),
+      this.projects.findOne({ where: { id: projectId }, relations: { teams: true } }),
+    ]);
+
+    if (!department) throw new NotFoundException(`Department ${departmentId} not found`);
+    if (!team) throw new NotFoundException(`Team ${teamId} not found`);
+    if (!project) throw new NotFoundException(`Project ${projectId} not found`);
+    if (team.department?.id !== departmentId) {
+      throw new BadRequestException('The team does not belong to the specified department');
+    }
+    if (!project.teams?.some((projectTeam) => projectTeam.id === teamId)) {
+      throw new BadRequestException('The project is not assigned to the specified team');
+    }
+  }
+
+  private parseOrganizationId(value: string | undefined, field: string): number {
+    if (!value || !/^\d+$/.test(value)) {
+      throw new BadRequestException(`${field} must be a positive integer`);
+    }
+    const id = Number(value);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      throw new BadRequestException(`${field} must be a positive integer`);
+    }
+    return id;
   }
 
   private assertOwner(request: ResourceRequest, user: AuthUser) {

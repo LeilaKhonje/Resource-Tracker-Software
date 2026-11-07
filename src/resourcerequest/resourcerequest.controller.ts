@@ -20,7 +20,6 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ResourcerequestService } from './resourcerequest.service';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
@@ -35,7 +34,8 @@ import { AuthUser, UserRole } from './roles';
 export class ResourcerequestController {
   constructor(private readonly service: ResourcerequestService) {}
 
-  
+  // The logged-in user comes from the login token. The guard puts it on
+  // req.user, so the caller can no longer choose their own id or role.
   private currentUser(req: any): AuthUser {
     const user = req.user;
     if (!user) throw new UnauthorizedException('Not logged in');
@@ -70,6 +70,7 @@ export class ResourcerequestController {
   @ApiResponse({ status: 400, description: 'A required field is missing or invalid.' })
   @ApiResponse({ status: 401, description: 'Not logged in.' })
   @ApiResponse({ status: 403, description: 'Only team leads can create requests.' })
+  @ApiResponse({ status: 404, description: 'The team, department or project does not exist.' })
   @Post()
   create(@Body() dto: CreateResourceRequestDto, @Req() req: any) {
     return this.service.create(dto, this.currentUser(req));

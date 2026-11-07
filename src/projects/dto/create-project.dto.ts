@@ -1,4 +1,4 @@
-import {ArrayMaxSize, ArrayUnique, IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Length, MaxLength, Min} from 'class-validator';
+import {ArrayUnique, IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Length, MaxLength, Min} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateProjectDto {
@@ -15,9 +15,8 @@ export class CreateProjectDto {
   description?: string;
 
   @IsOptional()
-  @ApiProperty({ type: [Number], example: [1], description: 'At least one team ID in the department is required by the create operation' })
+  @ApiPropertyOptional({ type: [Number], example: [1], description: 'Optional team IDs to associate with the project' })
   @IsArray()
-  @ArrayMaxSize(1)
   @ArrayUnique()
   @IsInt({ each: true })
   @Min(1, { each: true })
