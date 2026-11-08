@@ -11,7 +11,7 @@ import { AuthSecurityModule } from '../auth/auth-security.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project]),
+    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project, RequestAuditLog]),
     AuthSecurityModule,
   ],
   controllers: [ResourcerequestController],

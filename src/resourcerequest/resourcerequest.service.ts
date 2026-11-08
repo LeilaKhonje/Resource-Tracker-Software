@@ -1,15 +1,7 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException,  ForbiddenException,Injectable,NotFoundException,} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
-import {
-  RequestStatus,
-  ResourceRequest,
-} from './entities/resourcerequest.entity';
+import {RequestStatus, ResourceRequest,} from './entities/resourcerequest.entity';
 import { RequestAuditLog } from './entities/request-audit-log.entity';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
@@ -19,6 +11,7 @@ import { AuditLog } from '../auditlog/auditlog.entity';
 import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
+import { AuditLog } from '../auditlog/auditlog.entity';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -32,8 +25,8 @@ export class ResourcerequestService {
   constructor(
     @InjectRepository(ResourceRequest)
     private readonly requests: Repository<ResourceRequest>,
-    @InjectRepository(AuditLog)
-    private readonly audit: Repository<AuditLog>,
+    @InjectRepository(RequestAuditLog)
+    private readonly audit: Repository<RequestAuditLog>,
     @InjectRepository(Department)
     private readonly departments: Repository<Department>,
     @InjectRepository(Team)
@@ -236,28 +229,48 @@ export class ResourcerequestService {
     departmentId?: string;
     projectId?: string;
   }) {
-    const departmentId = this.parseOrganizationId(reference.departmentId, 'departmentId');
+    const departmentId = this.parseOrganizationId(
+      reference.departmentId,
+      'departmentId',
+    );
     const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
-    const projectId = this.parseOrganizationId(reference.projectId, 'projectId');
+    const projectId = this.parseOrganizationId(
+      reference.projectId,
+      'projectId',
+    );
 
     const [department, team, project] = await Promise.all([
       this.departments.findOne({ where: { id: departmentId } }),
-      this.teams.findOne({ where: { id: teamId }, relations: { department: true } }),
-      this.projects.findOne({ where: { id: projectId }, relations: { teams: true } }),
+      this.teams.findOne({
+        where: { id: teamId },
+        relations: { department: true },
+      }),
+      this.projects.findOne({
+        where: { id: projectId },
+        relations: { teams: true },
+      }),
     ]);
 
-    if (!department) throw new NotFoundException(`Department ${departmentId} not found`);
+    if (!department)
+      throw new NotFoundException(`Department ${departmentId} not found`);
     if (!team) throw new NotFoundException(`Team ${teamId} not found`);
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
     if (team.department?.id !== departmentId) {
-      throw new BadRequestException('The team does not belong to the specified department');
+      throw new BadRequestException(
+        'The team does not belong to the specified department',
+      );
     }
     if (!project.teams?.some((projectTeam) => projectTeam.id === teamId)) {
-      throw new BadRequestException('The project is not assigned to the specified team');
+      throw new BadRequestException(
+        'The project is not assigned to the specified team',
+      );
     }
   }
 
-  private parseOrganizationId(value: string | undefined, field: string): number {
+  private parseOrganizationId(
+    value: string | undefined,
+    field: string,
+  ): number {
     if (!value || !/^\d+$/.test(value)) {
       throw new BadRequestException(`${field} must be a positive integer`);
     }
