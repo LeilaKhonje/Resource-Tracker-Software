@@ -49,7 +49,9 @@ export class ResourceRequest {
   quantity: number;
 
   
-  @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.DRAFT })
+  // Store statuses as a bounded string. DTO validation still restricts values
+  // to RequestStatus, and varchar avoids MySQL enum schema-sync incompatibility.
+  @Column({ type: 'varchar', length: 20, default: RequestStatus.DRAFT })
   status: RequestStatus;
 
   
