@@ -7,8 +7,8 @@ import {
 } from 'typeorm';
 
 
+
 export enum RequestStatus {
-  DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',
   QUERIED = 'QUERIED',
   APPROVED = 'APPROVED',
@@ -49,9 +49,7 @@ export class ResourceRequest {
   quantity: number;
 
   
-  // Store statuses as a bounded string. DTO validation still restricts values
-  // to RequestStatus, and varchar avoids MySQL enum schema-sync incompatibility.
-  @Column({ type: 'varchar', length: 20, default: RequestStatus.DRAFT })
+    @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.SUBMITTED })
   status: RequestStatus;
 
   

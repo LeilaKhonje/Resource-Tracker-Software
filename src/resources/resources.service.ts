@@ -22,7 +22,7 @@ export class ResourcesService {
       name: dto.name,
       type: dto.type,
       description: dto.description,
-      department: dto.department,
+      departmentId: dto.departmentId,
     }) : this.resourcesRepository.create({
       name: dto.name,
       type: dto.type,

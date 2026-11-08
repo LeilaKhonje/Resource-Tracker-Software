@@ -1,20 +1,13 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException,  ForbiddenException,Injectable,NotFoundException,} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Not, Repository } from 'typeorm';
-import {
-  RequestStatus,
-  ResourceRequest,
-} from './entities/resourcerequest.entity';
+import { FindOptionsWhere, Repository } from 'typeorm';
+import {RequestStatus, ResourceRequest,} from './entities/resourcerequest.entity';
 import { RequestAuditLog } from './entities/request-audit-log.entity';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
 import { AuthUser, UserRole } from './roles';
+import { AuditLog } from '../auditlog/auditlog.entity';
 import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
@@ -32,8 +25,8 @@ export class ResourcerequestService {
   constructor(
     @InjectRepository(ResourceRequest)
     private readonly requests: Repository<ResourceRequest>,
-    @InjectRepository(AuditLog)
-    private readonly audit: Repository<AuditLog>,
+    @InjectRepository(RequestAuditLog)
+    private readonly audit: Repository<RequestAuditLog>,
     @InjectRepository(Department)
     private readonly departments: Repository<Department>,
     @InjectRepository(Team)
@@ -43,7 +36,7 @@ export class ResourcerequestService {
   ) {}
 
   // ---------------------------------------------------------------
-  // Create (team lead). Always starts as DRAFT.
+  // Create (team lead). The request is sent to the line manager at once.
   // ---------------------------------------------------------------
   async create(dto: CreateResourceRequestDto, user: AuthUser) {
     if (user.role !== UserRole.TEAM_LEAD) {
@@ -53,17 +46,22 @@ export class ResourcerequestService {
     const request = this.requests.create({
       ...dto,
       requestedBy: user.id, // from the logged-in user, never from the body
-      status: RequestStatus.DRAFT,
+      status: RequestStatus.SUBMITTED,
+      submittedAt: new Date(),
     });
     const saved = await this.requests.save(request);
-    await this.log(saved.id, 'CREATED', user.id);
+    await this.log(saved.id, 'SUBMITTED', user.id);
+
+    // TODO: notification component:
+    //  - notify the line manager that a request arrived
+    //  - notify the team lead that the request was submitted
     return saved;
   }
 
   // ---------------------------------------------------------------
   // Read: one list endpoint, results depend on who is asking
   //   team lead:    the requests they created
-  //   line manager: submitted requests routed to them (drafts hidden)
+  //   line manager: the requests routed to them
   //   dept head / managing director: everything
   // ---------------------------------------------------------------
   async findAll(query: QueryResourceRequestDto, user: AuthUser) {
@@ -75,8 +73,6 @@ export class ResourcerequestService {
       where.requestedBy = user.id;
     } else if (user.role === UserRole.LINE_MANAGER) {
       where.lineManagerId = user.id;
-      if (query.status === RequestStatus.DRAFT) return [];
-      if (!query.status) where.status = Not(RequestStatus.DRAFT);
     }
     // TODO: scope DEPARTMENT_HEAD to their own department once the
     // organization module can tell us which department they head.
@@ -99,7 +95,7 @@ export class ResourcerequestService {
 
   // ---------------------------------------------------------------
   // Write: one update endpoint
-  //   team lead: edit details, change team/department, status SUBMITTED
+  //   team lead: edit a QUERIED request and resubmit it (status SUBMITTED)
   //   line manager: status APPROVED / REJECTED / QUERIED (with note)
   // ---------------------------------------------------------------
   async update(id: string, dto: UpdateResourceRequestDto, user: AuthUser) {
@@ -126,7 +122,7 @@ export class ResourcerequestService {
       return this.review(request, status, note, user);
     }
 
-    // Everything below is the team lead's: edits and submitting.
+    // Everything below is the team lead's: editing and resubmitting.
     this.assertOwner(request, user);
     this.assertEditable(request);
     Object.assign(request, changes);
@@ -151,7 +147,7 @@ export class ResourcerequestService {
       if (!request.lineManagerId) missing.push('line manager');
       if (missing.length > 0) {
         throw new BadRequestException(
-          `Cannot submit: missing ${missing.join(', ')}`,
+          `Cannot resubmit: missing ${missing.join(', ')}`,
         );
       }
       request.status = RequestStatus.SUBMITTED;
@@ -171,10 +167,8 @@ export class ResourcerequestService {
       await this.log(id, 'UPDATED', user.id);
     }
     if (submitting) {
-      await this.log(id, 'SUBMITTED', user.id);
-      // TODO: notification component:
-      //  - notify the line manager that a request arrived
-      //  - notify the team lead that the request was submitted
+      await this.log(id, 'RESUBMITTED', user.id);
+      // TODO: notification component: tell the line manager it is back.
     }
     return saved;
   }
@@ -235,28 +229,48 @@ export class ResourcerequestService {
     departmentId?: string;
     projectId?: string;
   }) {
-    const departmentId = this.parseOrganizationId(reference.departmentId, 'departmentId');
+    const departmentId = this.parseOrganizationId(
+      reference.departmentId,
+      'departmentId',
+    );
     const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
-    const projectId = this.parseOrganizationId(reference.projectId, 'projectId');
+    const projectId = this.parseOrganizationId(
+      reference.projectId,
+      'projectId',
+    );
 
     const [department, team, project] = await Promise.all([
       this.departments.findOne({ where: { id: departmentId } }),
-      this.teams.findOne({ where: { id: teamId }, relations: { department: true } }),
-      this.projects.findOne({ where: { id: projectId }, relations: { teams: true } }),
+      this.teams.findOne({
+        where: { id: teamId },
+        relations: { department: true },
+      }),
+      this.projects.findOne({
+        where: { id: projectId },
+        relations: { teams: true },
+      }),
     ]);
 
-    if (!department) throw new NotFoundException(`Department ${departmentId} not found`);
+    if (!department)
+      throw new NotFoundException(`Department ${departmentId} not found`);
     if (!team) throw new NotFoundException(`Team ${teamId} not found`);
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
     if (team.department?.id !== departmentId) {
-      throw new BadRequestException('The team does not belong to the specified department');
+      throw new BadRequestException(
+        'The team does not belong to the specified department',
+      );
     }
     if (!project.teams?.some((projectTeam) => projectTeam.id === teamId)) {
-      throw new BadRequestException('The project is not assigned to the specified team');
+      throw new BadRequestException(
+        'The project is not assigned to the specified team',
+      );
     }
   }
 
-  private parseOrganizationId(value: string | undefined, field: string): number {
+  private parseOrganizationId(
+    value: string | undefined,
+    field: string,
+  ): number {
     if (!value || !/^\d+$/.test(value)) {
       throw new BadRequestException(`${field} must be a positive integer`);
     }
@@ -273,12 +287,11 @@ export class ResourcerequestService {
     }
   }
 
-  // Requests can only be changed before review, or after a query.
+  // A request can only be edited after the line manager has queried it.
   private assertEditable(request: ResourceRequest) {
-    const editable = [RequestStatus.DRAFT, RequestStatus.QUERIED];
-    if (!editable.includes(request.status)) {
+    if (request.status !== RequestStatus.QUERIED) {
       throw new BadRequestException(
-        `A ${request.status} request can no longer be changed`,
+        `A ${request.status} request cannot be edited. A request can only be edited after the line manager queries it.`,
       );
     }
   }
