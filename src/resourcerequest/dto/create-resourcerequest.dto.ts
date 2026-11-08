@@ -7,7 +7,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 // Only what the team lead is allowed to provide. status and requestedBy are
 // NOT here: the server sets them.
