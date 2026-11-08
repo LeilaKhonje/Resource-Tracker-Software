@@ -307,14 +307,22 @@ export class ResourcerequestService {
     }
   }
 
-  private async log(
+    private async log(
     requestId: string,
     action: string,
     performedBy: string,
     note?: string,
   ) {
     await this.audit.save(
-      this.audit.create({ requestId, action, performedBy, note }),
+      this.audit.create({
+        actionType: action, // required by the group's audit table
+        entityType: 'RESOURCE_REQUEST', // required by the group's audit table
+        requestId,
+        action,
+        performedBy,
+        note: note ?? null,
+        details: note ?? null,
+      }),
     );
   }
 }
