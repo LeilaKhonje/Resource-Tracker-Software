@@ -7,41 +7,41 @@ import { ReportFilterDto } from './dto/report-filter.dto';
 export class ReportsService {
   constructor(private readonly dataSource: DataSource) {}
 
-  // 1. Historical approval decisions
   async getApprovalHistory(filter: ReportFilterDto) {
-    const conditions: string[] = [];
+    const conditions: string[] = [
+      `r.status IN ('APPROVED', 'REJECTED')`,
+    ];
     const params: any[] = [];
 
     if (filter.departmentId) {
       params.push(filter.departmentId);
-      conditions.push(`r.department_id = ?`);
+      conditions.push(`r.departmentId = ?`);
     }
 
     if (filter.startDate) {
       params.push(filter.startDate);
-      conditions.push(`a.created_at >= ?`);
+      conditions.push(`r.createdAt >= ?`);
     }
 
     if (filter.endDate) {
       params.push(filter.endDate);
-      conditions.push(`a.created_at < DATE_ADD(?, INTERVAL 1 DAY)`);
+      conditions.push(`r.createdAt < DATE_ADD(?, INTERVAL 1 DAY)`);
     }
 
-    const where = conditions.length
-      ? `WHERE ${conditions.join(' AND ')}`
-      : '';
-
     return this.dataSource.query(
-      `SELECT a.*, r.department_id
-       FROM approvals a
-       JOIN resource_requests r ON r.id = a.request_id
-       ${where}
-       ORDER BY a.created_at DESC`,
+      `SELECT
+          r.id AS requestId,
+          r.itemDescription,
+          r.departmentId,
+          r.status,
+          r.createdAt
+       FROM resource_requests r
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY r.createdAt DESC`,
       params,
     );
   }
 
-  // 2. Departmental spending patterns
   async getDepartmentalSpending(filter: ReportFilterDto) {
     const conditions: string[] = [
       `r.status = 'APPROVED'`,
@@ -50,28 +50,30 @@ export class ReportsService {
 
     if (filter.departmentId) {
       params.push(filter.departmentId);
-      conditions.push(`r.department_id = ?`);
+      conditions.push(`r.departmentId = ?`);
     }
 
     if (filter.startDate) {
       params.push(filter.startDate);
-      conditions.push(`r.created_at >= ?`);
+      conditions.push(`r.createdAt >= ?`);
     }
 
     if (filter.endDate) {
       params.push(filter.endDate);
-      conditions.push(
-        `r.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
-      );
+      conditions.push(`r.createdAt < DATE_ADD(?, INTERVAL 1 DAY)`);
     }
 
     return this.dataSource.query(
-      `SELECT d.id AS departmentId,
-              d.name AS departmentName,
-              COALESCE(SUM(r.total_cost), 0) AS totalSpending
-       FROM departments d
+      `SELECT
+          d.id AS departmentId,
+          d.name AS departmentName,
+          COALESCE(
+            SUM(r.unitPrice * r.quantity),
+            0
+          ) AS totalSpending
+       FROM department d
        LEFT JOIN resource_requests r
-         ON r.department_id = d.id
+         ON r.departmentId = d.id
          AND ${conditions.join(' AND ')}
        GROUP BY d.id, d.name
        ORDER BY totalSpending DESC`,
@@ -79,64 +81,27 @@ export class ReportsService {
     );
   }
 
-  // 3. Resource allocation history
   async getAllocationHistory(filter: ReportFilterDto) {
-    const conditions: string[] = [];
-    const params: any[] = [];
-
-    if (filter.departmentId) {
-      params.push(filter.departmentId);
-      conditions.push(`r.department_id = ?`);
-    }
-
-    if (filter.startDate) {
-      params.push(filter.startDate);
-      conditions.push(`ra.created_at >= ?`);
-    }
-
-    if (filter.endDate) {
-      params.push(filter.endDate);
-      conditions.push(
-        `ra.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
-      );
-    }
-
-    const where = conditions.length
-      ? `WHERE ${conditions.join(' AND ')}`
-      : '';
-
-    return this.dataSource.query(
-      `SELECT ra.*, r.department_id
-       FROM resource_allocations ra
-       JOIN resource_requests r ON r.id = ra.request_id
-       ${where}
-       ORDER BY ra.created_at DESC`,
-      params,
-    );
+    return [];
   }
 
   async getDepartmentReport(
     departmentId: number,
     filter: ReportFilterDto,
   ) {
+    const departmentFilter = {
+      ...filter,
+      departmentId,
+    };
+
     return {
       departmentId,
-      approvals: await this.getApprovalHistory({
-        ...filter,
-        departmentId,
-      }),
-      spending: await this.getDepartmentalSpending({
-        ...filter,
-        departmentId,
-      }),
-      allocations: await this.getAllocationHistory({
-        ...filter,
-        departmentId,
-      }),
+      approvals: await this.getApprovalHistory(departmentFilter),
+      spending: await this.getDepartmentalSpending(departmentFilter),
+      allocations: await this.getAllocationHistory(departmentFilter),
     };
   }
 
-  // 5. Organization-wide report
   async getOrganizationReport(filter: ReportFilterDto) {
     const organizationFilter = {
       startDate: filter.startDate,

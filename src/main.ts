@@ -71,6 +71,7 @@ async function bootstrap() {
     jsonDocumentUrl: 'api/docs-json',
     swaggerOptions: {
       persistAuthorization: true,
+      docExpansion: 'none',
     },
   });
 

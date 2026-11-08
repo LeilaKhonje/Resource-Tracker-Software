@@ -15,6 +15,7 @@ import { AuthSecurityModule } from '../auth/auth-security.module';
     AuthSecurityModule,
   ],
   controllers: [DepartmentsController],
-  providers: [DepartmentsService]
+  providers: [DepartmentsService],
+  exports:[DepartmentsService]
 })
 export class DepartmentsModule {}

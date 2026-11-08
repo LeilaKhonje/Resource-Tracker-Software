@@ -1,10 +1,23 @@
 
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { DataSource } from 'typeorm';
+import { DepartmentsService } from '../departments/departments.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly departmentsService: DepartmentsService,
+  ) {}
+
+  // Get all departments through DepartmentsModule
+  async getDepartments() {
+    return this.departmentsService.findAll();
+  }
 
   // Summary cards
   async getSummary(departmentId?: number) {
@@ -12,7 +25,7 @@ export class DashboardService {
     let departmentCondition = '';
 
     if (departmentId !== undefined) {
-      departmentCondition = 'WHERE department_id = ?';
+      departmentCondition = 'WHERE departmentId = ?';
       params.push(departmentId);
     }
 
@@ -27,29 +40,11 @@ export class DashboardService {
       params,
     );
 
-    const allocationParams: any[] = [];
-    let allocationCondition = '';
-
-    if (departmentId !== undefined) {
-      allocationCondition = 'WHERE department_id = ?';
-      allocationParams.push(departmentId);
-    }
-
-    const [allocationResult] = await this.dataSource.query(
-      `SELECT COUNT(*) AS allocatedResources
-       FROM resource_allocations
-       ${allocationCondition}`,
-      allocationParams,
-    );
-
     return {
       totalRequests: Number(result.totalRequests),
       pendingApprovals: Number(result.pendingApprovals),
       approvedRequests: Number(result.approvedRequests),
       rejectedRequests: Number(result.rejectedRequests),
-      allocatedResources: Number(
-        allocationResult.allocatedResources,
-      ),
     };
   }
 
@@ -60,7 +55,7 @@ export class DashboardService {
     return this.dataSource.query(
       `SELECT *
        FROM audit_logs
-       ORDER BY created_at DESC
+       ORDER BY createdAt DESC
        LIMIT ${safeLimit}`,
     );
   }
@@ -71,18 +66,41 @@ export class DashboardService {
       `SELECT
          d.id AS departmentId,
          d.name AS departmentName,
-         COALESCE(SUM(
-           CASE
-             WHEN r.status = 'APPROVED' THEN r.total_cost
-             ELSE 0
-           END
-         ), 0) AS totalSpending
-       FROM departments d
+         COALESCE(
+           SUM(
+             CASE
+               WHEN r.status = 'APPROVED'
+               THEN r.unitPrice * r.quantity
+               ELSE 0
+             END
+           ), 0
+         ) AS totalSpending
+       FROM department d
        LEFT JOIN resource_requests r
-         ON r.department_id = d.id
+         ON r.departmentId = d.id
        GROUP BY d.id, d.name
        ORDER BY totalSpending DESC`,
     );
+  }
+
+  // Get dashboard details for a particular department
+  async getDepartmentDashboard(departmentId: number) {
+    const departments = await this.departmentsService.findAll();
+
+    const department = departments.find(
+      (item: any) => Number(item.id) === departmentId,
+    );
+
+    if (!department) {
+      throw new NotFoundException(
+        `Department with ID ${departmentId} not found`,
+      );
+    }
+
+    return {
+      department,
+      summary: await this.getSummary(departmentId),
+    };
   }
 
   // Complete dashboard data
@@ -91,6 +109,7 @@ export class DashboardService {
       summary: await this.getSummary(departmentId),
       recentActivity: await this.getRecentActivity(),
       departmentSpending: await this.getDepartmentSpending(),
+      departments: await this.getDepartments(),
     };
   }
 }

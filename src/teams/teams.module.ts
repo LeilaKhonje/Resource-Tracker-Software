@@ -16,5 +16,6 @@ import { AuthSecurityModule } from '../auth/auth-security.module';
   ],
   controllers: [TeamsController],
   providers: [TeamsService],
+  exports:[TeamsService],
 })
 export class TeamsModule {}

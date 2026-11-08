@@ -98,34 +98,34 @@ assignRole(
    return this.usersService.changeMyPassword(req.user!.sub, changePasswordDto);
  }
 
- @ApiOperation({summary: 'A user can be able to de-activate their account'})
- @Patch('me/deactivate')
- @ApiOperation({ summary: 'Deactivate the authenticated user account' })
- @ApiResponse({ status: 200, description: 'Success message', schema: { type: 'string', example: 'Your account has been deactivated successfully' } })
+ @Patch(':id/deactivate')
+ @ApiOperation({ summary: 'Deactivate a user account (Managing Director only)' })
+ @ApiParam({ name: 'id', description: 'User UUID' })
+ @ApiResponse({ status: 200, description: 'Account deactivated successfully' })
+ @ApiResponse({ status: 400, description: 'Account is already deactivated or the Managing Director cannot deactivate their own account' })
  @ApiResponse({ status: 401, description: 'Authentication required' })
- @ApiResponse({ status: 400, description: 'Account is already deactivated' })
+ @ApiResponse({ status: 403, description: 'Only the Managing Director can deactivate user accounts' })
  @ApiResponse({ status: 404, description: 'User not found' })
- @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, RolesGuard)
+ @Roles(UserRole.MANAGING_DIRECTOR)
  @ApiBearerAuth('access-token')
- async deactivateMyAccount(@Req() req: AuthenticatedRequest){
-  const userId = req.user!.sub;
-
-  return this.usersService.deactivateMyAccount(userId);
+ deactivateUser(@Param('id', ParseUUIDPipe) userId: string, @Req() req: AuthenticatedRequest) {
+  return this.usersService.deactivateUser(userId, req.user!.sub);
  }
 
- @ApiOperation({summary: 'A user can be able to re-activate their account'})
- @Patch('me/reactivate')
- @ApiOperation({ summary: 'Reactivate the authenticated user account' })
- @ApiResponse({ status: 200, description: 'Success message', schema: { type: 'string', example: 'Account successfully re-activated' } })
- @ApiResponse({ status: 401, description: 'Authentication required' })
+ @Patch(':id/reactivate')
+ @ApiOperation({ summary: 'Reactivate a user account (Managing Director only)' })
+ @ApiParam({ name: 'id', description: 'User UUID' })
+ @ApiResponse({ status: 200, description: 'Account reactivated successfully' })
  @ApiResponse({ status: 400, description: 'Account is already active' })
+ @ApiResponse({ status: 401, description: 'Authentication required' })
+ @ApiResponse({ status: 403, description: 'Only the Managing Director can reactivate user accounts' })
  @ApiResponse({ status: 404, description: 'User not found' })
- @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, RolesGuard)
+ @Roles(UserRole.MANAGING_DIRECTOR)
  @ApiBearerAuth('access-token')
- async reActivateMyAccount(@Req() req: AuthenticatedRequest){
-  const userId = req.user!.sub;
-
-  return this.usersService.reActivateMyAccount(userId);
+ reactivateUser(@Param('id', ParseUUIDPipe) userId: string, @Req() req: AuthenticatedRequest) {
+  return this.usersService.reactivateUser(userId, req.user!.sub);
  }
 
 }

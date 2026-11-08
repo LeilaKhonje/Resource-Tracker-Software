@@ -149,8 +149,12 @@ export class UsersService {
     return { message: 'Password changed successfully' };
   }
 
-  async deactivateMyAccount(userId: string){
-    const user = await this.usersRepository.findOne({ where: { id: userId } });
+  async deactivateUser(userId: string, managingDirectorId: string){
+    await this.assertManagingDirector(managingDirectorId);
+    if (userId === managingDirectorId) {
+      throw new BadRequestException('The Managing Director cannot deactivate their own account');
+    }
+    const user = await this.usersRepository.findOne({where: {id: userId},});
     if(!user){
       throw new NotFoundException('User Not Found');
     }
@@ -163,11 +167,12 @@ export class UsersService {
 
     await this.usersRepository.save(user);
 
-    return 'Your account has been deactivated successfully';
+    return 'User account deactivated successfully';
   }
 
-  async reActivateMyAccount(userId: string){
-    const user = await this.usersRepository.findOne({ where: { id: userId } });
+  async reactivateUser(userId: string, managingDirectorId: string){
+    await this.assertManagingDirector(managingDirectorId);
+    const user = await this.usersRepository.findOne({where: {id: userId},});
 
     if(!user){
       throw new NotFoundException('User not found')
@@ -182,6 +187,14 @@ export class UsersService {
     await this.usersRepository.save(user);
 
     return 'Account successfully re-activated';
+  }
+
+  private async assertManagingDirector(userId: string) {
+    const user = await this.usersRepository.findOneBy({ id: userId });
+    if (!user) throw new NotFoundException('Managing Director not found');
+    if (user.role !== UserRole.MANAGING_DIRECTOR) {
+      throw new ForbiddenException('Only the Managing Director can manage user account status');
+    }
   }
 
   async assignRole(

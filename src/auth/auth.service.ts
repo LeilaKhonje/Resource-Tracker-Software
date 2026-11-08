@@ -41,7 +41,7 @@ export class AuthService {
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Your account has been deactivated');
     }
 
     return this.loginUser(user);
