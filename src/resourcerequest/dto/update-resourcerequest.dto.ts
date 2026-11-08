@@ -3,6 +3,7 @@ import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { CreateResourceRequestDto } from './create-resourcerequest.dto';
 import { RequestStatus } from '../entities/resourcerequest.entity';
 
+
 // One body for every change to a request. Send only the fields you need.
 // The fields of the create DTO come from PartialType and are all optional.
 export class UpdateResourceRequestDto extends PartialType(CreateResourceRequestDto) {
