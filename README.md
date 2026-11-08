@@ -95,13 +95,14 @@ set a role.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /auth/login` | Checks the email and password and returns an access token. | `400` invalid input format; `401` email or password is incorrect. |
+| `POST /auth/login` | Checks the email and password and returns access and refresh tokens. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
 | `POST /auth/forgot-password` | Accepts an email and returns a generic password reset request message to avoid disclosing whether an account exists. Email delivery and reset-token handling are not configured yet. | `400` invalid email format. |
 
 ### Users
 
-Users can register, view their own profile, and deactivate/reactivate their account.
-Authorized Managing Directors and Department Heads can assign eligible roles.
+Users can register and view their own profile. Managing Directors can
+deactivate and reactivate user accounts. Authorized Managing Directors and
+Department Heads can assign eligible roles.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
@@ -111,8 +112,8 @@ Authorized Managing Directors and Department Heads can assign eligible roles.
 | --- | --- | --- |
 | `GET /users/me` | Returns the authenticated user's ID, name, email, and role. | `401` missing or invalid bearer token; `404` user record no longer exists. |
 | `PATCH /users/me/password` | Changes the authenticated user's password. Body: `{"currentPassword":"current123","newPassword":"newSecure456"}`. The new password must be 8–12 characters and include a number. | `400` invalid new password or same password supplied; `401` missing/invalid token or current password is incorrect; `404` user not found. |
-| `PATCH /users/me/deactivate` | Deactivates the authenticated user's account. | `401` missing or invalid token; `404` user not found; `400` account is already deactivated. |
-| `PATCH /users/me/reactivate` | Reactivates the authenticated user's account. | `401` missing or invalid token; `404` user not found; `400` account is already active. |
+| `PATCH /users/:id/deactivate` | Managing Director deactivates the user identified by UUID. The Managing Director cannot deactivate their own account. | `401` missing or invalid token; `403` caller is not Managing Director; `404` user not found; `400` account is already deactivated or self-deactivation attempted. |
+| `PATCH /users/:id/reactivate` | Managing Director reactivates the user identified by UUID. | `401` missing or invalid token; `403` caller is not Managing Director; `404` user not found; `400` account is already active. |
 | `PATCH /users/:id/role` | Assigns an allowed role to the user identified by UUID. Body: `{"role":"team_lead"}` (or another supported role). | `400` invalid UUID/body/role, Managing Director role assignment attempted, or assignment violates role rules; `401` missing or invalid token; `403` caller lacks permission; `404` assigning account or target user not found. |
 
 ### Departments
@@ -294,20 +295,6 @@ routes currently do not declare authentication guards.
 | --- | --- | --- |
 | `GET /audit-logs` | Lists all audit log records. | Database errors. |
 | `GET /audit-logs/record/:entityType/:entityId` | Lists audit records associated with an entity type and record ID. | `400` entity ID is not an integer; database errors. |
-
-### Line manager review
-
-The line manager dashboard shows request totals and lets a line manager review,
-approve, or reject requests. These controller routes currently do not declare
-authentication guards.
-
-| Method and path | What it does | Possible errors |
-| --- | --- | --- |
-| `GET /line-manager/overview` | Returns counts by request status. | Database errors. |
-| `GET /line-manager/requests?status=...` | Lists requests, optionally filtered by allocation status. | Invalid status may be rejected by validation if enabled for the query; database errors. |
-| `GET /line-manager/requests/:id` | Intended to return request details. | Currently throws a generic unimplemented error (`500`). |
-| `PATCH /line-manager/requests/:id/review` | Marks a request as queried for follow-up. | Database errors; ID conversion/update failures. |
-| `PATCH /line-manager/requests/:id/reject` | Marks a request rejected; DTO expects a `reason`. | `400` invalid/missing reason when DTO validation is applied; database errors; ID conversion/update failures. |
 
 ## Error response notes
 

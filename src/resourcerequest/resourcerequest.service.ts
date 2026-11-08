@@ -11,6 +11,7 @@ import { AuditLog } from '../auditlog/auditlog.entity';
 import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
+import { AuditLog } from '../auditlog/auditlog.entity';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [

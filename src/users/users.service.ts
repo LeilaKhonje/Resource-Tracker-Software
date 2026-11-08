@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -148,7 +148,11 @@ export class UsersService {
     return { message: 'Password changed successfully' };
   }
 
-  async deactivateMyAccount(userId: string){
+  async deactivateUser(userId: string, managingDirectorId: string){
+    await this.assertManagingDirector(managingDirectorId);
+    if (userId === managingDirectorId) {
+      throw new BadRequestException('The Managing Director cannot deactivate their own account');
+    }
     const user = await this.usersRepository.findOne({where: {id: userId},});
     if(!user){
       throw new NotFoundException('User Not Found');
@@ -162,10 +166,11 @@ export class UsersService {
 
     await this.usersRepository.save(user);
 
-    return 'Your account has been deactivated successfully';
+    return 'User account deactivated successfully';
   }
 
-  async reActivateMyAccount(userId: string){
+  async reactivateUser(userId: string, managingDirectorId: string){
+    await this.assertManagingDirector(managingDirectorId);
     const user = await this.usersRepository.findOne({where: {id: userId},});
 
     if(!user){
@@ -181,6 +186,14 @@ export class UsersService {
     await this.usersRepository.save(user);
 
     return 'Account successfully re-activated';
+  }
+
+  private async assertManagingDirector(userId: string) {
+    const user = await this.usersRepository.findOneBy({ id: userId });
+    if (!user) throw new NotFoundException('Managing Director not found');
+    if (user.role !== UserRole.MANAGING_DIRECTOR) {
+      throw new ForbiddenException('Only the Managing Director can manage user account status');
+    }
   }
 
   async assignRole(
