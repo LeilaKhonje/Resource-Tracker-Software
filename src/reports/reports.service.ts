@@ -7,8 +7,6 @@ import { ReportFilterDto } from './dto/report-filter.dto';
 export class ReportsService {
   constructor(private readonly dataSource: DataSource) {}
 
-  // 1. Current approval status records
-  // NOTE: This is NOT full historical approval history.
   async getApprovalHistory(filter: ReportFilterDto) {
     const conditions: string[] = [
       `r.status IN ('APPROVED', 'REJECTED')`,
@@ -44,7 +42,6 @@ export class ReportsService {
     );
   }
 
-  // 2. Departmental spending
   async getDepartmentalSpending(filter: ReportFilterDto) {
     const conditions: string[] = [
       `r.status = 'APPROVED'`,
@@ -84,14 +81,10 @@ export class ReportsService {
     );
   }
 
-  // 3. Allocation history
-  // No resource_allocations table currently exists.
-  // Return an empty array until allocation records are implemented.
   async getAllocationHistory(filter: ReportFilterDto) {
     return [];
   }
 
-  // 4. Department report
   async getDepartmentReport(
     departmentId: number,
     filter: ReportFilterDto,
@@ -109,7 +102,6 @@ export class ReportsService {
     };
   }
 
-  // 5. Organization-wide report
   async getOrganizationReport(filter: ReportFilterDto) {
     const organizationFilter = {
       startDate: filter.startDate,

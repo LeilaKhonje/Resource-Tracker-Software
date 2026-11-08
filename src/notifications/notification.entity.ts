@@ -1,25 +1,24 @@
-import{
-    Entity,
-    PrimaryGeneratedColumn,
-    Column,
-    CreateDateColumn,
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
 } from 'typeorm';
 
-@Entity()
-export class Notification{
-    @PrimaryGeneratedColumn()
-    id:number;
+@Entity('notification')
+export class Notification {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-    @Column()
-    userId:number;
+  @Column({ type: 'varchar', length: 36 })
+  userId: string;
 
-    @Column()
-    message:string;
+  @Column({ type: 'varchar', length: 255 })
+  message: string;
 
-    @Column({default:false})
-    isRead:boolean;
-     
-    @CreateDateColumn()
-    createdAt:Date;
+  @Column({ default: false })
+  isRead: boolean;
 
+  @CreateDateColumn()
+  createdAt: Date;
 }
