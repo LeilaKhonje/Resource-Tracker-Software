@@ -10,7 +10,7 @@ import {
   RequestStatus,
   ResourceRequest,
 } from './entities/resourcerequest.entity';
-import { RequestAuditLog } from './entities/request-audit-log.entity';
+import { AuditLog } from './entities/audit-log.entity';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
@@ -172,7 +172,7 @@ export class ResourcerequestService {
     if (changedKeys.some((key) => key !== 'teamId' && key !== 'departmentId')) {
       await this.log(id, 'UPDATED', user.id);
     }
-    if (resubmitting) {
+    if (submitting) {
       await this.log(id, 'RESUBMITTED', user.id);
       // TODO: notification component: tell the line manager it is back.
     }

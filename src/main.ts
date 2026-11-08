@@ -53,7 +53,7 @@ async function bootstrap() {
       .addTag('Reports',
         'Provides reports on resource requests, approvals, spending, and allocations.'
       )
-      .addTag('resource-requests',
+      .addTag('Resource Requests',
         'Allows Team_leads to create and send reource requests to Line managers. Line managers approve, reject, or query a resource request. Managing directors can view all resource requests and their statuses.'
       )
     .setVersion('1.0')
