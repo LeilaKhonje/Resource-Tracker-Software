@@ -29,9 +29,9 @@ export class CreateResourceDto {
 
   @ApiProperty({ required: false, description: 'Required when type is "insourced".', example: 'Information Technology' })
   @ValidateIf((o) => o.type === ResourceType.INSOURCED)
-  @IsString()
-  @IsNotEmpty()
-  department?: string;
+  @IsInt()
+  @Min(1)
+  departmentId?: number;
 
   // ---- Required when type === outsourced ----
   @ApiProperty({ required: false, description: 'Required when type is "outsourced"; non-negative and at most two decimal places.', example: 1250.5, minimum: 0 })

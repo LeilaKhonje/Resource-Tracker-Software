@@ -9,7 +9,6 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AuthSecurityModule } from '../auth/auth-security.module';
 
-
 @Module({
   imports: [
     TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project]),

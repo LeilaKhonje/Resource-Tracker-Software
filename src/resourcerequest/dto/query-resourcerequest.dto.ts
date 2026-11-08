@@ -2,7 +2,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { RequestStatus } from '../entities/resourcerequest.entity';
 
-
 export class QueryResourceRequestDto {
   @ApiPropertyOptional({ example: '8', description: 'Filter to a numeric team ID.' })
   @IsOptional()

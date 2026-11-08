@@ -23,6 +23,6 @@ export function toResourceResponse(resource: Resources) {
   return {
     ...base,
     description: resource.description,
-    department: resource.department,
+    departmentId: resource.departmentId,
   };
 }

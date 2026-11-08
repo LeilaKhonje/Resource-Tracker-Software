@@ -8,7 +8,6 @@ import {
   Min,
 } from 'class-validator';
 
-
 // Only what the team lead is allowed to provide. status and requestedBy are
 // NOT here: the server sets them.
 export class CreateResourceRequestDto {
@@ -16,7 +15,6 @@ export class CreateResourceRequestDto {
     description: 'Short description of the item being requested',
     example: 'Laptop for design team',
   })
-  @ApiProperty({ example: 'Laptop for field data collection' })
   @IsString()
   @IsNotEmpty()
   itemDescription: string;
