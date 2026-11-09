@@ -10,7 +10,10 @@ import { UserRole } from '../users/user-role.enum';
 @ApiTags('Audit Logs')
 @Controller('api/v1/audit-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SYSTEM_ADMIN)
+@Roles(
+  UserRole.SYSTEM_ADMIN,
+  UserRole.DEPARTMENT_HEAD,
+  UserRole.MANAGING_DIRECTOR,)
 @ApiBearerAuth('access-token')
 export class AuditLogsController {
   constructor(
