@@ -4,7 +4,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from './user-role.enum';
 import { AssignUserRoleDto } from './dto/assign-user-role.dto';
-import { RegisterUserDto } from './dto/register-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { UsersService } from './users.service';
@@ -16,28 +16,41 @@ import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } 
 export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post('register')
-  @ApiOperation({ summary: 'Register a new user' })
-  @ApiBody({ type: RegisterUserDto })
-  @ApiResponse({ status: 201, description: 'User registered successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid fields, email format, company email domain, or password requirements' })
+  @Post('')
+  @ApiOperation({ summary: 'Create a user account with an initial password (System Admin only)' })
+  @ApiBody({ type: CreateUserDto })
+  @ApiResponse({ status: 201, description: 'Active account created; the initial password is not returned' })
+  @ApiResponse({ status: 400, description: 'Invalid account details' })
   @ApiResponse({ status: 409, description: 'Conflict: Email already exists' })
-  register(@Body() registerDto: RegisterUserDto) {
-    return this.usersService.register(registerDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SYSTEM_ADMIN)
+  @ApiBearerAuth('access-token')
+  createAccount(@Body() createUserDto: CreateUserDto, @Req() request: AuthenticatedRequest) {
+    return this.usersService.createAccount(createUserDto, request.user!.sub);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List user accounts (System Admin and managing directors)' })
+  @ApiResponse({ status: 200, description: 'User accounts without credential data' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR)
+  @ApiBearerAuth('access-token')
+  listUsers() {
+    return this.usersService.listUsers();
   }
 
 @Patch(':id/role')
 @ApiOperation({ summary: 'Update a user role' })
 @ApiParam({ name: 'id', description: 'User UUID' })
 @ApiBody({ type: AssignUserRoleDto })
-@ApiResponse({ status: 200, description: 'User assignment updated', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) } } } })
+@ApiResponse({ status: 200, description: 'User assignment updated', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole).filter((role) => role !== UserRole.SYSTEM_ADMIN) } } } })
 @ApiResponse({ status: 401, description: 'Authentication required' })
 @ApiResponse({ status: 403, description: 'Insufficient permissions' })
 @ApiResponse({ status: 400, description: 'Invalid role value or role assignment is not permitted' })
 @ApiResponse({ status: 404, description: 'Target user or assigning user not found' })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-@Roles(UserRole.MANAGING_DIRECTOR, UserRole.DEPARTMENT_HEAD)
+@Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR, UserRole.DEPARTMENT_HEAD)
 @ApiBearerAuth('access-token')
 assignRole(
   @Param('id', ParseUUIDPipe) userId: string,
@@ -99,30 +112,30 @@ assignRole(
  }
 
  @Patch(':id/deactivate')
- @ApiOperation({ summary: 'Deactivate a user account (Managing Director only)' })
+ @ApiOperation({ summary: 'Deactivate a user account (System Admin only)' })
  @ApiParam({ name: 'id', description: 'User UUID' })
  @ApiResponse({ status: 200, description: 'Account deactivated successfully' })
- @ApiResponse({ status: 400, description: 'Account is already deactivated or the Managing Director cannot deactivate their own account' })
+ @ApiResponse({ status: 400, description: 'Account is already deactivated or the System Admin cannot deactivate their own account' })
  @ApiResponse({ status: 401, description: 'Authentication required' })
- @ApiResponse({ status: 403, description: 'Only the Managing Director can deactivate user accounts' })
+ @ApiResponse({ status: 403, description: 'Only the System Admin can deactivate user accounts' })
  @ApiResponse({ status: 404, description: 'User not found' })
  @UseGuards(JwtAuthGuard, RolesGuard)
- @Roles(UserRole.MANAGING_DIRECTOR)
+ @Roles(UserRole.SYSTEM_ADMIN)
  @ApiBearerAuth('access-token')
  deactivateUser(@Param('id', ParseUUIDPipe) userId: string, @Req() req: AuthenticatedRequest) {
   return this.usersService.deactivateUser(userId, req.user!.sub);
  }
 
  @Patch(':id/reactivate')
- @ApiOperation({ summary: 'Reactivate a user account (Managing Director only)' })
+ @ApiOperation({ summary: 'Reactivate a user account (System Admin only)' })
  @ApiParam({ name: 'id', description: 'User UUID' })
  @ApiResponse({ status: 200, description: 'Account reactivated successfully' })
  @ApiResponse({ status: 400, description: 'Account is already active' })
  @ApiResponse({ status: 401, description: 'Authentication required' })
- @ApiResponse({ status: 403, description: 'Only the Managing Director can reactivate user accounts' })
+ @ApiResponse({ status: 403, description: 'Only the System Admin can reactivate user accounts' })
  @ApiResponse({ status: 404, description: 'User not found' })
  @UseGuards(JwtAuthGuard, RolesGuard)
- @Roles(UserRole.MANAGING_DIRECTOR)
+ @Roles(UserRole.SYSTEM_ADMIN)
  @ApiBearerAuth('access-token')
  reactivateUser(@Param('id', ParseUUIDPipe) userId: string, @Req() req: AuthenticatedRequest) {
   return this.usersService.reactivateUser(userId, req.user!.sub);
