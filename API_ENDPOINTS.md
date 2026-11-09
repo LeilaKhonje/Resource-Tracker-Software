@@ -239,7 +239,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `POST /api/v1/projects`
 - **Access:** Bearer token; role: `department_head`
-- **Request:** `{ "name": "Office Modernization", "description": "Upgrade shared equipment", "teamIds": [1] }`. Name required (1–150 chars); description optional (max 1000); teamIds optional array of unique positive integers.
+- **Request:** `{ "name": "Office Modernization", "description": "Upgrade shared equipment", "startDate": "2026-01-01", "endDate": "2026-12-31", "teamIds": [1] }`. Name required (1–150 chars); `startDate` and `endDate` required as `YYYY-MM-DD`, with `endDate` on or after `startDate`; description optional (max 1000); teamIds optional array of unique positive integers.
 - **Response:** `201` project with assigned teams.
 
 ### `GET /api/v1/projects`
@@ -264,7 +264,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `PATCH /api/v1/projects/{id}`
 - **Access:** Bearer token; role: `department_head`
-- **Request:** One or both of `name` (1–150 chars) and `description` (max 1000).
+- **Request:** One or more of `name` (1–150 chars), `description` (max 1000), `startDate`, and `endDate`. Dates use `YYYY-MM-DD`; if a date is changed, the resulting end date must be on or after the start date.
 - **Response:** `200` updated project.
 
 ### `GET /api/v1/projects/{id}/team-members`

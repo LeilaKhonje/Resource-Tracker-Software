@@ -181,11 +181,11 @@ are for Department Heads, while Managing Directors can also list and view.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /projects` | Creates a project (`name`, optional `description`, and `teamIds`). | `400` invalid body; `401` missing/invalid token; `403` caller has wrong role, no department, or team belongs to another department; `422` no team supplied or a team ID does not exist. |
+| `POST /projects` | Creates a project (`name`, required `startDate` and `endDate`, optional `description`, and `teamIds`). Dates use `YYYY-MM-DD`; `endDate` must be on or after `startDate`. | `400` invalid body or date range; `401` missing/invalid token; `403` caller has wrong role, no department, or team belongs to another department; `422` no team supplied or a team ID does not exist. |
 | `GET /projects` | Lists projects visible to the caller's role and department. | `401` missing/invalid token; `403` caller is not a Department Head or Managing Director, or Department Head has no department. |
 | `GET /projects/:id` | Returns a project visible to the caller. | `400` ID is not an integer; `401` missing/invalid token; `403` caller lacks role/department; `404` project does not exist or is outside the Department Head's department. |
 | `PATCH /projects/:id/teams` | Replaces a project's team assignments (`teamIds`). | `400` invalid body or ID; `401` missing/invalid token; `403` wrong role, no department, or cross-department team; `404` project not found; `422` team ID not found or no team remains assigned. |
-| `PATCH /projects/:id` | Updates project `name` and/or `description`. | `400` invalid ID/body or no fields supplied; `401` missing/invalid token; `403` wrong role/no department; `404` project does not exist or is outside the caller's department. |
+| `PATCH /projects/:id` | Updates project `name`, `description`, `startDate`, and/or `endDate`. Dates use `YYYY-MM-DD`; the resulting `endDate` must be on or after `startDate`. | `400` invalid ID/body, invalid date range, or no fields supplied; `401` missing/invalid token; `403` wrong role/no department; `404` project does not exist or is outside the caller's department. |
 | `GET /projects/:id/team-members` | Lists names and team details for members of the project's teams. | `400` ID is not an integer; `401` missing/invalid token; `403` caller lacks role/department; `404` project does not exist or is outside the caller's department. |
 | `DELETE /projects/:id` | Deletes a project. | `400` ID is not an integer; `401` missing/invalid token; `403` wrong role/no department; `404` project does not exist or is outside the caller's department. |
 
