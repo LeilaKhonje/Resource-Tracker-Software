@@ -68,7 +68,7 @@ Resource Tracker is a system for managing and monitoring resources requested and
 
 ### 2.1 Product functions
 
-The system will support user registration and authentication, with access determined by each user's role. Team leads will submit resource requests containing the required item and organizational details. Requests will be associated with a team, project, and department and routed to a line manager.
+The system will support System Admin-managed account creation and user authentication, with access determined by each user's role. Team leads will submit resource requests containing the required item and organizational details. Requests will be associated with a team, project, and department and routed to a line manager.
 
 Line managers will review requests and approve, reject, or query them. The system will record these decisions and maintain resource allocation history. Team leads will be able to track their requests and receive notifications about important status changes and return deadlines. Department heads and the managing director will have access to historical decisions and spending information appropriate to their responsibilities.
 
@@ -90,12 +90,19 @@ Department heads can access data for their own departments, including historical
 
 The managing director can view historical approval decisions, spending patterns across all departments, and the resource-request audit trail.
 
+#### 2.2.5 System administrator
+
+The System Admin creates and lists user accounts, assigns business roles, and deactivates or reactivates accounts. The System Admin sets an initial password and provides the account credentials to the designated user outside the system. The user may keep the initial password or change it after login.
+
 ### 2.3 Functional requirements
 
-#### 2.3.1 User registration and authentication
+#### 2.3.1 User account management and authentication
 
-- The system shall allow users to register and authenticate using unique credentials: a company-assigned email address and a password.
-- The system shall support the roles Team Lead, Department Head, Line Manager, and Managing Director, with permissions assigned according to role.
+- The system shall allow only the System Admin to create user accounts with unique company-assigned email addresses, a specified business role, and an initial password.
+- The system shall create new accounts as active and apply the specified role.
+- The system shall allow users to change their initial password after login.
+- The system shall allow the System Admin to deactivate and reactivate user accounts and shall record account-management actions in an audit log.
+- The system shall support the System Admin, Team Lead, Department Head, Line Manager, and Managing Director roles, with permissions assigned according to role.
 
 #### 2.3.2 Create and submit a resource request
 

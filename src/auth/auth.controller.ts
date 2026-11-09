@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { LogoutDto } from './dto/logout.dto';
 
 @ApiTags('Authentication')
 @Controller('api/v1/auth')
@@ -60,7 +61,17 @@ export class AuthController {
     return this.authService.refresh(refreshTokenDto);
   }
 
-  @ApiOperation({ summary: 'Request a password reset' })
+  @ApiOperation({ summary: 'Log out and revoke the current refresh token' })
+  @ApiBody({ type: LogoutDto })
+  @ApiResponse({ status: 200, description: 'Refresh token revoked' })
+  @ApiResponse({ status: 401, description: 'Refresh token is invalid, expired, or already revoked' })
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout(@Body() logoutDto: LogoutDto) {
+    return this.authService.logout(logoutDto);
+  }
+
+  @ApiOperation({ summary: 'Forgot password, send a user the link to reset their password' })
   @ApiResponse({
     status: 200,
     description: 'Password reset request accepted',

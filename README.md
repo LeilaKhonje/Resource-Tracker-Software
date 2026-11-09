@@ -2,43 +2,41 @@
 
 ## Authentication and roles
 
-The API provides `POST /users/register` and `POST /auth/login`. Registration
-accepts `firstName`, `lastName`, `email`, and a password. New accounts have no
-role until an authorized user assigns one. Public registration cannot choose a
-role. The database enforces that at most one account has the Managing Director
-role.
+The API provides administrator-managed account creation and `POST /auth/login`.
+Only the System Admin can create accounts. New accounts are active immediately
+with the business role specified during creation. The database enforces at
+most one System Admin and at most one Managing Director.
 
-Passwords are stored as bcrypt hashes with a cost factor of 12. Registration
-returns a public user object; login returns an `accessToken`. The one-hour
+Passwords are stored as bcrypt hashes with a cost factor of 12. Login returns
+an `accessToken`. The one-hour
 bearer token contains the user's ID, email, and role.
 
 Set `JWT_SECRET` to a random value of at least 16 characters before starting
 the application. Database connection settings are `DB_CONNECTION`, `DB_HOST`,
-`DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, and `DB_DATABASE`. Never accept role
-changes from public registration input.
+`DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, and `DB_DATABASE`.
 
-## Set up the Managing Director account
+## Set up the System Admin account
 
 Set these values in the ignored `.env` file before running the seed:
 
 ```env
-MANAGING_DIRECTOR_EMAIL=director@example.com
-MANAGING_DIRECTOR_FULL_NAME=Project Managing Director
-MANAGING_DIRECTOR_PASSWORD=choose-a-strong-password
+SYSTEM_ADMIN_EMAIL=admin@example.com
+SYSTEM_ADMIN_FULL_NAME=Project System Admin
+SYSTEM_ADMIN_PASSWORD=Choose9Safe
 ```
 
-The seed hashes the password and creates the account with the Managing Director
+The seed hashes the password and creates the account with the System Admin
 role. It is safe to rerun for the same email: it updates that account's name,
 password hash, and role. If another account currently has that role, the seed
 clears the old assignment and transfers it to the configured email in the same
 database transaction. Keep the `.env` file and credentials out of version
-control, and give the grader the credentials through the agreed private channel.
+control.
 
 For local development, start the database and run the seed from the project
 directory:
 
 ```bash
-npm run seed:managing-director
+npm run seed:system-admin
 ```
 
 With Docker Compose, start MySQL and then run the seed in a one-off app
@@ -46,7 +44,8 @@ container:
 
 ```bash
 docker compose up -d mysql
-docker compose run --rm app npm run seed:managing-director
+docker compose build app
+docker compose run --rm app npm run seed:system-admin
 ```
 
 The app container uses the same `.env` and Compose network as the API. Once the
@@ -67,12 +66,36 @@ conflicts with a local MySQL server already using `3306`. Set `DB_HOST_PORT`
 in `.env` to another available host port if needed. The API container still
 connects to the MySQL service on its internal port `3306`.
 
-## Role assignment
+## Account and role management
+
+The System Admin creates an active account with `POST /users`, specifying the
+user's business role and initial password, then provides the user their email
+and initial password outside the system through a secure channel.
+The user can keep that password or log in and change it through
+`PATCH /users/me/password`. The password is stored only as a bcrypt hash and
+is never returned by the API. Account creation, deactivation, reactivation,
+and role changes are recorded in the audit log.
+
+Account creation body:
+
+```json
+{
+  "fullName": "Alex Morgan",
+  "email": "alex@company.com",
+  "role": "team_member",
+  "initialPassword": "Temp1234"
+}
+```
+
+The System Admin role can only be assigned by the bootstrap seed. The Managing
+Director role can be assigned during account creation only when no Managing
+Director account already exists.
 
 Department heads can assign `team_lead` through `PATCH /users/:id/role` with a
-JSON body such as `{"role":"team_lead","teamId":1}`. The Managing Director
-can assign `line_manager` and `department_head`. The Managing Director role
-cannot be assigned or changed through this endpoint.
+JSON body such as `{"role":"team_lead"}`. Managing Directors can assign
+`line_manager` and `department_head`. The System Admin can assign business
+roles, including the Managing Director role, but cannot assign another System
+Admin. The System Admin role is assigned only by the bootstrap seed.
 
 Protect resource endpoints with `JwtAuthGuard` and apply `@Roles(...)` with
 `RolesGuard` to enforce role-specific access. A valid token is sent as
@@ -88,10 +111,10 @@ response.
 
 ### Authentication
 
-Authentication lets users register an account and log in to receive a bearer
-token for protected endpoints. Registration is limited to `@company.com`
-addresses, requires a password of 8–12 characters with a number, and does not
-set a role.
+Authentication lets active users log in to receive a bearer token for
+protected endpoints. Account creation is limited to `@company.com` addresses;
+the initial password must be 8–12 characters and contain a number. Users may
+change it after logging in.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
@@ -100,21 +123,22 @@ set a role.
 
 ### Users
 
-Users can register and view their own profile. Managing Directors can
-deactivate and reactivate user accounts. Authorized Managing Directors and
-Department Heads can assign eligible roles.
+Users can view their own profile. System Admins manage account status.
+System Admins, Managing Directors, and Department Heads can assign eligible
+business roles according to the role rules above.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /users/register` | Creates an account from `firstName`, `lastName`, `email`, and `password`, and returns the public user object. | `400` invalid email, non-company email, missing fields, or password rules not met; `409` email already registered. |
+| `POST /users` | System Admin creates an active account from `fullName`, `email`, `role`, and `initialPassword`. The password is not returned. | `400` invalid fields, role, or password; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned. |
+| `GET /users` | System Admin lists accounts without credential data. | `401` missing/invalid token; `403` caller is not System Admin. |
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
 | `GET /users/me` | Returns the authenticated user's ID, name, email, and role. | `401` missing or invalid bearer token; `404` user record no longer exists. |
 | `PATCH /users/me/password` | Changes the authenticated user's password. Body: `{"currentPassword":"current123","newPassword":"newSecure456"}`. The new password must be 8–12 characters and include a number. | `400` invalid new password or same password supplied; `401` missing/invalid token or current password is incorrect; `404` user not found. |
-| `PATCH /users/:id/deactivate` | Managing Director deactivates the user identified by UUID. The Managing Director cannot deactivate their own account. | `401` missing or invalid token; `403` caller is not Managing Director; `404` user not found; `400` account is already deactivated or self-deactivation attempted. |
-| `PATCH /users/:id/reactivate` | Managing Director reactivates the user identified by UUID. | `401` missing or invalid token; `403` caller is not Managing Director; `404` user not found; `400` account is already active. |
-| `PATCH /users/:id/role` | Assigns an allowed role to the user identified by UUID. Body: `{"role":"team_lead"}` (or another supported role). | `400` invalid UUID/body/role, Managing Director role assignment attempted, or assignment violates role rules; `401` missing or invalid token; `403` caller lacks permission; `404` assigning account or target user not found. |
+| `PATCH /users/:id/deactivate` | System Admin deactivates the user identified by UUID. The System Admin cannot deactivate their own account. | `401` missing or invalid token; `403` caller is not System Admin; `404` user not found; `400` account is already deactivated or self-deactivation attempted. |
+| `PATCH /users/:id/reactivate` | System Admin reactivates the user identified by UUID. | `401` missing or invalid token; `403` caller is not System Admin; `404` user not found; `400` account is already active. |
+| `PATCH /users/:id/role` | Assigns an allowed business role to the user identified by UUID. Body: `{"role":"team_lead"}` (or another supported role). | `400` invalid UUID/body/role or assignment violates role rules; `401` missing/invalid token; `403` caller lacks permission; `404` assigning account or target user not found. |
 
 ### Departments
 

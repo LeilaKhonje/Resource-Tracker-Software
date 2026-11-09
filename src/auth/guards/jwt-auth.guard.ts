@@ -3,10 +3,16 @@ import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '../../users/user-role.enum';
 import { AuthenticatedRequest } from '../interfaces/authenticated-request.interface';
 import { AuthTokenPayload } from '../interfaces/auth-token-payload.interface';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../../users/user.entity';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    @InjectRepository(User) private readonly usersRepository: Repository<User>,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request =
@@ -48,7 +54,15 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('The access token is invalid');
     }
 
-    request.user = payload;
+    const user = await this.usersRepository.findOne({
+      where: { id: payload.sub },
+      select: { id: true, email: true, role: true, isActive: true },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('The account is inactive or no longer exists');
+    }
+
+    request.user = { ...payload, email: user.email, role: user.role };
     return true;
   }
 }
