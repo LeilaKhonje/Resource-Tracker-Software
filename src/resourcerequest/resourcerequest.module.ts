@@ -12,7 +12,7 @@ import { RequestAuditLog } from './entities/request-audit-log.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project,RequestAuditLog]),
+    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project]),
     AuthSecurityModule,
   ],
   controllers: [ResourcerequestController],

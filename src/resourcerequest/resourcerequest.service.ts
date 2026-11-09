@@ -2,7 +2,6 @@ import { BadRequestException,  ForbiddenException,Injectable,NotFoundException,}
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
 import {RequestStatus, ResourceRequest,} from './entities/resourcerequest.entity';
-import { RequestAuditLog } from './entities/request-audit-log.entity';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
@@ -10,7 +9,6 @@ import { AuthUser, UserRole } from './roles';
 import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
-import { AuditLog } from '../auditlog/auditlog.entity';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -24,8 +22,8 @@ export class ResourcerequestService {
   constructor(
     @InjectRepository(ResourceRequest)
     private readonly requests: Repository<ResourceRequest>,
-    @InjectRepository(RequestAuditLog)
-    private readonly audit: Repository<RequestAuditLog>,
+    @InjectRepository(AuditLog)
+    private readonly audit: Repository<AuditLog>,
     @InjectRepository(Department)
     private readonly departments: Repository<Department>,
     @InjectRepository(Team)
@@ -307,14 +305,22 @@ export class ResourcerequestService {
     }
   }
 
-  private async log(
+    private async log(
     requestId: string,
     action: string,
     performedBy: string,
     note?: string,
   ) {
     await this.audit.save(
-      this.audit.create({ requestId, action, performedBy, note }),
+      this.audit.create({
+        actionType: action, // required by the group's audit table
+        entityType: 'RESOURCE_REQUEST', // required by the group's audit table
+        requestId,
+        action,
+        performedBy,
+        note: note ?? null,
+        details: note ?? null,
+      }),
     );
   }
 }
