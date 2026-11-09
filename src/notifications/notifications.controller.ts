@@ -1,27 +1,11 @@
 
-import {
-  Body,
-  BadRequestException,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Req,
-} from '@nestjs/common';
-
+import { Body,BadRequestException,Controller,Delete,Get,Param,Patch,Post,Req, UseGuards,} from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
-
-import {
-  ApiBody,
-  ApiOperation,
-  ApiParam,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {ApiBearerAuth,ApiBody,ApiOperation,ApiParam,ApiResponse, ApiTags,} from '@nestjs/swagger';
 
 @ApiTags('Notifications')
+@ApiBearerAuth()
 @Controller('api/v1/notifications')
 export class NotificationsController {
   constructor(
@@ -29,6 +13,7 @@ export class NotificationsController {
   ) {}
 
   // Get notifications for the authenticated user
+  @UseGuards(JwtAuthGuard)
   @Get('me')
   @ApiOperation({
     summary: 'Get notifications for the authenticated user',
@@ -39,15 +24,19 @@ export class NotificationsController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Request must include an authenticated user',
+    description: 'Unauthorized',
   })
   getMyNotifications(@Req() req: any) {
-    if (!req.user || !req.user.id) {
-      throw new BadRequestException('Authenticated user not found');
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw new BadRequestException(
+        'Authenticated user not found',
+      );
     }
 
     return this.notificationsService.getUserNotifications(
-      req.user.id,
+      userId,
     );
   }
 
@@ -79,7 +68,6 @@ export class NotificationsController {
     name: 'id',
     description: 'UUID of the notification',
     type: String,
-    example: '584ef94b-a106-4f23-8120-ab07a4091d0b',
   })
   @ApiBody({
     schema: {
@@ -101,15 +89,11 @@ export class NotificationsController {
     status: 404,
     description: 'Notification not found for the supplied user ID',
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Notification ID and userId are required',
-  })
   markAsRead(
     @Param('id') id: string,
     @Body() body: { userId: string },
   ) {
-    if (!id || !body || !body.userId) {
+    if (!id || !body?.userId) {
       throw new BadRequestException(
         'Please provide notification ID and userId',
       );
@@ -146,14 +130,10 @@ export class NotificationsController {
     status: 201,
     description: 'Created notification',
   })
-  @ApiResponse({
-    status: 400,
-    description: 'userId and message are required',
-  })
   createNotification(
     @Body() body: { userId: string; message: string },
   ) {
-    if (!body || !body.userId || !body.message) {
+    if (!body?.userId || !body?.message) {
       throw new BadRequestException(
         'Please provide userId and message',
       );
@@ -174,13 +154,11 @@ export class NotificationsController {
     name: 'userId',
     description: 'UUID of the user',
     type: String,
-    example: '28e6826d-c5c9-40b4-8c7a-98793e110321',
   })
   @ApiParam({
     name: 'notificationId',
     description: 'UUID of the notification',
     type: String,
-    example: '584ef94b-a106-4f23-8120-ab07a4091d0b',
   })
   @ApiResponse({
     status: 200,
