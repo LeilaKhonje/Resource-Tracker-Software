@@ -24,6 +24,7 @@ export class ProjectsService {
     if (user.role !== UserRole.DEPARTMENT_HEAD) {
       throw new ForbiddenException('Only department heads can create projects');
     }
+    this.assertDateRange(createProjectDto.startDate, createProjectDto.endDate);
     const { teamIds = [], ...projectDetails } = createProjectDto;
     const teams = await this.findTeams(teamIds);
     const project = this.projectRepository.create({
@@ -50,7 +51,7 @@ export class ProjectsService {
   async findByDepartment(departmentId: number) {
     return this.projectRepository.find({
       where: { teams: { department: { id: departmentId } } },
-      select: { id: true, name: true, description: true },
+      select: { id: true, name: true, description: true, startDate: true, endDate: true },
     });
   }
 
@@ -84,10 +85,19 @@ export class ProjectsService {
   }
 
   async update(id: number, updateProjectDto: UpdateProjectDto, user: AuthTokenPayload) {
-    if (updateProjectDto.name === undefined && updateProjectDto.description === undefined) {
-      throw new BadRequestException('Provide a project name or description to update');
+    if (
+      updateProjectDto.name === undefined &&
+      updateProjectDto.description === undefined &&
+      updateProjectDto.startDate === undefined &&
+      updateProjectDto.endDate === undefined
+    ) {
+      throw new BadRequestException('Provide at least one project field to update');
     }
     const project = await this.findOne(id, user);
+    this.assertDateRange(
+      updateProjectDto.startDate ?? project.startDate,
+      updateProjectDto.endDate ?? project.endDate,
+    );
     Object.assign(project, updateProjectDto);
     return this.projectRepository.save(project);
   }
@@ -135,6 +145,12 @@ export class ProjectsService {
     const invalidTeams = teams.filter((team) => team.department?.id !== departmentId);
     if (invalidTeams.length > 0) {
       throw new ForbiddenException('Projects can only be assigned to teams in your department');
+    }
+  }
+
+  private assertDateRange(startDate: string, endDate: string) {
+    if (startDate > endDate) {
+      throw new BadRequestException('Project endDate must be on or after startDate');
     }
   }
 

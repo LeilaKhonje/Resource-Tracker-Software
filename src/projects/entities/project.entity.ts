@@ -12,6 +12,12 @@ export class Project {
   @Column({ type: 'varchar', length: 1000, nullable: true })
   description?: string;
 
+  @Column({ name: 'startDate',type: 'date', nullable: true })
+  startDate: string;
+
+  @Column({ name: 'end_date', type: 'date', nullable: true })
+  endDate: string;
+
   @ManyToMany(() => Team)
   @JoinTable()
   teams: Team[];

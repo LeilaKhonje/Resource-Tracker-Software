@@ -8,6 +8,7 @@ import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AuthSecurityModule } from '../auth/auth-security.module';
+import { RequestAuditLog } from './entities/request-audit-log.entity';
 
 @Module({
   imports: [

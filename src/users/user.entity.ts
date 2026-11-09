@@ -36,11 +36,10 @@ export class User {
   @Column({default: true})
   isActive: boolean;
 
-  @Column({
-    type: 'enum',
-    enum: UserRole,
-    nullable: true,
-  })
+  // Keep this as a string column so schema sync can preserve legacy role
+  // values when the application role set changes. API validation and guards
+  // enforce the supported UserRole values.
+  @Column({ type: 'varchar', length: 32, nullable: true })
   role: UserRole | null;
 
   @ManyToOne(() => Department, { nullable: true, onDelete: 'SET NULL' })

@@ -17,7 +17,7 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @ApiOperation({ summary: 'Create a new project' })
-  @ApiResponse({ status: 201, description: 'Created project', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
+  @ApiResponse({ status: 201, description: 'Created project', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, startDate: { type: 'string', format: 'date' }, endDate: { type: 'string', format: 'date' }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
   @ApiResponse({ status: 400, description: 'Invalid project fields' })
   @ApiResponse({ status: 422, description: 'One or more team IDs do not exist' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
@@ -25,13 +25,15 @@ export class ProjectsController {
   @ApiBody({
     schema: {
       type: 'object',
-        required: ['name'],
+        required: ['name', 'startDate', 'endDate'],
       properties: {
         name: {
           type: 'string',
           example: 'New Project'
         },
         description: { type: 'string', maxLength: 1000, example: 'Upgrade office equipment' },
+        startDate: { type: 'string', format: 'date', example: '2026-01-01' },
+        endDate: { type: 'string', format: 'date', example: '2026-12-31' },
         teamIds: { type: 'array', items: { type: 'integer', minimum: 1 }, example: [1] }
       }
     }
@@ -85,7 +87,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Assign teams to a project' })
-  @ApiResponse({ status: 200, description: 'Updated project record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
+  @ApiResponse({ status: 200, description: 'Updated project record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, startDate: { type: 'string', format: 'date' }, endDate: { type: 'string', format: 'date' }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
   @ApiResponse({ status: 400, description: 'Invalid team IDs' })
   @ApiResponse({ status: 422, description: 'Team IDs are missing/unknown or no team remains assigned' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
@@ -120,7 +122,7 @@ export class ProjectsController {
     return this.projectsService.assignTeams(id, assignProjectTeamsDto.teamIds, request.user!);
   }
 
-  @ApiOperation({ summary: 'Update a project name or description' })
+  @ApiOperation({ summary: 'Update a project name, description, or time span' })
   @ApiResponse({ status: 200, description: 'Updated project record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, teams: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } } })
   @ApiResponse({ status: 400, description: 'No project fields supplied' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
