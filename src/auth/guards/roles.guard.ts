@@ -27,7 +27,7 @@ export class RolesGuard implements CanActivate {
     if (!user) {
       throw new UnauthorizedException('Authentication is required');
     }
-
+    console.log('user:', user, 'required:', requiredRoles); 
     return user.role !== null && requiredRoles.includes(user.role);
   }
 }

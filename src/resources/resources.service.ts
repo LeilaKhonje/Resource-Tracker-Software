@@ -23,6 +23,7 @@ export class ResourcesService {
       type: dto.type,
       description: dto.description,
       departmentId: dto.departmentId,
+      quantity: dto.quantity,
     }) : this.resourcesRepository.create({
       name: dto.name,
       type: dto.type,
@@ -30,15 +31,23 @@ export class ResourcesService {
       label: dto.label,
       batchNumber: dto.batchNumber,
       vendor: dto.vendor,
+      quantity: dto.quantity,
     });
     return this.resourcesRepository.save(resource);
   }
 
   async findAll(query: QueryResourceDto): Promise<Resources[]> {
     const where: FindOptionsWhere<Resources> = {};
-    if (query.name) where.name = ILike(`%${query.name}%`);
-    if (query.type) where.type = query.type;
-    return this.resourcesRepository.find({ where, order: { createdAt: 'DESC' } });
+    if (query.name) {
+      where.name = ILike(`%${query.name}%`);
+    }
+    if (query.type) {
+      where.type = query.type;
+    }
+    return this.resourcesRepository.find({
+      where,
+      order: { createdAt: 'DESC' } 
+    });
   }
 
   async findOne(id: string): Promise<Resources> {

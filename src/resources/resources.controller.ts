@@ -36,7 +36,7 @@ export class ResourcesController {
     summary: 'List resources',
     description: 'Returns resources newest first. Optional filters can match a name substring and/or an exact resource type.',
   })
-  @ApiQuery({ name: 'name', required: false, type: String, description: 'Case-insensitive substring to match in the resource name.', example: 'laptop' })
+  @ApiQuery({ name: 'name', required: false, type: String, description: 'Case-insensitive substring to match in the resource name.'})
   @ApiQuery({ name: 'type', required: false, enum: ['insourced', 'outsourced'], description: 'Return only resources of this type.' })
   @ApiResponse({ status: 200, description: 'Array of resources matching the filters. Each item includes id, name, type, createdAt, updatedAt, and the fields for its type.' })
   @ApiResponse({ status: 400, description: 'Validation failed: name is not a string or type is not "insourced" or "outsourced".' })
