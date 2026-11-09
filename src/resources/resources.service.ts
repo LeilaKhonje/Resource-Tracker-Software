@@ -38,9 +38,16 @@ export class ResourcesService {
 
   async findAll(query: QueryResourceDto): Promise<Resources[]> {
     const where: FindOptionsWhere<Resources> = {};
-    if (query.name) where.name = ILike(`%${query.name}%`);
-    if (query.type) where.type = query.type;
-    return this.resourcesRepository.find({ where, order: { createdAt: 'DESC' } });
+    if (query.name) {
+      where.name = ILike(`%${query.name}%`);
+    }
+    if (query.type) {
+      where.type = query.type;
+    }
+    return this.resourcesRepository.find({
+      where,
+      order: { createdAt: 'DESC' } 
+    });
   }
 
   async findOne(id: string): Promise<Resources> {
