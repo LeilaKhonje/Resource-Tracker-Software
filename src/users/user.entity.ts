@@ -2,6 +2,7 @@ import {Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryG
 import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { UserRole } from './user-role.enum';
+import { Exclude } from 'class-transformer';
 
 @Entity('users')
 export class User {
@@ -16,6 +17,9 @@ export class User {
 
   @Column({ name: 'password_hash', length: 128, select: false })
   passwordHash: string;
+
+  @Column({ name: 'refresh_token_hash', type: 'varchar', length: 64, nullable: true, select: false })
+  refreshTokenHash: string | null;
 
   @Column({ name: 'phone_number', type: 'varchar', length: 30, nullable: true })
   phoneNumber: string | null;
@@ -47,6 +51,7 @@ export class User {
   @JoinColumn({ name: 'team_id' })
   team: Team | null;
 
+  @Exclude({toPlainOnly: true})
   @Index('IDX_users_single_managing_director', { unique: true })
   @Column({
     name: 'managing_director_unique_role',
@@ -59,6 +64,20 @@ export class User {
     select: false,
   })
   managingDirectorUniqueRole: string | null;
+
+  @Exclude({toPlainOnly: true})
+  @Index('IDX_users_single_system_admin', { unique: true })
+  @Column({
+    name: 'system_admin_unique_role',
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+    asExpression:
+      "CASE WHEN role = 'system_admin' THEN 'system_admin' ELSE NULL END",
+    generatedType: 'VIRTUAL',
+    select: false,
+  })
+  systemAdminUniqueRole: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

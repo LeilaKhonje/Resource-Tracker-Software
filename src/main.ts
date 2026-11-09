@@ -20,12 +20,12 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Resource Tracker API')
     .setDescription(
-      'API document for resource tracker system. This api supports user registration and login, resource requests, resource tracking, and department, teams, and projects.')
+      'API document for resource tracker system. This api supports administrator-managed user accounts, login, resource requests, resource tracking, departments, teams, and projects.')
     .addTag(
       'Authentication',
       'Allows users log in to access the resource tracker.')
       .addTag('Users',
-        'Users section allows users to register their accounts into the system and allow them to modify some their stored information. Users section also allows higher authorities to modify user roles'
+        'System administrators manage user accounts; users can modify their own profile, and authorized roles can assign business roles.'
       )
       .addTag('Notifications',
         'Notifications allows users to get notifications sent to them, they can also delete notifications'

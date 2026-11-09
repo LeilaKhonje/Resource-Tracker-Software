@@ -2,12 +2,14 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
+import { createHash } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { AuthTokenPayload } from './interfaces/auth-token-payload.interface';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { LogoutDto } from './dto/logout.dto';
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TOKEN_TTL = '7d';
@@ -48,30 +50,23 @@ export class AuthService {
   }
 
   async refresh(refreshTokenDto: RefreshTokenDto) {
-    let payload: AuthTokenPayload & { tokenUse?: string };
-    try {
-      payload = await this.jwtService.verifyAsync<
-        AuthTokenPayload & { tokenUse?: string }
-      >(refreshTokenDto.refreshToken);
-    } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
-    }
-
-    if (
-      typeof payload !== 'object' ||
-      payload === null ||
-      payload.tokenUse !== 'refresh' ||
-      typeof payload.sub !== 'string'
-    ) {
-      throw new UnauthorizedException('Invalid or expired refresh token');
-    }
-
-    const user = await this.usersRepository.findOneBy({ id: payload.sub });
-    if (!user || !user.isActive) {
+    const { user, token } = await this.getRefreshTokenUser(refreshTokenDto.refreshToken);
+    if (!user.refreshTokenHash || user.refreshTokenHash !== this.hashToken(token)) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     return this.loginUser(user);
+  }
+
+  async logout(logoutDto: LogoutDto) {
+    const { user, token } = await this.getRefreshTokenUser(logoutDto.refreshToken);
+    if (!user.refreshTokenHash || user.refreshTokenHash !== this.hashToken(token)) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    user.refreshTokenHash = null;
+    await this.usersRepository.save(user);
+    return { message: 'Logged out successfully' };
   }
 
   async forgotPassword(_forgotPasswordDto: ForgotPasswordDto) {
@@ -98,7 +93,44 @@ export class AuthService {
       ),
     ]);
 
+    user.refreshTokenHash = this.hashToken(refreshToken);
+    await this.usersRepository.save(user);
+
     return { accessToken, refreshToken };
+  }
+
+  private async getRefreshTokenUser(refreshToken: string) {
+    let payload: AuthTokenPayload & { tokenUse?: string };
+    try {
+      payload = await this.jwtService.verifyAsync<
+        AuthTokenPayload & { tokenUse?: string }
+      >(refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      payload.tokenUse !== 'refresh' ||
+      typeof payload.sub !== 'string'
+    ) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const user = await this.usersRepository.findOne({
+      where: { id: payload.sub },
+      select: { id: true, email: true, role: true, isActive: true, refreshTokenHash: true },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    return { user, token: refreshToken };
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   private async verifyPassword(password: string, passwordHash: string,): Promise<boolean> {
