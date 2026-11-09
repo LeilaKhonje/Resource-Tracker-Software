@@ -23,6 +23,7 @@ export class ResourcesService {
       type: dto.type,
       description: dto.description,
       departmentId: dto.departmentId,
+      quantity: dto.quantity,
     }) : this.resourcesRepository.create({
       name: dto.name,
       type: dto.type,
@@ -30,6 +31,7 @@ export class ResourcesService {
       label: dto.label,
       batchNumber: dto.batchNumber,
       vendor: dto.vendor,
+      quantity: dto.quantity,
     });
     return this.resourcesRepository.save(resource);
   }
