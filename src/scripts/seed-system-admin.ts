@@ -34,7 +34,7 @@ const dataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   entities: [User, Department, Team],
-  synchronize: true,
+  synchronize: false,
 });
 
 async function seedSystemAdmin() {

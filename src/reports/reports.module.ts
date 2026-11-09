@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
+import { AuthSecurityModule } from '../auth/auth-security.module';
 
 @Module({
+  imports: [AuthSecurityModule],
   controllers: [ReportsController],
   providers: [ReportsService],
   exports:[ReportsService],
