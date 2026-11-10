@@ -1,5 +1,5 @@
 import { toResourceResponse } from './resource-response';
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ResourcesService } from './resources.service';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
@@ -12,9 +12,18 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { UserRole } from '../users/user-role.enum'; 
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { ApiBearerAuth} from '@nestjs/swagger';
 
 @ApiTags('Resources')
 @Controller('api/v1/resources')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.DEPARTMENT_HEAD)
+@ApiBearerAuth('access-token')
+
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 
