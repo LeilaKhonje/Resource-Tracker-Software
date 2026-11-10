@@ -13,7 +13,7 @@ export class Notification {
   @Column({ type: 'varchar', length: 36 })
   userId: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'text' })
   message: string;
 
   @Column({ default: false })

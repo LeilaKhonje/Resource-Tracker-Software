@@ -1,5 +1,6 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { ResourceType } from '../enum/resource-type.enum';
+import { Department } from '../../departments/entities/department.entity';
 
 @Entity('resources')
 export class Resources {
@@ -15,8 +16,9 @@ export class Resources {
     @Column({type: 'text', nullable: true})
     description: string | null;
 
-    @Column({ name: 'department_id', type: 'int', nullable: true})
-    departmentId: number | null;
+    @ManyToOne(() => Department, { nullable: true, onDelete: 'RESTRICT' })
+    @JoinColumn({ name: 'department_id' })
+    department: Department | null;
 
     @Column({
         type: 'decimal',
