@@ -20,7 +20,7 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 
 - Most endpoints use the `/api/v1` prefix. Replace `{id}` placeholders with the indicated numeric ID or UUID.
 - Routes marked **Bearer** require `Authorization: Bearer <accessToken>`. Role restrictions are shown where the controller enforces them.
-- Routes without an access label do not declare a JWT/role guard in their controller. In particular, resources, notifications, dashboard, and reports are currently unguarded; `GET /api/v1/notifications/me` still expects the request to contain a user identity.
+- Routes without an access label do not declare a JWT/role guard in their controller. In particular, resource listing/view/update routes, notifications, dashboard, and reports are currently unguarded; `GET /api/v1/notifications/me` still expects the request to contain a user identity.
 - The global validation pipe rejects unknown fields and transforms input values where configured. Required and optional fields below follow the endpoint DTOs.
 - Successful responses return the created/updated record, an array, or the summary described below. Error responses use NestJS HTTP errors (commonly 400, 401, 403, 404, or 409).
 - User roles: `system_admin`, `team_lead`, `line_manager`, `department_head`, `managing_director`, `team_member`.
@@ -54,6 +54,11 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 - **Access:** Bearer token; role: `system_admin`, `managing_director`
 - **Request:** No body or query parameters.
 - **Response:** `200` array of user accounts without credential data.
+
+### `GET /api/v1/users/line-managers`
+- **Access:** Bearer token; role: `team_lead`
+- **Request:** No body or query parameters.
+- **Response:** `200` array of active Line Managers, each with `id`, `fullName`, and `email`, ordered by name. Use `fullName` as `lineManagerName` when creating a resource request.
 
 ### `PATCH /api/v1/users/{id}/role`
 - **Access:** Bearer token; role: `system_admin`, `managing_director`, `department_head`
@@ -90,12 +95,41 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 Resource types are `insourced` and `outsourced`. Responses include common fields `id`, `name`, `type`, `quantity`, `createdAt`, and `updatedAt`, plus type-specific fields.
 
 ### `POST /api/v1/resources`
-- **Request:** Insourced JSON: `{ "name": "Office laptop", "type": "insourced", "description": "Existing inventory", "departmentId": 2, "quantity": 1 }`. Outsourced JSON: `{ "name": "Office laptop", "type": "outsourced", "price": 1250.50, "label": "Dell Latitude 5450", "batchNumber": "LOT-2026-04", "vendor": "Example Supplies Ltd", "quantity": 3 }`. Quantity is a non-negative integer; outsourced price is non-negative with at most two decimals.
-- **Response:** `201` created resource. Insourced records include `description`, `departmentId`; outsourced records include `price`, `label`, `batchNumber`, `vendor`.
+- **Access:** Bearer token; role: `managing_director`.
+- **Request:** Insourced JSON: `{ "name": "Office laptop", "type": "insourced", "description": "Existing inventory", "departmentName": "Information Technology", "quantity": 1 }`. The department name must match one existing department. Outsourced JSON: `{ "name": "Office laptop", "type": "outsourced", "price": 1250.50, "label": "Dell Latitude 5450", "batchNumber": "LOT-2026-04", "vendor": "Example Supplies Ltd", "quantity": 3 }`. Quantity is an integer of at least 1; outsourced price and vendor are required. Type-specific fields from the other resource type are rejected.
+- **Response:** `201` created resource. Insourced records include `description` and `departmentName`; outsourced records include `price`, `label`, `batchNumber`, and `vendor`. `401` missing/invalid token; `403` caller is not Managing Director.
 
 ### `GET /api/v1/resources`
 - **Request:** Optional query: `name` (case-insensitive substring), `type` (`insourced` or `outsourced`). Example: `?name=laptop&type=outsourced`.
 - **Response:** `200` matching resource array, newest first.
+
+### `GET /api/v1/resources/available`
+- **Access:** Bearer token; role: `line_manager`.
+- **Response:** `200` resources with positive available quantity grouped by type (`insourced`, `outsourced`), each with an `availableQuantity` total and resource records. The response also includes `totalAvailableQuantity`. Active allocations are deducted from recorded quantities.
+- **Errors:** `401` missing/invalid token; `403` caller is not a Line Manager.
+
+### `POST /api/v1/resources/{id}/allocations`
+- **Access:** Bearer token; role: `line_manager`.
+- **Request:** `quantity`, `teamId`, `projectId`, and `assignedToUserId`; optional `expectedReturnAt` and approved `requestId`. When allocating against a request, omitting `expectedReturnAt` sets it from the request's `expectedDurationDays`. The project must be assigned to the team, and the active assigned user must belong to that team. A supplied request must be approved, routed to the caller, and match the team and project.
+- **Response:** `201` active allocation and an allocation movement event. The server rejects quantities exceeding available stock or the request's unfulfilled quantity.
+
+### `GET /api/v1/resources/{id}/allocations`
+- **Access:** Bearer token; role: `line_manager`.
+- **Response:** `200` active allocations, including current user, team, project, request, allocation date, and return deadline.
+
+### `PATCH /api/v1/resources/allocations/{allocationId}/return`
+- **Access:** Bearer token; role: `line_manager`.
+- **Request:** Optional `note`.
+- **Response:** `200` allocation marked returned and a return movement event recorded.
+
+### `PATCH /api/v1/resources/allocations/{allocationId}/transfer`
+- **Access:** Bearer token; role: `line_manager`.
+- **Request:** New `teamId`, `projectId`, and `assignedToUserId`; optional `expectedReturnAt` and `note`.
+- **Response:** `200` prior assignment closed, new active assignment created, and transfer movement event recorded.
+
+### `GET /api/v1/resources/{id}/movements`
+- **Access:** Bearer token; role: `line_manager`.
+- **Response:** `200` chronological allocation, transfer, and return events for the resource.
 
 ### `GET /api/v1/resources/{id}`
 - **Request:** Resource UUID in path.
@@ -113,8 +147,8 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `POST /resource-requests/api/v1/resource-request`
 - **Access:** `team_lead`
-- **Request:** JSON body: `{ "itemDescription": "Laptop for field data collection", "manufacturerLabel": "ThinkPad T14", "price": 1200, "batchNumber": "LOT-2026-04", "vendor": "Example Supplies", "quantity": 3, "projectId": "12", "lineManagerId": "<user UUID>", "teamId": "8", "departmentId": "2" }`. IDs for project/team/department are numeric strings; price is positive (max 2 decimals), quantity is integer ≥1. `requestedBy` and initial status are set by the server.
-- **Response:** `201` new request in `DRAFT` status.
+- **Request:** JSON body: `{ "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "vendor": "Example Supplies", "quantity": 3, "expectedDurationDays": 14, "projectName": "Office Modernization", "lineManagerName": "Jordan Lee", "teamName": "Platform" }`. Names must identify one project assigned to the named team and one active Line Manager; the department is taken from the team. Quantity and `expectedDurationDays` are positive integers. Unit price and manufacturer label are not requested. `requestedBy`, relationship IDs, and initial status are set by the server.
+- **Response:** `201` submitted request. Duplicate team, project, or Line Manager names are rejected as ambiguous.
 
 ### `GET /resource-requests/api/v1/resource-request`
 - **Access:** `team_lead`, `line_manager`, `department_head`, `managing_director`
@@ -128,7 +162,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `PATCH /resource-requests/api/v1/resource-request/{id}`
 - **Access:** `team_lead` (own draft/queried requests), `line_manager` (assigned submitted requests)
-- **Request:** Partial request fields from create body plus optional `status` and `note`. Team lead may edit `DRAFT`/`QUERIED` and submit using `{ "status": "SUBMITTED" }`. Line manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
+- **Request:** Partial request fields from create body (including the name fields `projectName`, `lineManagerName`, and `teamName`) plus optional `status` and `note`. Team lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
 - **Response:** `200` updated request, with review fields updated on manager review.
 
 ## Departments — `/api/v1/departments`
@@ -200,6 +234,11 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 - **Request:** No body.
 - **Response:** `200` team array.
 
+### `GET /api/v1/teams/unassigned-users`
+- **Access:** Bearer token; role: `department_head`
+- **Request:** Optional `role` query parameter: `team_lead` or `team_member`. Omit to list both roles.
+- **Response:** `200` active users without a team, each with `id`, `fullName`, `email`, and `role`, ordered by name.
+
 ### `GET /api/v1/teams/{id}/users`
 - **Access:** Bearer token; role: `department_head`, `team_lead`, `team_member`
 - **Request:** Numeric team ID.
@@ -224,6 +263,11 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 - **Access:** Bearer token; role: `department_head`
 - **Request:** `{ "userId": "<user UUID>" }`; target user must have `team_lead` role.
 - **Response:** `200` team lead assignment.
+
+### `PATCH /api/v1/teams/{id}/assign-user`
+- **Access:** Bearer token; role: `department_head` for the team's department
+- **Request:** `{ "userId": "<Team Lead or Team Member UUID>" }`
+- **Response:** `200` updated team record. The active user is assigned to the team and the team's department. `403` inactive user or unsupported role; `409` user already belongs to another team.
 
 ### `PATCH /api/v1/teams/{id}`
 - **Access:** Bearer token; role: `department_head`
