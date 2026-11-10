@@ -48,8 +48,24 @@ docker compose build app
 docker compose run --rm app npm run seed:system-admin
 ```
 
-The app container uses the same `.env` and Compose network as the API. Once the
-seed succeeds, start the API with `docker compose up -d app` or
+If the API or seed fails with `Column 'role' has a generated column
+dependency`, stop the API and apply the one-time schema conversion before
+retrying. The existing database has a `role` column type that TypeORM cannot
+change while the indexed generated role columns depend on it.
+
+In PowerShell:
+
+```powershell
+docker compose stop app
+Get-Content -Raw .\scripts\convert-user-role-to-varchar.sql | docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"'
+```
+
+Then rerun the seed or start the API. Run this conversion once; it preserves
+the generated columns and does not delete user data.
+
+The app container uses the same `.env` and Compose network as the API, with
+`DB_HOST=mysql` and `DB_PORT=3306` set for its internal connection to MySQL.
+Once the seed succeeds, start the API with `docker compose up -d app` or
 `npm run start:prod` as appropriate. Log in through `POST /auth/login` using
 the seeded email and password.
 
@@ -63,8 +79,10 @@ database automatically.
 
 MySQL is available to host applications on port `3307` by default, avoiding
 conflicts with a local MySQL server already using `3306`. Set `DB_HOST_PORT`
-in `.env` to another available host port if needed. The API container still
-connects to the MySQL service on its internal port `3306`.
+in `.env` to another available host port if needed. When connecting from a
+host application, use `DB_HOST=localhost` and set `DB_PORT` to that published
+host port. The API container instead connects to the MySQL service on its
+internal port `3306`.
 
 ## Account and role management
 
