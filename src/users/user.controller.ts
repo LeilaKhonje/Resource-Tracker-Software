@@ -39,6 +39,30 @@ export class UserController {
     return this.usersService.listUsers();
   }
 
+  @Get('line-managers')
+  @ApiOperation({ summary: 'List active Line Managers for request routing' })
+  @ApiResponse({
+    status: 200,
+    description: 'Active Line Managers available to receive resource requests',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          fullName: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+        },
+      },
+    },
+  })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.TEAM_LEAD)
+  @ApiBearerAuth('access-token')
+  listActiveLineManagers() {
+    return this.usersService.listActiveLineManagers();
+  }
+
 @Patch(':id/role')
 @ApiOperation({ summary: 'Update a user role' })
 @ApiParam({ name: 'id', description: 'User UUID' })

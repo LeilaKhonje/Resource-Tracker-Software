@@ -39,32 +39,41 @@ const dataSource = new DataSource({
 
 async function seedSystemAdmin() {
   await dataSource.initialize();
-  await dataSource.transaction(async (manager) => {
+  const seeded = await dataSource.transaction(async (manager) => {
     const users = manager.getRepository(User);
     const existingAdmin = await users.findOneBy({ role: UserRole.SYSTEM_ADMIN });
-    let user = await users.findOneBy({ email: adminEmail });
 
-    if (existingAdmin && existingAdmin.email !== adminEmail) {
-      existingAdmin.role = null;
-      await users.save(existingAdmin);
+    if (existingAdmin) {
+      if (existingAdmin.email !== adminEmail) {
+        throw new Error(
+          `A System Admin already exists for ${existingAdmin.email}; no account was changed.`,
+        );
+      }
+      return false;
     }
 
-    if (!user) {
-      user = users.create({
-        email: adminEmail,
-        fullName: adminFullName,
-        role: UserRole.SYSTEM_ADMIN,
-      });
-    } else {
-      user.fullName = adminFullName;
-      user.role = UserRole.SYSTEM_ADMIN;
+    const existingEmail = await users.findOneBy({ email: adminEmail });
+    if (existingEmail) {
+      throw new Error(
+        `An account already exists for ${adminEmail}; no account was changed.`,
+      );
     }
 
-    user.passwordHash = await bcrypt.hash(adminPassword, 12);
-    user.isActive = true;
+    const user = users.create({
+      email: adminEmail,
+      fullName: adminFullName,
+      role: UserRole.SYSTEM_ADMIN,
+      passwordHash: await bcrypt.hash(adminPassword, 12),
+      isActive: true,
+    });
     await users.save(user);
+    return true;
   });
-  console.log(`System Admin account is ready for ${adminEmail}.`);
+  console.log(
+    seeded
+      ? `System Admin account created for ${adminEmail}.`
+      : `System Admin account for ${adminEmail} already exists; no changes made.`,
+  );
 }
 
 seedSystemAdmin()

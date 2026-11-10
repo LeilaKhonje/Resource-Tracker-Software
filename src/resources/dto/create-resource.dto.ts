@@ -27,11 +27,11 @@ export class CreateResourceDto {
   @IsNotEmpty()
   description?: string;
 
-  @ApiProperty({ required: false, description: 'Required when type is "insourced".', example: 'Information Technology' })
+  @ApiProperty({ required: false, description: 'Required when type is "insourced". Must exactly identify an existing department by name.', example: 'Information Technology' })
   @ValidateIf((o) => o.type === ResourceType.INSOURCED)
-  @IsInt()
-  @Min(1)
-  departmentId?: number;
+  @IsString()
+  @IsNotEmpty()
+  departmentName?: string;
 
   // ---- Required when type === outsourced ----
   @ApiProperty({ required: false, description: 'Required when type is "outsourced"; non-negative and at most two decimal places.', example: 1250.5, minimum: 0 })
@@ -46,8 +46,9 @@ export class CreateResourceDto {
   @IsNotEmpty()
   label?: string;
 
+  @ApiProperty({ description: 'Number of units represented by this resource record; must be at least 1.', example: 2, minimum: 1 })
   @IsInt()
-  @Min(0)
+  @Min(1)
   quantity: number;
 
   @ValidateIf((o) => o.type === ResourceType.OUTSOURCED)
