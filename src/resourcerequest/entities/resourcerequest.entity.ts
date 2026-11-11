@@ -24,20 +24,21 @@ export class ResourceRequest {
   @Column({ type: 'text' })
   itemDescription: string;
 
-  @Column()
-  manufacturerLabel: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  manufacturerLabel: string | null;
 
   
   @Column({
     type: 'decimal',
     precision: 12,
     scale: 2,
+    nullable: true,
     transformer: {
-      to: (value: number) => value,
-      from: (value: string) => parseFloat(value),
+      to: (value: number | null) => value,
+      from: (value: string | null) => value === null ? null : parseFloat(value),
     },
   })
-  price: number;
+  price: number | null;
 
   @Column()
   batchNumber: string;
@@ -47,6 +48,9 @@ export class ResourceRequest {
 
   @Column({ default: 1 })
   quantity: number;
+
+  @Column({ type: 'int', nullable: true })
+  expectedDurationDays: number | null;
 
   
     @Column({ type: 'enum', enum: RequestStatus, default: RequestStatus.SUBMITTED })

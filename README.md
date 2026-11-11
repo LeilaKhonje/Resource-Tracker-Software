@@ -25,11 +25,9 @@ SYSTEM_ADMIN_FULL_NAME=Project System Admin
 SYSTEM_ADMIN_PASSWORD=Choose9Safe
 ```
 
-The seed hashes the password and creates the account with the System Admin
-role. It is safe to rerun for the same email: it updates that account's name,
-password hash, and role. If another account currently has that role, the seed
-clears the old assignment and transfers it to the configured email in the same
-database transaction. Keep the `.env` file and credentials out of version
+The seed creates a System Admin account only when neither that email nor a
+System Admin account already exists. If either exists, it stops without
+changing any account. Keep the `.env` file and credentials out of version
 control.
 
 For local development, start the database and run the seed from the project
@@ -39,19 +37,25 @@ directory:
 npm run seed:system-admin
 ```
 
-With Docker Compose, start MySQL and then run the seed in a one-off app
-container:
+Before starting a new deployment, start MySQL and run the reviewed database
+migrations in a one-off app container. The migration changes `users.role` to
+nullable `VARCHAR(32)` when needed, preserving existing role values and leaving
+the generated unique-role columns in place. The API has TypeORM synchronization
+disabled; it will not apply migrations automatically at startup.
 
 ```bash
 docker compose up -d mysql
 docker compose build app
+docker compose run --rm app npm run migration:run
 docker compose run --rm app npm run seed:system-admin
+docker compose up -d --no-build app
 ```
 
-The app container uses the same `.env` and Compose network as the API. Once the
-seed succeeds, start the API with `docker compose up -d app` or
-`npm run start:prod` as appropriate. Log in through `POST /auth/login` using
-the seeded email and password.
+The app container uses the same `.env` and Compose network as the API; set
+`DB_HOST=mysql` for Compose. The migration runner records applied migrations in
+`typeorm_migrations`. The seed is intended for initial provisioning; it does
+not reset an existing administrator's password. Log in through
+`POST /api/v1/auth` using the seeded email and password.
 
 If the API repeatedly reports that it cannot connect to MySQL, check
 `docker compose logs mysql` for the database-side error and make sure
@@ -131,6 +135,7 @@ business roles according to the role rules above.
 | --- | --- | --- |
 | `POST /users` | System Admin creates an active account from `fullName`, `email`, `role`, and `initialPassword`. The password is not returned. | `400` invalid fields, role, or password; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned. |
 | `GET /users` | System Admin lists accounts without credential data. | `401` missing/invalid token; `403` caller is not System Admin. |
+| `GET /users/line-managers` | Team Lead lists active Line Managers to choose a recipient for a resource request. Returns `id`, `fullName`, and `email`, ordered by name. | `401` missing/invalid token; `403` caller is not a Team Lead. |
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
@@ -159,17 +164,20 @@ do not declare authentication guards.
 
 ### Teams
 
-Teams group staff within a department and connect those staff to projects. These
-routes currently do not declare authentication guards.
+Teams group staff within a department and connect those staff to projects. Team
+routes require authentication; only the Department Head for a team's department
+can manage team membership.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
 | `POST /teams` | Creates a team using `name`, `departmentId`, and optional `description`. | `400` invalid input; `404` department does not exist. |
 | `GET /teams` | Lists teams with their department information. | Database errors. |
+| `GET /teams/unassigned-users?role=team_lead` | Department Head lists active Team Leads without a team; `role=team_member` lists active Team Members, and omitting `role` returns both. | `400` unsupported role filter; `401` missing/invalid token; `403` caller is not a Department Head. |
 | `GET /teams/:id` | Returns one team and its department. | `404` team does not exist; `400` malformed numeric ID may be coerced by the service. |
 | `GET /teams/:id/users` | Lists users assigned to a team. | `404` team does not exist. |
 | `GET /teams/:id/projects` | Lists projects associated with a team. | `404` team does not exist. |
 | `PATCH /teams/:id` | Updates a team's name, description, or department. | `400` invalid input; `404` team or requested department does not exist. |
+| `PATCH /teams/:id/assign-user` | Assigns an active Team Lead or Team Member by UUID; also updates the user's department to the team's department. | `403` target is inactive, has an unsupported role, or caller is not the department head for the team; `404` team or user not found; `409` target already belongs to another team. |
 | `DELETE /teams/:id` | Deletes a team. | `404` team does not exist; database constraint errors may occur if related records prevent deletion. |
 
 ### Projects
@@ -191,17 +199,21 @@ are for Department Heads, while Managing Directors can also list and view.
 
 ### Resources
 
-The resources API manages catalog records. It does not track inventory quantities.
-These routes currently do not declare authentication guards. Resource IDs are
-UUIDs. The returned fields depend on the resource `type`:
+The resources API manages catalog records and stores the count of units represented by each record. Line Managers can allocate units to a team member and project, record returns and transfers, and review movement history. Available quantity is recorded quantity minus active allocations. Creating resources requires a Managing Director; listing, viewing, and updating routes currently do not declare authentication guards. Resource IDs are UUIDs. The returned fields depend on the resource `type`:
 
-- `insourced`: `id`, `name`, `type`, `description`, `department`, `createdAt`, `updatedAt`
+- `insourced`: `id`, `name`, `type`, `description`, `departmentName`, `quantity`, `createdAt`, `updatedAt`
 - `outsourced`: `id`, `name`, `type`, `price`, `label`, `batchNumber`, `vendor`, `createdAt`, `updatedAt`
 
 | Method and path | Request | What it does | Possible errors |
 | --- | --- | --- | --- |
-| `POST /resources` | JSON resource object; see examples below. | Creates a catalog resource. `type` is `insourced` or `outsourced`; insourced requires `description` and `department`, outsourced requires `price`, `label`, `batchNumber`, and `vendor`. | `400` invalid or missing type-specific fields; database errors. |
+| `POST /resources` | Managing Director bearer token and JSON resource object; see examples below. | Creates a catalog resource. `type` is `insourced` or `outsourced`; insourced requires `description` and an existing `departmentName`, outsourced requires `price`, `label`, `batchNumber`, and `vendor`. Quantity must be at least 1. | `400` invalid or conflicting type-specific fields; `401` missing/invalid token; `403` caller is not Managing Director; `404` department not found; database errors. |
 | `GET /resources?name=lap&type=insourced` | Optional `name` substring and `type` filters. | Lists matching catalog resources, newest first. `name` matching is case-insensitive. | `400` invalid `type`; database errors. |
+| `GET /resources/available` | Line Manager bearer token. | Lists resources with positive available quantities, grouped by type, with available-unit totals after active allocations are deducted. | `401` missing/invalid token; `403` caller is not a Line Manager. |
+| `POST /resources/:id/allocations` | Line Manager bearer token; quantity, team, project, assigned user; optional due date and approved request ID. | Assigns available units and records a movement. When linked to a request without an explicit due date, the due date is calculated from the Team Lead's requested duration. The project must be assigned to the team and the active user must belong to that team. | `400` invalid assignment; `401` missing/invalid token; `403` caller is not authorized; `404` referenced record not found; `409` insufficient availability/request quantity. |
+| `GET /resources/:id/allocations` | Line Manager bearer token. | Lists active assignments and current holders. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` resource not found. |
+| `PATCH /resources/allocations/:allocationId/return` | Line Manager bearer token; optional note. | Marks an assignment returned and records a movement. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` allocation not found; `409` allocation is not active. |
+| `PATCH /resources/allocations/:allocationId/transfer` | Line Manager bearer token; destination team, project, and assigned user. | Closes the prior assignment, opens a new assignment, and records the transfer. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` destination/allocation not found; `409` allocation is not active. |
+| `GET /resources/:id/movements` | Line Manager bearer token. | Lists allocation, transfer, and return history. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` resource not found. |
 | `GET /resources/:id` | `:id` is a resource UUID. | Returns one catalog resource. | `400` malformed UUID; `404` resource not found. |
 | `PATCH /resources/:id` | JSON containing one or more editable fields. `type` cannot be changed. | Updates the resource catalog record. Fields belonging to the other resource type are rejected. | `400` malformed UUID or invalid fields; `404` resource not found; database errors. |
 
@@ -212,7 +224,8 @@ Create an insourced resource:
   "name": "Laptop",
   "type": "insourced",
   "description": "Standard staff laptop",
-  "department": "IT"
+  "departmentName": "IT",
+  "quantity": 2
 }
 ```
 
@@ -225,7 +238,8 @@ Create an outsourced resource:
   "price": 1200,
   "label": "ThinkPad T14",
   "batchNumber": "LOT-2026-04",
-  "vendor": "Example Supplies"
+  "vendor": "Example Supplies",
+  "quantity": 3
 }
 ```
 
@@ -249,7 +263,7 @@ Example `GET /resources/:id` response for an outsourced resource:
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /resource-requests` | Creates a draft; body includes item details, `quantity`, and team/project/department/manager IDs. | `400` invalid fields/references; `403` caller is not a team lead. |
+| `POST /resource-requests` | Creates and submits a request; body includes item details, `quantity`, positive integer `expectedDurationDays`, and the names `teamName`, `projectName`, and `lineManagerName`. Department is derived from the team; unit price, manufacturer label, and department ID are not requested. | `400` invalid or ambiguous names/fields; `403` caller is not a team lead; `404` team, project, or active Line Manager not found. |
 | `GET /resource-requests` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing caller identity. |
 | `GET /resource-requests/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
 | `PATCH /resource-requests/:id` | Team lead edits a draft/queried request or submits with `{"status":"SUBMITTED"}`. Assigned line manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`. Rejection/query requires a `note`. | `400` invalid status/state or missing required submit fields; `403` wrong owner/role/manager; `404` request not found. |
