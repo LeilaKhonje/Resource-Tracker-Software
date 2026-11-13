@@ -1,4 +1,4 @@
-import { Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post } from '@nestjs/common';
+import { Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -7,9 +7,10 @@ import { AssignUserRoleDto } from './dto/assign-user-role.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+import { ListUsersByCreatedAtDto } from './dto/list-users-by-created-at.dto';
 import { UsersService } from './users.service';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @Controller('api/v1/users')
 @ApiTags('Users')
@@ -17,7 +18,7 @@ export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('')
-  @ApiOperation({ summary: 'Create a user account with an initial password (System Admin only)' })
+  @ApiOperation({ summary: 'Create a user account and assign a role to the user(System Admin only)' })
   @ApiBody({ type: CreateUserDto })
   @ApiResponse({ status: 201, description: 'Active account created; the initial password is not returned' })
   @ApiResponse({ status: 400, description: 'Invalid account details' })
@@ -39,8 +40,21 @@ export class UserController {
     return this.usersService.listUsers();
   }
 
+  @Get('created-between')
+  @ApiOperation({ summary: 'List user accounts created within an inclusive timestamp range' })
+  @ApiQuery({ name: 'startDate', required: true, type: String, format: 'date-time', example: '2026-11-01T00:00:00.000Z' })
+  @ApiQuery({ name: 'endDate', required: true, type: String, format: 'date-time', example: '2026-11-11T23:59:59.999Z' })
+  @ApiResponse({ status: 200, description: 'User accounts without credential data' })
+  @ApiResponse({ status: 400, description: 'Invalid date format or startDate is after endDate' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR)
+  @ApiBearerAuth('access-token')
+  listUsersByCreatedAt(@Query() filter: ListUsersByCreatedAtDto) {
+    return this.usersService.listUsersByCreatedAt(filter);
+  }
+
   @Get('line-managers')
-  @ApiOperation({ summary: 'List active Line Managers for request routing' })
+  @ApiOperation({ summary: 'List active Line Managers for request routing (Team leads only)' })
   @ApiResponse({
     status: 200,
     description: 'Active Line Managers available to receive resource requests',
@@ -89,7 +103,7 @@ assignRole(
   }
 
 @Get('me')
-@ApiOperation({ summary: 'User must view his profile' })
+@ApiOperation({ summary: 'User must view his profile (every user in the system)' })
 @ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) }, department: { type: 'string', nullable: true }, team: { type: 'string', nullable: true } } } })
 @ApiResponse({ status: 401, description: 'Authentication required' })
 @ApiResponse({ status: 404, description: 'User not found' })
@@ -103,7 +117,7 @@ assignRole(
  }
 
  @Patch('me/profile')
- @ApiOperation({ summary: 'Update the authenticated user profile details' })
+ @ApiOperation({ summary: 'Update user profile details (every user in the system)' })
  @ApiBody({ type: UpdateMyProfileDto })
  @ApiResponse({ status: 200, description: 'Updated user profile details' })
  @ApiResponse({ status: 400, description: 'Invalid profile details or no fields supplied' })
@@ -120,7 +134,7 @@ assignRole(
  }
 
  @Patch('me/password')
- @ApiOperation({ summary: 'Change the authenticated user password' })
+ @ApiOperation({ summary: 'Change the password (every user in the system)' })
  @ApiBody({ type: ChangePasswordDto })
  @ApiResponse({ status: 200, description: 'Password changed successfully' })
  @ApiResponse({ status: 400, description: 'Invalid new password or new password matches the current password' })

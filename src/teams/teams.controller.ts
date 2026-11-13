@@ -1,10 +1,4 @@
-import {Body, Controller,Delete,Get,Param,Patch,
-  Post,
-  ParseIntPipe,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import {Body, Controller,Delete,Get,Param,Patch, Post, ParseIntPipe, Query, Req, UseGuards,} from '@nestjs/common';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamsService } from './teams.service';

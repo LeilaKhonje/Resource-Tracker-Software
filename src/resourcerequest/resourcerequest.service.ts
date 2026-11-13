@@ -55,7 +55,6 @@ export class ResourcerequestService {
     const request = this.requests.create({
       itemDescription: dto.itemDescription,
       batchNumber: dto.batchNumber,
-      vendor: dto.vendor,
       quantity: dto.quantity,
       expectedDurationDays: dto.expectedDurationDays,
       teamId: String(references.team.id),

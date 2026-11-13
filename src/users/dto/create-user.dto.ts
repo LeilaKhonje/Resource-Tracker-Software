@@ -15,7 +15,7 @@ export class CreateUserDto {
   @ApiProperty({ example: 'alex@company.com', description: 'Company email address' })
   @IsEmail()
   @MaxLength(254)
-  @Matches(/@company\.com$/, { message: 'Email must be a company email' })
+  @Matches(/@company\.com$/, { message: 'Email must be company email' })
   email: string;
 
   @ApiProperty({
