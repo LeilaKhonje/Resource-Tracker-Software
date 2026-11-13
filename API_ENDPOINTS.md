@@ -55,6 +55,12 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 - **Request:** No body or query parameters.
 - **Response:** `200` array of user accounts without credential data.
 
+### `GET /api/v1/users/created-between`
+- **Access:** Bearer token; role: `system_admin`, `managing_director`
+- **Request:** Required `startDate` and `endDate` query parameters as ISO 8601 timestamps, for example `?startDate=2026-11-01T00:00:00.000Z&endDate=2026-11-11T23:59:59.999Z`. Both boundaries are inclusive; `startDate` must be less than or equal to `endDate`.
+- **Response:** `200` array of matching user accounts without credential data, ordered by creation time ascending.
+- **Errors:** `400` for invalid timestamps or a start later than the end; `401` missing/invalid token; `403` caller lacks permission.
+
 ### `GET /api/v1/users/line-managers`
 - **Access:** Bearer token; role: `team_lead`
 - **Request:** No body or query parameters.
@@ -147,7 +153,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `POST /resource-requests/api/v1/resource-request`
 - **Access:** `team_lead`
-- **Request:** JSON body: `{ "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "vendor": "Example Supplies", "quantity": 3, "expectedDurationDays": 14, "projectName": "Office Modernization", "lineManagerName": "Jordan Lee", "teamName": "Platform" }`. Names must identify one project assigned to the named team and one active Line Manager; the department is taken from the team. Quantity and `expectedDurationDays` are positive integers. Unit price and manufacturer label are not requested. `requestedBy`, relationship IDs, and initial status are set by the server.
+- **Request:** JSON body: `{ "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "quantity": 3, "expectedDurationDays": 14, "projectName": "Office Modernization", "lineManagerName": "Jordan Lee", "teamName": "Platform" }`. Names must identify one project assigned to the named team and one active Line Manager; the department is taken from the team. Quantity and `expectedDurationDays` are positive integers. Unit price, manufacturer label, vendor, and department ID are not requested. `requestedBy`, relationship IDs, and initial status are set by the server.
 - **Response:** `201` submitted request. Duplicate team, project, or Line Manager names are rejected as ambiguous.
 
 ### `GET /resource-requests/api/v1/resource-request`

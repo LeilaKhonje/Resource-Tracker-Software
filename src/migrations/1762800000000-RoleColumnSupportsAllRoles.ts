@@ -32,6 +32,13 @@ export class RoleColumnSupportsAllRoles1762800000000
   name = 'RoleColumnSupportsAllRoles1762800000000';
 
   async up(queryRunner: QueryRunner): Promise<void> {
+    const usersTable = await queryRunner.getTable('users');
+    if (!usersTable) {
+      throw new Error(
+        'Cannot migrate roles: the users table does not exist. Create the application schema before running migrations.',
+      );
+    }
+
     const [roleColumn] = (await queryRunner.query(
       `SELECT DATA_TYPE AS dataType,
               CHARACTER_MAXIMUM_LENGTH AS characterMaximumLength,
@@ -47,7 +54,12 @@ export class RoleColumnSupportsAllRoles1762800000000
     }>;
 
     if (!roleColumn) {
-      throw new Error('Cannot migrate roles: users.role does not exist.');
+      // Older installations may have the users table without a role field.
+      // Roles are nullable so existing accounts remain valid and can be
+      // assigned a business role through the application.
+      await queryRunner.query(
+        'ALTER TABLE `users` ADD COLUMN `role` VARCHAR(32) NULL',
+      );
     }
 
     const [oversizedRole] = (await queryRunner.query(
@@ -63,10 +75,11 @@ export class RoleColumnSupportsAllRoles1762800000000
       );
     }
 
-    const needsRoleChange =
+    const needsRoleChange = roleColumn && (
       roleColumn.dataType.toLowerCase() !== 'varchar' ||
       Number(roleColumn.characterMaximumLength) !== 32 ||
-      roleColumn.isNullable !== 'YES';
+      roleColumn.isNullable !== 'YES'
+    );
 
     if (needsRoleChange) {
       await this.assertUniqueRoleValues(queryRunner);
