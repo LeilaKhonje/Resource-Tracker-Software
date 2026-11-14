@@ -1,8 +1,6 @@
 import { toResourceResponse } from './resource-response';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ResourcesService } from './resources.service';
-import { CreateResourceDto } from './dto/create-resource.dto';
-import { UpdateResourceDto } from './dto/update-resource.dto';
 import { QueryResourceDto } from './dto/query-resource.dto';
 import { CreateResourceAllocationDto } from './dto/create-resource-allocation.dto';
 import { TransferResourceAllocationDto } from './dto/transfer-resource-allocation.dto';
@@ -11,6 +9,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user-role.enum';
+import { CreateInsourcedResourceDto } from './dto/create-insourced-resource.dto';
+import { CreateOutsourcedResourceDto } from './dto/create-outsourced-resource.dto';
+import { UpdateInsourcedResourceDto } from './dto/update-insourced-resource.dto';
+import { UpdateOutsourcedResourceDto } from './dto/update-outsourced-resource.dto';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import {
   ApiBearerAuth,
@@ -33,24 +35,42 @@ import {
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 
-  @Post()
+  @Post('insourced')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.MANAGING_DIRECTOR)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Create a resource (Managing Director only)',
     description:
-      'Creates an insourced or outsourced resource. Insourced resources require a description and the name of an existing department, and cannot include outsourced fields. Outsourced resources require price, label, batchNumber, and vendor, and cannot include insourced fields. Quantity must be at least 1.',
-  })
-  @ApiBody({ type: CreateResourceDto })
-  @ApiResponse({ status: 201, description: 'Resource created. The response includes common fields and only the fields for its resource type.' })
-  @ApiResponse({ status: 400, description: 'Invalid or conflicting type-specific fields, quantity below 1, or invalid price.' })
-  @ApiResponse({ status: 404, description: 'The named department does not exist.' })
-  @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
-  @ApiForbiddenResponse({ description: 'Only the Managing Director can create resources.' })
-  async create(@Body() dto: CreateResourceDto) {
-    return toResourceResponse(await this.resourcesService.create(dto));
-  }
+       'Creates an insourced resource. Requires a name, a description, the name of an existing department, and a quantity of at least 1.',
+})
+@ApiBody({ type: CreateInsourcedResourceDto })
+@ApiResponse({ status: 201, description: 'Insourced resource created.' })
+@ApiResponse({ status: 400, description: 'Invalid fields or quantity below 1.' })
+@ApiResponse({ status: 404, description: 'The named department does not exist.' })
+@ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
+@ApiForbiddenResponse({ description: 'Only the Managing Director can create resources.' })
+async createInsourced(@Body() dto: CreateInsourcedResourceDto) {
+  return toResourceResponse(await this.resourcesService.createInsourced(dto));
+}
+
+@Post('outsourced')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.MANAGING_DIRECTOR)
+@ApiBearerAuth('access-token')
+@ApiOperation({
+  summary: 'Create an outsourced resource (Managing Director only)',
+  description:
+    'Creates an outsourced (borrowed) resource. Requires a name, price, label, batchNumber, vendor, and a quantity of at least 1.',
+})
+@ApiBody({ type: CreateOutsourcedResourceDto })
+@ApiResponse({ status: 201, description: 'Outsourced resource created.' })
+@ApiResponse({ status: 400, description: 'Invalid fields, quantity below 1, or invalid price.' })
+@ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
+@ApiForbiddenResponse({ description: 'Only the Managing Director can create resources.' })
+async createOutsourced(@Body() dto: CreateOutsourcedResourceDto) {
+  return toResourceResponse(await this.resourcesService.createOutsourced(dto));
+}
 
   @Get()
   @ApiOperation({
@@ -121,6 +141,18 @@ export class ResourcesController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.resourcesService.createAllocation(id, dto, request.user!.sub);
+  }
+  
+  @Get('insourced')
+  async findInsourced(@Query() query: QueryResourceDto){
+    const resources = await this.resourcesService.findInsourced(query);
+    return resources.map(toResourceResponse);
+  }
+
+  @Get('outsourced')
+  async findOutsourced(@Query() query: QueryResourceDto){
+    const resources = await this.resourcesService.findOutsourced(query)
+    return resources.map(toResourceResponse);
   }
 
   @Get(':id/allocations')
@@ -199,17 +231,33 @@ export class ResourcesController {
     return toResourceResponse(await this.resourcesService.findOne(id));
   }
 
-  @Patch(':id')
-  @ApiOperation({
-    summary: 'Update a resource',
-    description: 'Updates one or more fields on a resource. All body fields are optional and the resource type cannot be changed. Only fields belonging to the resource’s existing type may be supplied.',
-  })
-  @ApiParam({ name: 'id', description: 'UUID of the resource.', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' })
-  @ApiBody({ type: UpdateResourceDto, description: 'One or more fields valid for the resource’s existing type.' })
-  @ApiResponse({ status: 200, description: 'Updated resource record.' })
-  @ApiResponse({ status: 400, description: 'The id is not a valid UUID; the body contains fields belonging to the other resource type (for example, vendor on an insourced resource); or the body includes type/another unknown field, which request validation rejects.' })
-  @ApiResponse({ status: 404, description: 'No resource exists with the supplied UUID.' })
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateResourceDto) {
-    return toResourceResponse(await this.resourcesService.update(id, dto));
-  }
+@Patch('insourced/:id')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.MANAGING_DIRECTOR)
+@ApiBearerAuth('access-token')
+@ApiOperation({ summary: 'Update an insourced resource' })
+@ApiBody({ type: UpdateInsourcedResourceDto })
+@ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
+@ApiForbiddenResponse({ description: 'Only the Managing Director can update resources.' })
+async updateInsourced(
+  @Param('id', ParseUUIDPipe) id: string,
+  @Body() dto: UpdateInsourcedResourceDto,
+) {
+  return toResourceResponse(await this.resourcesService.updateInsourced(id, dto));
+}
+
+@Patch('outsourced/:id')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.MANAGING_DIRECTOR)
+@ApiBearerAuth('access-token')
+@ApiOperation({ summary: 'Update an outsourced resource' })
+@ApiBody({ type: UpdateOutsourcedResourceDto })
+@ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
+@ApiForbiddenResponse({ description: 'Only the Managing Director can update resources.' })
+async updateOutsourced(
+  @Param('id', ParseUUIDPipe) id: string,
+  @Body() dto: UpdateOutsourcedResourceDto,
+) {
+  return toResourceResponse(await this.resourcesService.updateOutsourced(id, dto));
+}
 }
