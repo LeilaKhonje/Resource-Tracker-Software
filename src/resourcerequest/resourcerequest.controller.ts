@@ -38,7 +38,7 @@ export class ResourcerequestController {
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD)
   @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies projectName, lineManagerName, and teamName. The server resolves names to stored relationships, derives the department from the team, sets requestedBy from the caller, and creates an in-app notification for the active Line Manager.' })
-  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', vendor: 'Example Supplies', quantity: 3, expectedDurationDays: 14, projectName: 'Office Modernization', lineManagerName: 'Jordan Lee', teamName: 'Platform' } } } })
+  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectName: 'Office Modernization', lineManagerName: 'Jordan Lee', teamName: 'Platform' } } } })
   @ApiResponse({ status: 201, description: 'Request submitted with status SUBMITTED and notification created for the designated Line Manager.' })
   @ApiBadRequestResponse({ description: 'Invalid fields, ambiguous names, or project is not assigned to the named team.' })
   @ApiNotFoundResponse({ description: 'Team, project, active Line Manager, or requesting Team Lead not found.' })

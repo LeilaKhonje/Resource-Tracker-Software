@@ -29,15 +29,6 @@ export class CreateResourceRequestDto {
   batchNumber: string;
 
   @ApiProperty({
-    description: 'Name of the vendor supplying the item',
-    example: 'Dell',
-  })
-  @ApiProperty({ example: 'Example Supplies' })
-  @IsString()
-  @IsNotEmpty()
-  vendor: string;
-
-  @ApiProperty({
     description: 'How many units are requested (at least 1)',
     example: 3,
   })

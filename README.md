@@ -38,7 +38,9 @@ npm run seed:system-admin
 ```
 
 Before starting a new deployment, start MySQL and run the reviewed database
-migrations in a one-off app container. The migration changes `users.role` to
+migrations in a one-off app container. The initial migration creates the
+application tables for an empty database; subsequent migrations apply schema
+changes such as changing `users.role` to
 nullable `VARCHAR(32)` when needed, preserving existing role values and leaving
 the generated unique-role columns in place. The API has TypeORM synchronization
 disabled; it will not apply migrations automatically at startup.
@@ -135,6 +137,7 @@ business roles according to the role rules above.
 | --- | --- | --- |
 | `POST /users` | System Admin creates an active account from `fullName`, `email`, `role`, and `initialPassword`. The password is not returned. | `400` invalid fields, role, or password; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned. |
 | `GET /users` | System Admin lists accounts without credential data. | `401` missing/invalid token; `403` caller is not System Admin. |
+| `GET /users/created-between?startDate=<ISO-8601>&endDate=<ISO-8601>` | System Admin or Managing Director lists accounts created within the inclusive timestamp range, ordered by creation time. | `400` invalid timestamp or start later than end; `401` missing/invalid token; `403` caller lacks permission. |
 | `GET /users/line-managers` | Team Lead lists active Line Managers to choose a recipient for a resource request. Returns `id`, `fullName`, and `email`, ordered by name. | `401` missing/invalid token; `403` caller is not a Team Lead. |
 
 | Method and path | What it does | Possible errors |
@@ -263,7 +266,7 @@ Example `GET /resources/:id` response for an outsourced resource:
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /resource-requests` | Creates and submits a request; body includes item details, `quantity`, positive integer `expectedDurationDays`, and the names `teamName`, `projectName`, and `lineManagerName`. Department is derived from the team; unit price, manufacturer label, and department ID are not requested. | `400` invalid or ambiguous names/fields; `403` caller is not a team lead; `404` team, project, or active Line Manager not found. |
+| `POST /resource-requests` | Creates and submits a request; body includes item details, `quantity`, positive integer `expectedDurationDays`, and the names `teamName`, `projectName`, and `lineManagerName`. Department is derived from the team; unit price, manufacturer label, vendor, and department ID are not requested. | `400` invalid or ambiguous names/fields; `403` caller is not a team lead; `404` team, project, or active Line Manager not found. |
 | `GET /resource-requests` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing caller identity. |
 | `GET /resource-requests/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
 | `PATCH /resource-requests/:id` | Team lead edits a draft/queried request or submits with `{"status":"SUBMITTED"}`. Assigned line manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`. Rejection/query requires a `note`. | `400` invalid status/state or missing required submit fields; `403` wrong owner/role/manager; `404` request not found. |
