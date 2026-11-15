@@ -1,6 +1,6 @@
-import { ForbiddenException, Injectable, NotFoundException,} from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException,} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { Department } from './entities/department.entity';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-departments.dto';
@@ -31,7 +31,32 @@ export class DepartmentsService {
       ...createDepartmentDto,
       description: createDepartmentDto.description ?? '',
     });
-    return this.departmentRepository.save(department);
+    try {
+      return await this.departmentRepository.save(department);
+    } catch (error) {
+      if (this.isDepartmentNameConflict(error)) {
+        throw new ConflictException('A department with this name already exists');
+      }
+      throw error;
+    }
+  }
+
+  private isDepartmentNameConflict(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) {
+      return false;
+    }
+
+    const driverError = error.driverError as {
+      code?: string;
+      errno?: number;
+      message?: string;
+      sqlMessage?: string;
+    };
+    const isDuplicateKey =
+      driverError.code === 'ER_DUP_ENTRY' || driverError.errno === 1062;
+    const errorDetails = `${driverError.message ?? ''} ${driverError.sqlMessage ?? ''}`;
+
+    return isDuplicateKey && errorDetails.includes('UQ_department_name');
   }
 
   async findAll() {

@@ -177,6 +177,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 - **Access:** Bearer token; role: `managing_director`
 - **Request:** `{ "name": "Finance", "code": "FIN", "description": "Finance and accounting" }`. `name` required (3–100 chars); `code` optional (2–20 uppercase letters, digits, `_` or `-`); description optional (max 500).
 - **Response:** `201` department `{ id, name, code, description }`.
+- **Error:** `409` when a department with the same name already exists.
 
 ### `GET /api/v1/departments`
 - **Access:** Bearer token; role: `managing_director`
