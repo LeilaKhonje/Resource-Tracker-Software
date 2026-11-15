@@ -6,10 +6,12 @@ import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
 import { QueryResourceRequestDto } from './dto/query-resourcerequest.dto';
 import { AuthUser, UserRole } from './roles';
-import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AuditLog } from '../auditlog/auditlog.entity';
+import { User } from '../users/user.entity';
+import { UserRole as AccountUserRole } from '../users/user-role.enum';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -25,12 +27,13 @@ export class ResourcerequestService {
     private readonly requests: Repository<ResourceRequest>,
     @InjectRepository(AuditLog)
     private readonly audit: Repository<AuditLog>,
-    @InjectRepository(Department)
-    private readonly departments: Repository<Department>,
     @InjectRepository(Team)
     private readonly teams: Repository<Team>,
     @InjectRepository(Project)
     private readonly projects: Repository<Project>,
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ---------------------------------------------------------------
@@ -40,19 +43,35 @@ export class ResourcerequestService {
     if (user.role !== UserRole.TEAM_LEAD) {
       throw new ForbiddenException('Only team leads can create requests');
     }
-    await this.assertOrganizationReferences(dto);
+    const references = await this.resolveOrganizationReferences(dto);
+    const requester = await this.users.findOne({
+      where: { id: user.id },
+      select: { id: true, fullName: true },
+    });
+    if (!requester) {
+      throw new NotFoundException(`Team Lead ${user.id} not found`);
+    }
+
     const request = this.requests.create({
-      ...dto,
+      itemDescription: dto.itemDescription,
+      batchNumber: dto.batchNumber,
+      vendor: dto.vendor,
+      quantity: dto.quantity,
+      expectedDurationDays: dto.expectedDurationDays,
+      teamId: String(references.team.id),
+      departmentId: String(references.team.department!.id),
+      projectId: String(references.project.id),
+      lineManagerId: references.lineManager.id,
       requestedBy: user.id, // from the logged-in user, never from the body
       status: RequestStatus.SUBMITTED,
       submittedAt: new Date(),
     });
     const saved = await this.requests.save(request);
     await this.log(saved.id, 'SUBMITTED', user.id);
-
-    // TODO: notification component:
-    //  - notify the line manager that a request arrived
-    //  - notify the team lead that the request was submitted
+    await this.notifications.createNotification(
+      references.lineManager.id,
+      `Team Lead ${requester.fullName} from team ${references.team.name}, working on project ${references.project.name}, requests ${dto.quantity} x ${dto.itemDescription} for ${dto.expectedDurationDays} day(s).`,
+    );
     return saved;
   }
 
@@ -71,9 +90,10 @@ export class ResourcerequestService {
       where.requestedBy = user.id;
     } else if (user.role === UserRole.LINE_MANAGER) {
       where.lineManagerId = user.id;
+    } else if (user.role === UserRole.DEPARTMENT_HEAD) {
+      const departmentId = await this.getDepartmentHeadDepartmentId(user.id);
+      where.departmentId = String(departmentId);
     }
-    // TODO: scope DEPARTMENT_HEAD to their own department once the
-    // organization module can tell us which department they head.
 
     return this.requests.find({ where, order: { createdAt: 'DESC' } });
   }
@@ -81,7 +101,7 @@ export class ResourcerequestService {
   // One request. With includeAudit, the audit trail is attached too.
   async findOne(id: string, user: AuthUser, includeAudit = false) {
     const request = await this.getOrFail(id);
-    this.assertCanView(request, user);
+    await this.assertCanView(request, user);
     if (!includeAudit) return request;
 
     const auditTrail = await this.audit.find({
@@ -98,7 +118,19 @@ export class ResourcerequestService {
   // ---------------------------------------------------------------
   async update(id: string, dto: UpdateResourceRequestDto, user: AuthUser) {
     const request = await this.getOrFail(id);
-    const { status, note, ...fields } = dto;
+    const {
+      status,
+      note,
+      teamName,
+      projectName,
+      lineManagerName,
+      ...fields
+    } = dto;
+    const referenceChanges = Object.fromEntries(
+      Object.entries({ teamName, projectName, lineManagerName }).filter(
+        ([, value]) => value !== undefined,
+      ),
+    );
 
     // Keep only the fields that were actually sent.
     const changes: Record<string, unknown> = Object.fromEntries(
@@ -106,13 +138,17 @@ export class ResourcerequestService {
     );
     const changedKeys = Object.keys(changes);
 
-    if (status === undefined && changedKeys.length === 0) {
+    if (
+      status === undefined &&
+      changedKeys.length === 0 &&
+      Object.keys(referenceChanges).length === 0
+    ) {
       throw new BadRequestException('Nothing to update');
     }
 
     // A review decision (line manager). It can't be mixed with edits.
     if (status !== undefined && status !== RequestStatus.SUBMITTED) {
-      if (changedKeys.length > 0) {
+      if (changedKeys.length > 0 || Object.keys(referenceChanges).length > 0) {
         throw new BadRequestException(
           'A review decision cannot be combined with edits',
         );
@@ -123,15 +159,23 @@ export class ResourcerequestService {
     // Everything below is the team lead's: editing and resubmitting.
     this.assertOwner(request, user);
     this.assertEditable(request);
+    const previousTeamId = request.teamId;
+    const previousDepartmentId = request.departmentId;
     Object.assign(request, changes);
 
-    if (
-      changedKeys.includes('teamId') ||
-      changedKeys.includes('departmentId') ||
-      changedKeys.includes('projectId') ||
-      status === RequestStatus.SUBMITTED
-    ) {
-      await this.assertOrganizationReferences(request);
+    if (Object.keys(referenceChanges).length > 0 || status === RequestStatus.SUBMITTED) {
+      const references = await this.resolveOrganizationReferences({
+        teamName,
+        projectName,
+        lineManagerName,
+        teamId: request.teamId,
+        projectId: request.projectId,
+        lineManagerId: request.lineManagerId,
+      });
+      request.teamId = String(references.team.id);
+      request.departmentId = String(references.team.department!.id);
+      request.projectId = String(references.project.id);
+      request.lineManagerId = references.lineManager.id;
     }
 
     const submitting = status === RequestStatus.SUBMITTED;
@@ -143,6 +187,7 @@ export class ResourcerequestService {
       if (!request.departmentId) missing.push('department');
       if (!request.projectId) missing.push('project');
       if (!request.lineManagerId) missing.push('line manager');
+      if (!request.expectedDurationDays) missing.push('expectedDurationDays');
       if (missing.length > 0) {
         throw new BadRequestException(
           `Cannot resubmit: missing ${missing.join(', ')}`,
@@ -155,13 +200,18 @@ export class ResourcerequestService {
     const saved = await this.requests.save(request);
 
     // One audit entry per kind of change.
-    if (changedKeys.includes('teamId')) {
+    if (teamName !== undefined && request.teamId !== previousTeamId) {
       await this.log(id, 'TEAM_CHANGED', user.id, request.teamId);
     }
-    if (changedKeys.includes('departmentId')) {
+    if (request.departmentId !== previousDepartmentId) {
       await this.log(id, 'DEPARTMENT_CHANGED', user.id, request.departmentId);
     }
-    if (changedKeys.some((key) => key !== 'teamId' && key !== 'departmentId')) {
+    if (
+      changedKeys.length > 0 ||
+      projectName !== undefined ||
+      lineManagerName !== undefined ||
+      (teamName !== undefined && request.teamId === previousTeamId)
+    ) {
       await this.log(id, 'UPDATED', user.id);
     }
     if (submitting) {
@@ -222,47 +272,125 @@ export class ResourcerequestService {
     return request;
   }
 
-  private async assertOrganizationReferences(reference: {
+  private async resolveOrganizationReferences(reference: {
+    teamName?: string;
+    projectName?: string;
+    lineManagerName?: string;
     teamId?: string;
-    departmentId?: string;
     projectId?: string;
-  }) {
-    const departmentId = this.parseOrganizationId(
-      reference.departmentId,
-      'departmentId',
-    );
-    const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
-    const projectId = this.parseOrganizationId(
-      reference.projectId,
-      'projectId',
-    );
-
-    const [department, team, project] = await Promise.all([
-      this.departments.findOne({ where: { id: departmentId } }),
-      this.teams.findOne({
+    lineManagerId?: string;
+  }): Promise<{ team: Team; project: Project; lineManager: User }> {
+    let team: Team | null;
+    if (reference.teamName !== undefined) {
+      const matches = await this.teams.find({
+        where: { name: reference.teamName.trim() },
+        relations: { department: true },
+      });
+      if (matches.length === 0) {
+        throw new NotFoundException(`Team '${reference.teamName}' not found`);
+      }
+      if (matches.length > 1) {
+        throw new BadRequestException(
+          `Team name '${reference.teamName}' is ambiguous; team names must be unique to use name-based requests`,
+        );
+      }
+      team = matches[0];
+    } else if (reference.teamId) {
+      const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
+      team = await this.teams.findOne({
         where: { id: teamId },
         relations: { department: true },
-      }),
-      this.projects.findOne({
+      });
+    } else {
+      throw new BadRequestException('A team name is required');
+    }
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+    if (!team.department) {
+      throw new BadRequestException(`Team '${team.name}' has no department`);
+    }
+
+    let project: Project | null;
+    if (reference.projectName !== undefined) {
+      const matches = await this.projects.find({
+        where: { name: reference.projectName.trim(), teams: { id: team.id } },
+        relations: { teams: true },
+      });
+      if (matches.length === 0) {
+        throw new NotFoundException(
+          `Project '${reference.projectName}' not found for team '${team.name}'`,
+        );
+      }
+      if (matches.length > 1) {
+        throw new BadRequestException(
+          `Project name '${reference.projectName}' is ambiguous for team '${team.name}'`,
+        );
+      }
+      project = matches[0];
+    } else if (reference.projectId) {
+      const projectId = this.parseOrganizationId(reference.projectId, 'projectId');
+      project = await this.projects.findOne({
         where: { id: projectId },
         relations: { teams: true },
-      }),
-    ]);
+      });
+    } else {
+      throw new BadRequestException('A project name is required');
+    }
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+    if (!project.teams?.some((projectTeam) => projectTeam.id === team!.id)) {
+      throw new BadRequestException(
+        `Project '${project.name}' is not assigned to team '${team.name}'`,
+      );
+    }
 
-    if (!department)
-      throw new NotFoundException(`Department ${departmentId} not found`);
-    if (!team) throw new NotFoundException(`Team ${teamId} not found`);
-    if (!project) throw new NotFoundException(`Project ${projectId} not found`);
-    if (team.department?.id !== departmentId) {
+    let lineManager: User;
+    if (reference.lineManagerName !== undefined) {
+      const matches = await this.users.find({
+        where: {
+          fullName: reference.lineManagerName.trim(),
+          role: AccountUserRole.LINE_MANAGER,
+          isActive: true,
+        },
+        select: { id: true, fullName: true, role: true, isActive: true },
+      });
+      if (matches.length === 0) {
+        throw new NotFoundException(
+          `Active Line Manager '${reference.lineManagerName}' not found`,
+        );
+      }
+      if (matches.length > 1) {
+        throw new BadRequestException(
+          `Line Manager name '${reference.lineManagerName}' is ambiguous; use a unique full name`,
+        );
+      }
+      lineManager = matches[0];
+    } else if (reference.lineManagerId) {
+      lineManager = await this.assertLineManager(reference.lineManagerId);
+    } else {
+      throw new BadRequestException('A line manager name is required');
+    }
+
+    return { team, project, lineManager };
+  }
+
+  private async assertLineManager(lineManagerId: string): Promise<User> {
+    const manager = await this.users.findOne({
+      where: { id: lineManagerId },
+      select: { id: true, role: true, isActive: true },
+    });
+
+    if (!manager) {
+      throw new NotFoundException(`Line manager ${lineManagerId} not found`);
+    }
+    if (!manager.isActive || manager.role !== AccountUserRole.LINE_MANAGER) {
       throw new BadRequestException(
-        'The team does not belong to the specified department',
+        'lineManagerId must refer to an active user with the Line Manager role',
       );
     }
-    if (!project.teams?.some((projectTeam) => projectTeam.id === teamId)) {
-      throw new BadRequestException(
-        'The project is not assigned to the specified team',
-      );
-    }
+    return manager;
   }
 
   private parseOrganizationId(
@@ -294,16 +422,35 @@ export class ResourcerequestService {
     }
   }
 
-  private assertCanView(request: ResourceRequest, user: AuthUser) {
+  private async assertCanView(request: ResourceRequest, user: AuthUser) {
+    if (user.role === UserRole.DEPARTMENT_HEAD) {
+      const departmentId = await this.getDepartmentHeadDepartmentId(user.id);
+      if (request.departmentId !== String(departmentId)) {
+        throw new ForbiddenException('You can only view requests from your department');
+      }
+      return;
+    }
+
     const isOwner = request.requestedBy === user.id;
     const isAssignedManager = request.lineManagerId === user.id;
-    const isOversight =
-      user.role === UserRole.DEPARTMENT_HEAD ||
-      user.role === UserRole.MANAGING_DIRECTOR;
-    // TODO: limit DEPARTMENT_HEAD to requests in their own department.
+    const isOversight = user.role === UserRole.MANAGING_DIRECTOR;
     if (!isOwner && !isAssignedManager && !isOversight) {
       throw new ForbiddenException('You cannot view this request');
     }
+  }
+
+  private async getDepartmentHeadDepartmentId(userId: string): Promise<number> {
+    const departmentHead = await this.users.findOne({
+      where: { id: userId },
+      relations: { department: true },
+    });
+    if (!departmentHead) {
+      throw new NotFoundException('Department Head account not found');
+    }
+    if (!departmentHead.department) {
+      throw new ForbiddenException('Your account is not assigned to a department');
+    }
+    return departmentHead.department.id;
   }
 
     private async log(

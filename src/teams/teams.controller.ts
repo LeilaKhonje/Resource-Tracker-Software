@@ -1,13 +1,14 @@
 import {Body, Controller,Delete,Get,Param,Patch,
   Post,
   ParseIntPipe,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamsService } from './teams.service';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -15,6 +16,7 @@ import { UserRole } from '../users/user-role.enum';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { AssignTeamLeadDto } from './dto/assign-team-lead.dto';
+import { AssignTeamUserDto } from './dto/assign-team-user.dto';
 
 @ApiTags('Teams')
 @Controller('api/v1/teams')
@@ -45,6 +47,18 @@ export class TeamsController {
   @ApiResponse({ status: 200, description: 'Team records', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true } } } } })
   findAll() {
     return this.teamsService.findAll();
+  }
+
+  @Get('unassigned-users')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD)
+  @ApiOperation({ summary: 'List active Team Leads and Team Members without a team' })
+  @ApiQuery({ name: 'role', required: false, enum: [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] })
+  @ApiResponse({ status: 200, description: 'Unassigned active users, ordered by name' })
+  @ApiResponse({ status: 400, description: 'Role filter must be team_lead or team_member' })
+  findUnassignedUsers(@Query('role') role?: string) {
+    return this.teamsService.findUnassignedUsers(role);
   }
 
   @Get(':id/users')
@@ -126,6 +140,25 @@ export class TeamsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.teamsService.assignTeamLead(id, dto, request.user!);
+  }
+
+  @Patch(':id/assign-user')
+  @ApiOperation({ summary: 'Assign a Team Lead or Team Member to a team' })
+  @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number })
+  @ApiBody({ type: AssignTeamUserDto })
+  @ApiResponse({ status: 200, description: 'User assigned to the team and its department' })
+  @ApiResponse({ status: 403, description: 'Target is inactive, has an unsupported role, or caller is not the team department head' })
+  @ApiResponse({ status: 409, description: 'Target user is already assigned to another team' })
+  @ApiResponse({ status: 404, description: 'Team or user not found' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DEPARTMENT_HEAD)
+  assignUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignTeamUserDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.teamsService.assignTeamUser(id, dto, request.user!);
   }
 
   @Patch(':id')
