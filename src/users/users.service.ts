@@ -50,6 +50,14 @@ export class UsersService {
     return users;
   }
 
+  async listActiveLineManagers() {
+    return this.usersRepository.find({
+      where: { role: UserRole.LINE_MANAGER, isActive: true },
+      select: { id: true, fullName: true, email: true },
+      order: { fullName: 'ASC' },
+    });
+  }
+
   private async logAccountAction(actionType: string, userId: string, actorId: string, details: string) {
     await this.auditLogsRepository.save(this.auditLogsRepository.create({
       actionType,

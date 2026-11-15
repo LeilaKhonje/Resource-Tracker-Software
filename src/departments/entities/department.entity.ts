@@ -1,6 +1,7 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()
+@Index('UQ_department_name', ['name'], { unique: true })
 export class Department {
   @PrimaryGeneratedColumn()
   id: number;

@@ -2,8 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsInt,
   IsNotEmpty,
-  IsNumber,
-  IsPositive,
   IsString,
   Min,
 } from 'class-validator';
@@ -20,24 +18,6 @@ export class CreateResourceRequestDto {
   @IsString()
   @IsNotEmpty()
   itemDescription: string;
-
-  @ApiProperty({
-    description: "The manufacturer's label or model name of the item",
-    example: 'Dell XPS 15',
-  })
-  @ApiProperty({ example: 'ThinkPad T14' })
-  @IsString()
-  @IsNotEmpty()
-  manufacturerLabel: string;
-
-  @ApiProperty({
-    description: 'Price of one unit, with at most two decimal places',
-    example: 1500.5,
-  })
-  @ApiProperty({ example: 1200, minimum: 0.01, description: 'Unit price, with at most two decimal places.' })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
-  price: number;
 
   @ApiProperty({
     description: 'Batch number printed on the item or its packaging',
@@ -67,39 +47,26 @@ export class CreateResourceRequestDto {
   quantity: number;
 
   @ApiProperty({
-    description: 'Id of the project the resource is for',
-    example: 'proj-1',
+    description: 'Expected number of days the requested resource will be assigned to the requester',
+    example: 14,
+    minimum: 1,
   })
-  @ApiProperty({ example: '12', description: 'Project numeric ID encoded as a string.' })
-  @IsString()
-  @IsNotEmpty()
-  projectId: string;
+  @IsInt()
+  @Min(1)
+  expectedDurationDays: number;
 
-  @ApiProperty({
-    description: 'Id of the line manager who will review the request',
-    example: 'manager-1',
-  })
-  @ApiProperty({ format: 'uuid', example: 'b9ca58fa-1a9a-4e5e-ad3e-badb621d783f', description: 'User ID of the line manager assigned to review this request.' })
+  @ApiProperty({ example: 'Office Modernization' })
   @IsString()
   @IsNotEmpty()
-  lineManagerId: string;
+  projectName: string;
 
-  // SRS: a request must come from a team, and that team must have a department.
-  @ApiProperty({
-    description: 'Id of the team making the request',
-    example: 'team-1',
-  })
-  @ApiProperty({ example: '8', description: 'Team numeric ID encoded as a string.' })
+  @ApiProperty({ example: 'Jordan Lee', description: 'Full name of the active Line Manager who will review the request.' })
   @IsString()
   @IsNotEmpty()
-  teamId: string;
+  lineManagerName: string;
 
-  @ApiProperty({
-    description: 'Id of the department the team belongs to',
-    example: 'dept-1',
-  })
-  @ApiProperty({ example: '2', description: 'Department numeric ID encoded as a string.' })
+  @ApiProperty({ example: 'Platform' })
   @IsString()
   @IsNotEmpty()
-  departmentId: string;
+  teamName: string;
 }

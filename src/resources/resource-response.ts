@@ -6,6 +6,7 @@ export function toResourceResponse(resource: Resources) {
     id: resource.id,
     name: resource.name,
     type: resource.type,
+    batchNumber: resource.batchNumber,
     quantity: resource.quantity,
     createdAt: resource.createdAt,
     updatedAt: resource.updatedAt,
@@ -23,6 +24,6 @@ export function toResourceResponse(resource: Resources) {
   return {
     ...base,
     description: resource.description,
-    departmentId: resource.departmentId,
+    departmentName: resource.department?.name ?? null,
   };
 }

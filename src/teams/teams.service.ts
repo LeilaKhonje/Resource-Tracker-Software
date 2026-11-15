@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Team } from './entities/team.entity';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
@@ -15,6 +17,9 @@ import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.ent
 import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
 import { UserRole } from '../users/user-role.enum';
 import { AssignTeamLeadDto } from './dto/assign-team-lead.dto';
+import { AssignTeamUserDto } from './dto/assign-team-user.dto';
+
+const ASSIGNABLE_TEAM_ROLES = [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] as const;
 
 @Injectable()
 export class TeamsService {
@@ -43,6 +48,25 @@ export class TeamsService {
     return this.teamRepository.find({ relations: { department: true } });
   }
 
+  async findUnassignedUsers(role?: string) {
+    if (role && !ASSIGNABLE_TEAM_ROLES.includes(role as (typeof ASSIGNABLE_TEAM_ROLES)[number])) {
+      throw new BadRequestException('role must be team_lead or team_member');
+    }
+
+    const roles = role
+      ? [role as (typeof ASSIGNABLE_TEAM_ROLES)[number]]
+      : [...ASSIGNABLE_TEAM_ROLES];
+    return this.userRepository.find({
+      where: roles.map((userRole) => ({
+        role: userRole,
+        isActive: true,
+        team: IsNull(),
+      })),
+      select: { id: true, fullName: true, email: true, role: true },
+      order: { fullName: 'ASC' },
+    });
+  }
+
   async findOne(id: number) {
     const team = await this.teamRepository.findOne({
       where: { id },
@@ -57,8 +81,21 @@ export class TeamsService {
   }
 
   async assignTeamLead(id: number, dto: AssignTeamLeadDto, user: AuthTokenPayload) {
+    return this.assignUserToTeam(id, dto.userId, user, UserRole.TEAM_LEAD);
+  }
+
+  async assignTeamUser(id: number, dto: AssignTeamUserDto, user: AuthTokenPayload) {
+    return this.assignUserToTeam(id, dto.userId, user);
+  }
+
+  private async assignUserToTeam(
+    id: number,
+    userId: string,
+    user: AuthTokenPayload,
+    requiredRole?: (typeof ASSIGNABLE_TEAM_ROLES)[number],
+  ) {
     if (user.role !== UserRole.DEPARTMENT_HEAD) {
-      throw new ForbiddenException('Only the department head can assign a team lead');
+      throw new ForbiddenException('Only the department head can assign users to a team');
     }
 
     const team = await this.findOne(id);
@@ -71,20 +108,32 @@ export class TeamsService {
       relations: { department: true },
     });
     if (departmentHead?.department?.id !== team.department.id) {
-      throw new ForbiddenException('Only the department head of this team\'s department can assign its team lead');
+      throw new ForbiddenException('Only the department head of this team\'s department can assign users to it');
     }
 
-    const teamLead = await this.userRepository.findOneBy({ id: dto.userId });
-    if (!teamLead) {
-      throw new NotFoundException(`User with id ${dto.userId} not found`);
+    const teamUser = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: { team: true },
+    });
+    if (!teamUser) {
+      throw new NotFoundException(`User with id ${userId} not found`);
     }
-    if (teamLead.role !== UserRole.TEAM_LEAD) {
-      throw new ForbiddenException('The assigned user must have the team lead role');
+    if (!teamUser.isActive) {
+      throw new ForbiddenException('Only active users can be assigned to a team');
+    }
+    if (teamUser.team && teamUser.team.id !== team.id) {
+      throw new ConflictException('The user is already assigned to another team');
+    }
+    if (!ASSIGNABLE_TEAM_ROLES.includes(teamUser.role as (typeof ASSIGNABLE_TEAM_ROLES)[number])) {
+      throw new ForbiddenException('The assigned user must be a Team Lead or Team Member');
+    }
+    if (requiredRole && teamUser.role !== requiredRole) {
+      throw new ForbiddenException('The assigned user must have the Team Lead role');
     }
 
-    teamLead.team = team;
-    teamLead.department = team.department;
-    await this.userRepository.save(teamLead);
+    teamUser.team = team;
+    teamUser.department = team.department;
+    await this.userRepository.save(teamUser);
     return this.findOne(id);
   }
 

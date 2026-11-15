@@ -3,6 +3,7 @@ import { AuthSecurityModule } from '../auth/auth-security.module';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 
+
 @Module({
   imports: [AuthSecurityModule],
   controllers: [ReportsController],
