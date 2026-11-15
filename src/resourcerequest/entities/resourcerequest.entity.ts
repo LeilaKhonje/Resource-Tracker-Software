@@ -43,8 +43,8 @@ export class ResourceRequest {
   @Column()
   batchNumber: string;
 
-  @Column()
-  vendor: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  vendor: string | null;
 
   @Column({ default: 1 })
   quantity: number;

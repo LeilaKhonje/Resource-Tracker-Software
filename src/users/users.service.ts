@@ -9,6 +9,7 @@ import { AssignUserRoleDto } from './dto/assign-user-role.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { AuditLog } from '../auditlog/auditlog.entity';
+import { ListUsersByCreatedAtDto } from './dto/list-users-by-created-at.dto';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -49,6 +50,31 @@ export class UsersService {
       order: { fullName: 'ASC' },
     });
     return users;
+  }
+
+  async listUsersByCreatedAt(filter: ListUsersByCreatedAtDto) {
+    const startDate = new Date(filter.startDate);
+    const endDate = new Date(filter.endDate);
+
+    if (startDate > endDate) {
+      throw new BadRequestException('startDate must be before or equal to endDate');
+    }
+
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.fullName',
+        'user.email',
+        'user.role',
+        'user.isActive',
+        'user.createdAt',
+      ])
+      .where('user.createdAt >= :startDate', { startDate })
+      .andWhere('user.createdAt <= :endDate', { endDate })
+      .orderBy('user.createdAt', 'ASC')
+      .addOrderBy('user.fullName', 'ASC')
+      .getMany();
   }
 
   async listActiveLineManagers() {

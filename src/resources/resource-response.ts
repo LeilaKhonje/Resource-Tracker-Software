@@ -25,5 +25,6 @@ export function toResourceResponse(resource: Resources) {
     ...base,
     description: resource.description,
     departmentName: resource.department?.name ?? null,
+    batchNumber: resource.batchNumber,
   };
 }
