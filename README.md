@@ -65,12 +65,13 @@ The `mysql_data` volume retains database users and passwords from its initial
 creation, so changing Compose environment values does not update an existing
 database automatically.
 
-MySQL is available to host applications on port `3307` by default, avoiding
-conflicts with a local MySQL server already using `3306`. Set `DB_HOST_PORT`
-in `.env` to another available host port if needed. When connecting from a
-host application, use `DB_HOST=localhost` and set `DB_PORT` to that published
-host port. The API container instead connects to the MySQL service on its
-internal port `3306`.
+The API is available on host port `3001` by default, and MySQL is available to
+host applications on port `3308`. These defaults avoid conflicts with another
+Compose project using ports `3000` and `3307`. Set `API_HOST_PORT` or
+`DB_HOST_PORT` in `.env` to another available host port if needed. When
+connecting to MySQL from a host application, use `DB_HOST=localhost` and set
+`DB_PORT` to its published host port. The API container connects to the MySQL
+service on its internal port `3306`.
 
 ## Account and role management
 
