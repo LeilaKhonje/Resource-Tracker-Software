@@ -8,11 +8,13 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
 import { AuthSecurityModule } from '../auth/auth-security.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Department, User, Team, Project, ResourceRequest]),
     AuthSecurityModule,
+    EmailModule,
   ],
   controllers: [DepartmentsController],
   providers: [DepartmentsService],

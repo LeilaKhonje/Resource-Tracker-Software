@@ -22,6 +22,7 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { User } from '../users/user.entity';
 import { UserRole } from '../users/user-role.enum';
+import { EmailService } from '../email/email.service';
 
 const INSOURCED_FIELDS = ['description', 'departmentName'] as const;
 const OUTSOURCED_FIELDS = ['price', 'label', 'batchNumber', 'vendor'] as const;
@@ -34,6 +35,7 @@ export class ResourcesService {
     @InjectRepository(Department)
     private readonly departmentsRepository: Repository<Department>,
     private readonly dataSource: DataSource,
+    private readonly email: EmailService,
   ) {}
 
   async create(dto: CreateResourceDto): Promise<Resources> {
@@ -194,6 +196,7 @@ export class ResourcesService {
         toProjectId: destination.project.id,
         performedBy: { id: actorId } as User,
       });
+      await this.email.send(destination.assignedTo.email, 'Resource allocated to you', `${allocation.quantity} unit(s) of ${resource.name} have been allocated to you.`);
       return allocationRepo.findOne({
         where: { id: allocation.id },
         relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true },
@@ -238,6 +241,7 @@ export class ResourcesService {
         performedBy: { id: actorId } as User,
         note,
       });
+      await this.email.send(allocation.assignedTo.email, 'Resource returned', `${allocation.quantity} unit(s) of ${resource.name} have been marked as returned.`);
       return allocationRepo.findOne({
         where: { id: allocation.id },
         relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true },
@@ -299,6 +303,7 @@ export class ResourcesService {
         performedBy: { id: actorId } as User,
         note: dto.note,
       });
+      await this.email.send(destination.assignedTo.email, 'Resource transferred to you', `${oldAllocation.quantity} unit(s) of ${resource.name} have been transferred to you.`);
       return allocationRepo.findOne({
         where: { id: newAllocation.id },
         relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true },

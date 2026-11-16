@@ -20,7 +20,7 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 
 - Most endpoints use the `/api/v1` prefix. Replace `{id}` placeholders with the indicated numeric ID or UUID.
 - Routes marked **Bearer** require `Authorization: Bearer <accessToken>`. Role restrictions are shown where the controller enforces them.
-- Routes without an access label do not declare a JWT/role guard in their controller. In particular, resource listing/view/update routes, notifications, dashboard, and reports are currently unguarded; `GET /api/v1/notifications/me` still expects the request to contain a user identity.
+- Routes without an access label do not declare a JWT/role guard in their controller. Resource listing/view/update routes, notifications, and dashboard routes are currently unguarded; reports and audit-log routes are guarded. `GET /api/v1/notifications/me` still expects the request to contain a user identity.
 - The global validation pipe rejects unknown fields and transforms input values where configured. Required and optional fields below follow the endpoint DTOs.
 - Successful responses return the created/updated record, an array, or the summary described below. Error responses use NestJS HTTP errors (commonly 400, 401, 403, 404, or 409).
 - User roles: `system_admin`, `team_lead`, `line_manager`, `department_head`, `managing_director`, `team_member`.
@@ -167,8 +167,8 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 - **Response:** `200` request details; audit trail when requested.
 
 ### `PATCH /resource-requests/api/v1/resource-request/{id}`
-- **Access:** `team_lead` (own draft/queried requests), `line_manager` (assigned submitted requests)
-- **Request:** Partial request fields from create body (including the name fields `projectName`, `lineManagerName`, and `teamName`) plus optional `status` and `note`. Team lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
+- **Access:** `team_lead` (own queried requests), `line_manager` (assigned submitted requests)
+- **Request:** Partial request fields from create body (including the name fields `projectName`, `lineManagerName`, and `teamName`) plus optional `status` and `note`. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
 - **Response:** `200` updated request, with review fields updated on manager review.
 
 ## Departments — `/api/v1/departments`
@@ -366,7 +366,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ## Reports — `/api/v1/reports`
 
-Report endpoints accept optional query filters: `departmentId` (positive integer), `startDate`, and `endDate` (ISO date strings, e.g. `2026-01-01`). Dates are inclusive. No request body is used.
+Report endpoints require a Bearer token for `system_admin` or `managing_director`. They accept optional query filters: `departmentId` (positive integer), `startDate`, and `endDate` (ISO date strings, e.g. `2026-01-01`). Dates are inclusive. No request body is used.
 
 ### `GET /api/v1/reports/approval-history`
 - **Response:** `200` array of approval history rows.
@@ -385,7 +385,7 @@ Report endpoints accept optional query filters: `departmentId` (positive integer
 
 ## Audit logs — `/api/v1/audit-logs`
 
-Both routes require a Bearer token for `system_admin`.
+Both routes require a Bearer token for `system_admin`, `department_head`, or `managing_director`.
 
 ### `GET /api/v1/audit-logs`
 - **Request:** No body/query.
