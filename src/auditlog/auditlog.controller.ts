@@ -2,8 +2,6 @@
 import {
   Controller,
   Get,
-  Param,
-  ParseIntPipe,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -14,7 +12,6 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiParam,
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger';
@@ -38,12 +35,27 @@ export class AuditLogsController {
     private readonly auditLogsService: AuditLogService,
   ) {}
 
+  // GET 1: Retrieve all audit logs
+  @Get()
   @ApiOperation({
-    summary: 'Get audit logs using optional filters',
-    description:
-      'All filters are optional. You can provide one or multiple filters. When multiple filters are provided, OR logic is used, meaning a record matching ANY supplied filter is returned. If no filters are provided, all audit logs are returned.',
+    summary: 'Get all audit logs',
+    description: 'Retrieves all audit logs without filters.',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'All audit logs retrieved successfully',
+  })
+  getAllLogs() {
+    return this.auditLogsService.getAllLogs();
+  }
 
+  // GET 2: Filter audit logs using OR logic
+  @Get('filter')
+  @ApiOperation({
+    summary: 'Filter audit logs',
+    description:
+      'All filters are optional. Multiple filters use OR logic, meaning a record matching ANY supplied criterion is returned. Date and time are treated as one combined criterion when both are supplied.',
+  })
   @ApiQuery({
     name: 'userId',
     required: false,
@@ -51,7 +63,6 @@ export class AuditLogsController {
     description: 'Filter by user ID',
     example: 1,
   })
-
   @ApiQuery({
     name: 'actionType',
     required: false,
@@ -59,7 +70,6 @@ export class AuditLogsController {
     description: 'Filter by action type',
     example: 'DELETE',
   })
-
   @ApiQuery({
     name: 'entityType',
     required: false,
@@ -67,15 +77,13 @@ export class AuditLogsController {
     description: 'Filter by entity type',
     example: 'ResourceRequest',
   })
-
   @ApiQuery({
     name: 'date',
     required: false,
     type: String,
     description: 'Filter by date (YYYY-MM-DD)',
-    example: '2026-11-12',
+    example: '2026-11-16',
   })
-
   @ApiQuery({
     name: 'time',
     required: false,
@@ -83,21 +91,22 @@ export class AuditLogsController {
     description: 'Filter by time (HH:mm)',
     example: '13:30',
   })
-
   @ApiResponse({
     status: 200,
-    description: 'Filtered audit log records',
+    description: 'Filtered audit logs retrieved successfully',
   })
-
-  @Get('')
-  getAllLogs(
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid filter value',
+  })
+  filterLogs(
     @Query('userId') userId?: string,
     @Query('actionType') actionType?: string,
     @Query('entityType') entityType?: string,
     @Query('date') date?: string,
     @Query('time') time?: string,
   ) {
-    return this.auditLogsService.getAllLogs({
+    return this.auditLogsService.filterLogs({
       userId,
       actionType,
       entityType,
@@ -105,40 +114,5 @@ export class AuditLogsController {
       time,
     });
   }
-
-  @ApiOperation({
-    summary: 'Get audit logs for a specific record',
-  })
-
-  @ApiResponse({
-    status: 200,
-    description: 'Matching audit log records',
-  })
-
-  @ApiResponse({
-    status: 400,
-    description: 'entityId must be an integer',
-  })
-
-  @Get('record/:entityType/:entityId')
-  @ApiParam({
-    name: 'entityType',
-    description: 'Type of the audited entity',
-  })
-
-  @ApiParam({
-    name: 'entityId',
-    description: 'ID of the audited record',
-    type: Number,
-  })
-
-  getLogsForRecord(
-    @Param('entityType') entityType: string,
-    @Param('entityId', ParseIntPipe) entityId: number,
-  ) {
-    return this.auditLogsService.getLogsForRecord(
-      entityType,
-      entityId,
-    );
-  }
 }
+
