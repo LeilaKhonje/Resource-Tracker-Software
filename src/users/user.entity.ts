@@ -1,4 +1,4 @@
-import {Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { UserRole } from './user-role.enum';
@@ -36,9 +36,9 @@ export class User {
   @Column({default: true})
   isActive: boolean;
 
-  // Keep this as a string column so schema sync can preserve legacy role
-  // values when the application role set changes. API validation and guards
-  // enforce the supported UserRole values.
+  // Store the business role as a plain string so the database keeps legacy
+  // values when the allowed role set changes. API validation and guards enforce
+  // the supported UserRole values at runtime.
   @Column({ type: 'varchar', length: 32, nullable: true })
   role: UserRole | null;
 
@@ -57,9 +57,6 @@ export class User {
     type: 'varchar',
     length: 32,
     nullable: true,
-    asExpression:
-      "CASE WHEN role = 'managing_director' THEN 'managing_director' ELSE NULL END",
-    generatedType: 'VIRTUAL',
     select: false,
   })
   managingDirectorUniqueRole: string | null;
@@ -71,9 +68,6 @@ export class User {
     type: 'varchar',
     length: 32,
     nullable: true,
-    asExpression:
-      "CASE WHEN role = 'system_admin' THEN 'system_admin' ELSE NULL END",
-    generatedType: 'VIRTUAL',
     select: false,
   })
   systemAdminUniqueRole: string | null;

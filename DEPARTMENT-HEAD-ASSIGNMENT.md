@@ -3,7 +3,7 @@
 The app already supports assigning the `department_head` role through
 `PATCH /users/:id/role`. What is missing is linking that user to a specific
 department. The cleanest approach is to add an optional department relationship
-to `User`, then add a managing-director-only endpoint that sets both the role
+to `User`, then add a managing-director-ondockerly endpoint that sets both the role
 and department together.
 
 1. **Add the relationship.** In `User`, add a nullable `ManyToOne` relation to
