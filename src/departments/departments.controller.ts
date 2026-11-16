@@ -22,6 +22,7 @@ export class DepartmentsController {
     @ApiBody({ type: CreateDepartmentDto })
     @ApiResponse({ status: 201, description: 'Created department record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, code: { type: 'string', nullable: true }, description: { type: 'string' } } } })
     @ApiResponse({ status: 400, description: 'Invalid department fields' })
+    @ApiResponse({ status: 409, description: 'A department with this name already exists' })
     create(@Body() createDepartmentDto : CreateDepartmentDto) {
         return this.departmentsService.create (createDepartmentDto);
     }

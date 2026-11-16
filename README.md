@@ -2,7 +2,7 @@
 
 ## Authentication and roles
 
-The API provides administrator-managed account creation and `POST /auth/login`.
+The API provides administrator-managed account creation and `POST /auth`.
 Only the System Admin can create accounts. New accounts are active immediately
 with the business role specified during creation. The database enforces at
 most one System Admin and at most one Managing Director.
@@ -113,7 +113,7 @@ The endpoint summaries below describe the handlers currently implemented in
 the controllers. Unless stated otherwise, request bodies are JSON. Validation
 errors from the global validation pipe normally return `400 Bad Request` with
 the invalid fields. Database or service failures may also return an error
-response.
+response. Paths below are relative to `/api/v1` unless a full path is shown.
 
 ### Authentication
 
@@ -124,7 +124,9 @@ change it after logging in.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /auth/login` | Checks the email and password and returns access and refresh tokens. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
+| `POST /auth` | Checks the email and password and returns access and refresh tokens. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
+| `POST /auth/refresh` | Exchanges a valid refresh token for a new access and refresh token pair. | `401` refresh token is invalid, expired, revoked, or the account is inactive. |
+| `POST /auth/logout` | Revokes the supplied refresh token. | `401` refresh token is invalid, expired, or revoked. |
 | `POST /auth/forgot-password` | Accepts an email and returns a generic password reset request message to avoid disclosing whether an account exists. Email delivery and reset-token handling are not configured yet. | `400` invalid email format. |
 
 ### Users
@@ -136,13 +138,14 @@ business roles according to the role rules above.
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
 | `POST /users` | System Admin creates an active account from `fullName`, `email`, `role`, and `initialPassword`. The password is not returned. | `400` invalid fields, role, or password; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned. |
-| `GET /users` | System Admin lists accounts without credential data. | `401` missing/invalid token; `403` caller is not System Admin. |
+| `GET /users` | System Admin or Managing Director lists accounts without credential data. | `401` missing/invalid token; `403` caller lacks permission. |
 | `GET /users/created-between?startDate=<ISO-8601>&endDate=<ISO-8601>` | System Admin or Managing Director lists accounts created within the inclusive timestamp range, ordered by creation time. | `400` invalid timestamp or start later than end; `401` missing/invalid token; `403` caller lacks permission. |
 | `GET /users/line-managers` | Team Lead lists active Line Managers to choose a recipient for a resource request. Returns `id`, `fullName`, and `email`, ordered by name. | `401` missing/invalid token; `403` caller is not a Team Lead. |
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
 | `GET /users/me` | Returns the authenticated user's ID, name, email, and role. | `401` missing or invalid bearer token; `404` user record no longer exists. |
+| `PATCH /users/me/profile` | Updates one or more profile fields: `phoneNumber`, `address`, `dateOfBirth`, or `preferredPronoun`. | `400` invalid fields or no fields supplied; `401` missing or invalid bearer token. |
 | `PATCH /users/me/password` | Changes the authenticated user's password. Body: `{"currentPassword":"current123","newPassword":"newSecure456"}`. The new password must be 8–12 characters and include a number. | `400` invalid new password or same password supplied; `401` missing/invalid token or current password is incorrect; `404` user not found. |
 | `PATCH /users/:id/deactivate` | System Admin deactivates the user identified by UUID. The System Admin cannot deactivate their own account. | `401` missing or invalid token; `403` caller is not System Admin; `404` user not found; `400` account is already deactivated or self-deactivation attempted. |
 | `PATCH /users/:id/reactivate` | System Admin reactivates the user identified by UUID. | `401` missing or invalid token; `403` caller is not System Admin; `404` user not found; `400` account is already active. |
@@ -150,8 +153,8 @@ business roles according to the role rules above.
 
 ### Departments
 
-Departments organize teams, users, and projects. These controller routes currently
-do not declare authentication guards.
+Departments organize teams, users, and projects. All department routes require
+authentication; the allowed roles vary by route.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
@@ -161,9 +164,11 @@ do not declare authentication guards.
 | `GET /departments/:id/users` | Lists users assigned to the department. | `404` department does not exist or `:id` is not a valid number; database errors. |
 | `GET /departments/:id/teams` | Lists teams assigned to the department. | `404` department does not exist or `:id` is not a valid number; database errors. |
 | `GET /departments/:id/projects` | Lists projects linked to teams in the department, including the associated teams. | `404` department does not exist or `:id` is not a valid number; database errors. |
+| `GET /departments/:id/resource-requests` | Department Head lists requests for their own department. Although the route also permits Managing Directors, the service currently rejects them. | `401` missing/invalid token; `403` caller is not a Department Head or has no department; `404` department is outside caller's department. |
 | `GET /departments/:id/teams/:teamId/projects` | Lists projects assigned to `:teamId`, provided that team belongs to `:id` department. Both path values are numeric IDs. | `404` department does not exist, either ID is not a valid number, or the team does not belong to that department; database errors. |
 | `PATCH /departments/:id` | Updates a department's `name`, `code`, or `description`. | `400` invalid field values; `404` department does not exist or `:id` is not a valid number; database constraint errors may occur. |
 | `DELETE /departments/:id` | Deletes the department. | `404` department does not exist or `:id` is not a valid number; database constraint errors may occur if related records prevent deletion. |
+| `PATCH /departments/:id/assign-head/:userId` | Managing Director assigns an existing Department Head account to the department. | `403` target user is not a Department Head; `404` department or user does not exist. |
 
 ### Teams
 
@@ -179,21 +184,25 @@ can manage team membership.
 | `GET /teams/:id` | Returns one team and its department. | `404` team does not exist; `400` malformed numeric ID may be coerced by the service. |
 | `GET /teams/:id/users` | Lists users assigned to a team. | `404` team does not exist. |
 | `GET /teams/:id/projects` | Lists projects associated with a team. | `404` team does not exist. |
+| `GET /teams/:id/resource-requests` | Team Lead or Team Member lists requests for their own team. | `401` missing/invalid token; `403` caller is not assigned to the requested team; `404` team does not exist. |
+| `PATCH /teams/:id/team-lead` | Assigns a Team Lead to the team using a `userId` UUID. | `403` caller is not that team's Department Head or target user is not a Team Lead; `404` team or user not found; `409` user belongs to another team. |
 | `PATCH /teams/:id` | Updates a team's name, description, or department. | `400` invalid input; `404` team or requested department does not exist. |
 | `PATCH /teams/:id/assign-user` | Assigns an active Team Lead or Team Member by UUID; also updates the user's department to the team's department. | `403` target is inactive, has an unsupported role, or caller is not the department head for the team; `404` team or user not found; `409` target already belongs to another team. |
 | `DELETE /teams/:id` | Deletes a team. | `404` team does not exist; database constraint errors may occur if related records prevent deletion. |
 
 ### Projects
 
-Projects track work and can be associated with a department head's teams.
-Every project must have at least one team from that department. All project
+Projects track work and can be associated with teams. The create endpoint
+currently allows `teamIds` to be omitted or empty and does not check that
+supplied teams belong to the caller's department. All project
 routes require a bearer token; creation, update, team assignment, and deletion
 are for Department Heads, while Managing Directors can also list and view.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /projects` | Creates a project (`name`, required `startDate` and `endDate`, optional `description`, and `teamIds`). Dates use `YYYY-MM-DD`; `endDate` must be on or after `startDate`. | `400` invalid body or date range; `401` missing/invalid token; `403` caller has wrong role, no department, or team belongs to another department; `422` no team supplied or a team ID does not exist. |
+| `POST /projects` | Creates a project (`name`, required `startDate` and `endDate`, optional `description` and `teamIds`). Dates use `YYYY-MM-DD`; `endDate` must be on or after `startDate`. | `400` invalid body or date range; `401` missing/invalid token; `403` caller is not a Department Head; `422` a supplied team ID does not exist. |
 | `GET /projects` | Lists projects visible to the caller's role and department. | `401` missing/invalid token; `403` caller is not a Department Head or Managing Director, or Department Head has no department. |
+| `GET /projects/department/:departmentId` | Managing Director lists projects associated with teams in the specified department. | `401` missing/invalid token; `403` caller is not Managing Director; `400` department ID is not an integer. |
 | `GET /projects/:id` | Returns a project visible to the caller. | `400` ID is not an integer; `401` missing/invalid token; `403` caller lacks role/department; `404` project does not exist or is outside the Department Head's department. |
 | `PATCH /projects/:id/teams` | Replaces a project's team assignments (`teamIds`). | `400` invalid body or ID; `401` missing/invalid token; `403` wrong role, no department, or cross-department team; `404` project not found; `422` team ID not found or no team remains assigned. |
 | `PATCH /projects/:id` | Updates project `name`, `description`, `startDate`, and/or `endDate`. Dates use `YYYY-MM-DD`; the resulting `endDate` must be on or after `startDate`. | `400` invalid ID/body, invalid date range, or no fields supplied; `401` missing/invalid token; `403` wrong role/no department; `404` project does not exist or is outside the caller's department. |
@@ -264,33 +273,22 @@ Example `GET /resources/:id` response for an outsourced resource:
 
 ### Resource requests
 
-| Method and path | What it does | Possible errors |
-| --- | --- | --- |
-| `POST /resource-requests` | Creates and submits a request; body includes item details, `quantity`, positive integer `expectedDurationDays`, and the names `teamName`, `projectName`, and `lineManagerName`. Department is derived from the team; unit price, manufacturer label, vendor, and department ID are not requested. | `400` invalid or ambiguous names/fields; `403` caller is not a team lead; `404` team, project, or active Line Manager not found. |
-| `GET /resource-requests` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing caller identity. |
-| `GET /resource-requests/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
-| `PATCH /resource-requests/:id` | Team lead edits a draft/queried request or submits with `{"status":"SUBMITTED"}`. Assigned line manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`. Rejection/query requires a `note`. | `400` invalid status/state or missing required submit fields; `403` wrong owner/role/manager; `404` request not found. |
-
-The request controller currently accepts `x-user-id` and uppercase `x-user-role`
-headers when no authenticated request user is attached.
-
-### Resource allocations
-
-Resource allocations record quantities assigned to requests. The current
-service keeps allocations in memory, so they reset when the application
-restarts. These routes currently do not declare authentication guards.
+The implemented paths include a repeated prefix because the controller route
+prefix and method routes both contain path segments. Use the full paths shown
+below: `/resource-requests/api/v1/resource-request...`.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `GET /resource-allocation` | Lists allocations held in memory. | No service-level error is defined. |
-| `GET /resource-allocation/:id` | Returns one allocation. | `400` ID is not an integer; `404` allocation does not exist. |
-| `POST /resource-allocation` | Creates an allocation from positive integer `requestId`, `resourceId`, and `quantityAllocated`. | `400` invalid fields or allocated quantity is not greater than zero. |
+| `POST /resource-requests/api/v1/resource-request` | Creates and submits a request; body includes item details, `quantity`, positive integer `expectedDurationDays`, and `teamName`, `projectName`, and `lineManagerName`. Department is derived from the team. | `400` invalid or ambiguous names/fields; `401` missing/invalid token; `403` caller is not a Team Lead; `404` team, project, or active Line Manager not found. |
+| `GET /resource-requests/api/v1/resource-request` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing/invalid token; `403` unsupported role. |
+| `GET /resource-requests/api/v1/resource-request/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
+| `PATCH /resource-requests/api/v1/resource-request/:id` | Team Lead edits a queried request and may resubmit with `{"status":"SUBMITTED"}`. The assigned Line Manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires a `note`. | `400` invalid status/state or missing required fields; `401` missing/invalid token; `403` wrong owner/role/manager; `404` request not found. |
 
 ### Reports
 
 Reports summarize approval history, spending, and allocation history, with
-optional department and date filters. These routes currently do not declare
-authentication guards.
+optional department and date filters. All report routes require a bearer token
+for a System Admin or Managing Director.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
@@ -302,16 +300,13 @@ authentication guards.
 
 ### Dashboard
 
-The dashboard gives summary counts, recent activity, and spending totals for
-the resource tracker. These routes currently do not declare authentication
-guards.
+The dashboard routes currently do not declare authentication guards.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
 | `GET /dashboard` | Returns the dashboard data, optionally limited to `departmentId`. | `500` invalid department ID currently throws a generic error; database errors if source tables are unavailable. |
-| `GET /dashboard/summary` | Returns summary metrics, optionally limited to `departmentId`. | `500` invalid department ID currently throws a generic error; database errors if source tables are unavailable. |
-| `GET /dashboard/recent-activity?limit=10` | Returns recent activity, with an optional integer `limit`. | `400` limit is not an integer; database errors if source tables are unavailable. |
-| `GET /dashboard/department-spending` | Returns spending totals grouped by department. | Database errors if source tables are unavailable. |
+| `GET /dashboard/departments` | Returns the department list used by the dashboard. | Database errors if source tables are unavailable. |
+| `GET /dashboard/departments/:departmentId` | Returns dashboard details for the specified department. | `400` department ID is not an integer; database errors if source tables are unavailable. |
 
 ### Notifications
 
@@ -320,17 +315,16 @@ delete them. The controller currently does not declare authentication guards.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `GET /notifications` | Returns notifications for the current request's user. | `500` request has no authenticated `user` attached; database errors. |
-| `GET /notifications/:id` | Returns notifications for the user ID in the path. | `400` ID is not an integer; database errors. |
-| `PATCH /notifications/read/:id` | Marks a notification as read for the supplied `userId`. | `400` invalid ID or missing `userId`; database errors. |
-| `PATCH /notifications/:id/read` | Despite the route name, this handler currently returns notifications for the path ID; it does not mark one as read. | `400` ID is not an integer; database errors. |
+| `GET /notifications/me` | Returns notifications for the current request's user. | `400` request has no authenticated `user` attached; database errors. |
+| `GET /notifications/users/:id` | Returns notifications for the user ID in the path. | Database errors. |
+| `PATCH /notifications/:id/read` | Marks the notification as read for the `userId` in the JSON body. | `400` missing notification ID or `userId`; `404` notification not found for that user. |
 | `POST /notifications` | Creates a notification using `userId` and `message`. | `400` missing userId/message or invalid ID; database errors. |
-| `DELETE /notifications/:userId/:notificationId` | Deletes a notification belonging to the supplied user. | `400` either ID is not an integer; database errors. |
+| `DELETE /notifications/users/:userId/notifications/:notificationId` | Deletes a notification belonging to the supplied user. | `404` notification not found for that user; database errors. |
 
 ### Audit logs
 
-Audit logs provide a history of recorded system actions for review. These
-routes currently do not declare authentication guards.
+Audit logs provide a history of recorded system actions for review. Both routes
+require a bearer token for a System Admin, Department Head, or Managing Director.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |

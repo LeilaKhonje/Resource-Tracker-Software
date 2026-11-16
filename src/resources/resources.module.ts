@@ -11,6 +11,7 @@ import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.ent
 import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { User } from '../users/user.entity';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { User } from '../users/user.entity';
       User,
     ]),
     AuthSecurityModule,
+    EmailModule,
   ],
   controllers: [ResourcesController],
   providers: [ResourcesService],

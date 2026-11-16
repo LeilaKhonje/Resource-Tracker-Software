@@ -4,12 +4,13 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { User } from '../users/user.entity';
 import { AuthSecurityModule } from './auth-security.module';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     AuthSecurityModule,
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard],

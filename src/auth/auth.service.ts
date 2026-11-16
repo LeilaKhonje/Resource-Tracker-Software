@@ -10,6 +10,9 @@ import { AuthTokenPayload } from './interfaces/auth-token-payload.interface';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TOKEN_TTL = '7d';
@@ -20,6 +23,8 @@ export class AuthService {
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     private readonly jwtService: JwtService,
+    private readonly email: EmailService,
+    private readonly config: ConfigService,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -69,13 +74,33 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-  async forgotPassword(_forgotPasswordDto: ForgotPasswordDto) {
-    // Keep the response independent of whether the email belongs to an account.
-    // Password reset delivery can be connected here when an email provider is configured.
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
+    const user = await this.usersRepository.findOneBy({ email: forgotPasswordDto.email.trim().toLowerCase() });
+    if (user?.isActive) {
+      const token = await this.jwtService.signAsync(
+        { sub: user.id, tokenUse: 'password_reset' }, { expiresIn: '15m' },
+      );
+      const apiBaseUrl = this.config.get<string>('API_BASE_URL', 'http://localhost:3000').replace(/\/$/, '');
+      const url = `${apiBaseUrl}/api/v1/auth/reset-password?token=${encodeURIComponent(token)}`;
+      await this.email.send(user.email, 'Reset your password', `Use this link within 15 minutes to reset your password: ${url}`);
+    }
     return {
       message:
-        'If an account exists for this email, password reset instructions will be sent.',
+        'A reset password link has been sent to your email.',
     };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    let payload: { sub?: string; tokenUse?: string };
+    try { payload = await this.jwtService.verifyAsync(dto.token); }
+    catch { throw new UnauthorizedException('Invalid or expired password reset link'); }
+    if (payload.tokenUse !== 'password_reset' || !payload.sub) throw new UnauthorizedException('Invalid or expired password reset link');
+    const user = await this.usersRepository.findOneBy({ id: payload.sub });
+    if (!user || !user.isActive) throw new UnauthorizedException('Invalid or expired password reset link');
+    user.passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
+    user.refreshTokenHash = null;
+    await this.usersRepository.save(user);
+    return { message: 'Password reset successfully' };
   }
 
   private async loginUser(user: User){
