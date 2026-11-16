@@ -7,8 +7,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, FindOptionsWhere, ILike, MoreThan, Repository } from 'typeorm';
-import { CreateResourceDto } from './dto/create-resource.dto';
-import { UpdateResourceDto } from './dto/update-resource.dto';
+import { CreateInsourcedResourceDto } from './dto/create-insourced-resource.dto';
+import { CreateOutsourcedResourceDto } from './dto/create-outsourced-resource.dto';
+import { UpdateInsourcedResourceDto } from './dto/update-insourced-resource.dto';
+import { UpdateOutsourcedResourceDto } from './dto/update-outsourced-resource.dto';
 import { QueryResourceDto } from './dto/query-resource.dto';
 import { Resources } from './entities/resources.entity';
 import { ResourceType } from './enum/resource-type.enum';
@@ -36,35 +38,29 @@ export class ResourcesService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateResourceDto): Promise<Resources> {
-    this.assertQuantity(dto.quantity);
-    if (dto.type === ResourceType.INSOURCED) {
-      this.assertFieldsAbsent(dto, OUTSOURCED_FIELDS);
-      this.assertNonEmptyString(dto.description, 'description');
-      const department = await this.findDepartmentByName(dto.departmentName!);
-      const resource = this.resourcesRepository.create({
-        name: dto.name.trim(),
-        type: dto.type,
-        description: dto.description?.trim(),
-        department,
-        quantity: dto.quantity,
-      });
-      return this.resourcesRepository.save(resource);
-    }
-
-    this.assertFieldsAbsent(dto, INSOURCED_FIELDS);
-    this.assertOutsourcedFields(dto);
+  async createInsourced(dto: CreateInsourcedResourceDto): Promise<Resources>{
+    const department = await this.findDepartmentByName(dto.departmentName);
     const resource = this.resourcesRepository.create({
       name: dto.name.trim(),
-      type: dto.type,
-      price: dto.price,
-      label: dto.label?.trim(),
-      batchNumber: dto.batchNumber?.trim(),
-      vendor: dto.vendor?.trim(),
+      type: ResourceType.INSOURCED,
+      description: dto.description.trim(),
+      department,
       quantity: dto.quantity,
     });
     return this.resourcesRepository.save(resource);
   }
+  async createOutsourced(dto: CreateOutsourcedResourceDto): Promise<Resources> {
+    const resource = this.resourcesRepository.create({
+      name: dto.name.trim(),
+      type: ResourceType.OUTSOURCED,
+      price: dto.price,
+      label: dto.label.trim(),
+      batchNumber: dto.batchNumber.trim(),
+      vendor: dto.vendor.trim(),
+      quantity: dto.quantity,
+    });
+    return this.resourcesRepository.save(resource);
+  } 
 
   async findAll(query: QueryResourceDto): Promise<Resources[]> {
     const where: FindOptionsWhere<Resources> = {};
@@ -76,6 +72,14 @@ export class ResourcesService {
       relations: { department: true },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async findInsourced(query: QueryResourceDto): Promise<Resources[]>{
+    return this.findAll({...query, type: ResourceType.INSOURCED});
+  }
+
+  async findOutsourced(query: QueryResourceDto): Promise<Resources[]>{
+    return this.findAll({... query, type: ResourceType.OUTSOURCED});
   }
 
   async getAvailableResourcesByType() {
@@ -335,49 +339,53 @@ export class ResourcesService {
     return resource;
   }
 
-  async update(id: string, dto: UpdateResourceDto): Promise<Resources> {
-    return this.dataSource.transaction(async (manager) => {
-      const resources = manager.getRepository(Resources);
-      const resource = await resources.findOne({
-        where: { id },
-        relations: { department: true },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!resource) {
-        throw new NotFoundException(`Resource with id "${id}" not found`);
-      }
-      const { departmentName, ...changes } = dto;
+ async updateInsourced(id: string, dto: UpdateInsourcedResourceDto): Promise<Resources> {
+  return this.dataSource.transaction(async (manager) => {
+    const resource = await this.findLockedByType(manager, id, ResourceType.INSOURCED);
+    const { departmentName, ...changes } = dto;
+    if (departmentName !== undefined) {
+      resource.department = await this.findDepartmentByName(departmentName);
+    }
+    Object.assign(resource, changes);
+    await this.assertQuantityCoversAllocations(manager, resource);
+    return manager.getRepository(Resources).save(resource);
+  });
+}
 
-      if (resource.type === ResourceType.INSOURCED) {
-        this.assertFieldsAbsent(dto, OUTSOURCED_FIELDS);
-        if (departmentName !== undefined) {
-          resource.department = await this.findDepartmentByName(departmentName);
-        }
-      } else {
-        this.assertFieldsAbsent(dto, INSOURCED_FIELDS);
-      }
+async updateOutsourced(id: string, dto: UpdateOutsourcedResourceDto): Promise<Resources> {
+  return this.dataSource.transaction(async (manager) => {
+    const resource = await this.findLockedByType(manager, id, ResourceType.OUTSOURCED);
+    Object.assign(resource, dto);
+    await this.assertQuantityCoversAllocations(manager, resource);
+    return manager.getRepository(Resources).save(resource);
+  });
+}
 
-      Object.assign(resource, changes);
-      this.assertQuantity(resource.quantity);
-      const activeAllocationQuantity = await this.getActiveAllocationQuantity(
-        manager,
-        resource.id,
-      );
-      if (resource.quantity < activeAllocationQuantity) {
-        throw new ConflictException(
-          `Quantity cannot be lower than the ${activeAllocationQuantity} units currently allocated`,
-        );
-      }
-      if (resource.type === ResourceType.OUTSOURCED) {
-        this.assertOutsourcedFields(resource);
-      } else if (!resource.department) {
-        throw new BadRequestException(
-          'An insourced resource must be associated with an existing department',
-        );
-      }
-      return resources.save(resource);
-    });
+private async findLockedByType(manager: EntityManager, id: string, type: ResourceType) {
+  const resource = await manager.getRepository(Resources).findOne({
+    where: { id },
+    relations: { department: true },
+    lock: { mode: 'pessimistic_write' },
+  });
+  if (!resource) {
+    throw new NotFoundException(`Resource with id "${id}" not found`);
   }
+  if (resource.type !== type) {
+    throw new BadRequestException(
+      `Resource "${id}" is ${resource.type}; use the ${resource.type} endpoint to update it`,
+    );
+  }
+  return resource;
+}
+
+private async assertQuantityCoversAllocations(manager: EntityManager, resource: Resources) {
+  const active = await this.getActiveAllocationQuantity(manager, resource.id);
+  if (resource.quantity < active) {
+    throw new ConflictException(
+      `Quantity cannot be lower than the ${active} units currently allocated`,
+    );
+  }
+}
 
   private async getActiveAllocationQuantity(manager: EntityManager, resourceId: string) {
     const result = await manager.getRepository(ResourceAllocation)
