@@ -11,12 +11,14 @@ import { AuthSecurityModule } from '../auth/auth-security.module';
 import { RequestAuditLog } from './entities/request-audit-log.entity';
 import { User } from '../users/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project, User]),
     AuthSecurityModule,
     NotificationsModule,
+    EmailModule,
   ],
   controllers: [ResourcerequestController],
   providers: [ResourcerequestService],

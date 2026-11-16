@@ -18,6 +18,7 @@ import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interfac
 import { UserRole } from '../users/user-role.enum';
 import { AssignTeamLeadDto } from './dto/assign-team-lead.dto';
 import { AssignTeamUserDto } from './dto/assign-team-user.dto';
+import { EmailService } from '../email/email.service';
 
 const ASSIGNABLE_TEAM_ROLES = [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] as const;
 
@@ -34,6 +35,7 @@ export class TeamsService {
     private readonly projectRepository: Repository<Project>,
     @InjectRepository(ResourceRequest)
     private readonly resourceRequestRepository: Repository<ResourceRequest>,
+    private readonly email: EmailService,
   ) {}
 
   async create(createTeamDto: CreateTeamDto) {
@@ -134,6 +136,7 @@ export class TeamsService {
     teamUser.team = team;
     teamUser.department = team.department;
     await this.userRepository.save(teamUser);
+    await this.email.send(teamUser.email, 'Team assignment updated', `You have been assigned to the ${team.name} team in ${team.department.name}.`);
     return this.findOne(id);
   }
 

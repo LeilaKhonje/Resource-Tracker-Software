@@ -1,6 +1,6 @@
-import { ForbiddenException, Injectable, NotFoundException,} from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException,} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { Department } from './entities/department.entity';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-departments.dto';
@@ -10,6 +10,7 @@ import { Project } from '../projects/entities/project.entity';
 import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
 import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
 import { UserRole } from '../users/user-role.enum';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class DepartmentsService {
@@ -24,6 +25,7 @@ export class DepartmentsService {
     private readonly projectRepository: Repository<Project>,
     @InjectRepository(ResourceRequest)
     private readonly resourceRequestRepository: Repository<ResourceRequest>,
+    private readonly email: EmailService,
   ) {}
 
   async create(createDepartmentDto: CreateDepartmentDto) {
@@ -31,7 +33,32 @@ export class DepartmentsService {
       ...createDepartmentDto,
       description: createDepartmentDto.description ?? '',
     });
-    return this.departmentRepository.save(department);
+    try {
+      return await this.departmentRepository.save(department);
+    } catch (error) {
+      if (this.isDepartmentNameConflict(error)) {
+        throw new ConflictException('A department with this name already exists');
+      }
+      throw error;
+    }
+  }
+
+  private isDepartmentNameConflict(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) {
+      return false;
+    }
+
+    const driverError = error.driverError as {
+      code?: string;
+      errno?: number;
+      message?: string;
+      sqlMessage?: string;
+    };
+    const isDuplicateKey =
+      driverError.code === 'ER_DUP_ENTRY' || driverError.errno === 1062;
+    const errorDetails = `${driverError.message ?? ''} ${driverError.sqlMessage ?? ''}`;
+
+    return isDuplicateKey && errorDetails.includes('UQ_department_name');
   }
 
   async findAll() {
@@ -133,6 +160,8 @@ export class DepartmentsService {
     }
 
     user.department = department;
-    return this.userRepository.save(user);
+    const saved = await this.userRepository.save(user);
+    await this.email.send(user.email, 'Department assignment updated', `You have been assigned as head of the ${department.name} department.`);
+    return saved;
   }
 }

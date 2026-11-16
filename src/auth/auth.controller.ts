@@ -1,10 +1,11 @@
-import {Body, Controller, HttpCode, HttpStatus, Post,} from '@nestjs/common';
+import {Body, Controller, Get, Header, HttpCode, HttpStatus, Post,} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('Authentication')
 @Controller('api/v1/auth')
@@ -71,7 +72,7 @@ export class AuthController {
     return this.authService.logout(logoutDto);
   }
 
-  @ApiOperation({ summary: 'Forgot password, send a user the link to reset their password' })
+  @ApiOperation({ summary: 'Forgot password, send a user the code to reset their password' })
   @ApiResponse({
     status: 200,
     description: 'Password reset request accepted',
@@ -80,7 +81,7 @@ export class AuthController {
       properties: {
         message: {
           type: 'string',
-          example: 'If an account exists for this email, password reset instructions will be sent.',
+          example: 'A password reset code has been sent to l***a@example.com.',
         },
       },
     },
@@ -92,4 +93,14 @@ export class AuthController {
   forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto);
   }
+
+  @ApiBody({type: ResetPasswordDto})
+  @ApiOperation({summary: 'Reset pasword, the user enters the code sent to their email and a new password of their choosing'})
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
+ 
 }

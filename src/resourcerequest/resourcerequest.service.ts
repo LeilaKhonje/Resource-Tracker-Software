@@ -12,6 +12,7 @@ import { AuditLog } from '../auditlog/auditlog.entity';
 import { User } from '../users/user.entity';
 import { UserRole as AccountUserRole } from '../users/user-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -34,6 +35,7 @@ export class ResourcerequestService {
     @InjectRepository(User)
     private readonly users: Repository<User>,
     private readonly notifications: NotificationsService,
+    private readonly email: EmailService,
   ) {}
 
   // ---------------------------------------------------------------
@@ -71,6 +73,8 @@ export class ResourcerequestService {
       references.lineManager.id,
       `Team Lead ${requester.fullName} from team ${references.team.name}, working on project ${references.project.name}, requests ${dto.quantity} x ${dto.itemDescription} for ${dto.expectedDurationDays} day(s).`,
     );
+    const manager = references.lineManager;
+    await this.email.send(manager.email, 'New resource request', `${requester.fullName} submitted a request for ${dto.quantity} x ${dto.itemDescription}.`);
     return saved;
   }
 
@@ -258,7 +262,10 @@ export class ResourcerequestService {
     const saved = await this.requests.save(request);
     await this.log(request.id, status, user.id, note);
 
-    // TODO: notification component: tell the team lead the outcome.
+    const requester = await this.users.findOne({ where: { id: request.requestedBy } });
+    if (requester) {
+      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${request.itemDescription} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
+    }
     return saved;
   }
 
