@@ -26,13 +26,17 @@ export class AuditLogService {
 
   // Record an action performed in the system
   async recordAction(data: {
-    userId: number;
+    userId: string | number;
     actionType: string;
     entityType: string;
-    entityId: number;
+    entityId: string | number;
     details?: string;
   }): Promise<AuditLog> {
-    const auditLog = this.auditLogRepository.create(data);
+    const auditLog = this.auditLogRepository.create({
+      ...data,
+      userId: String(data.userId),
+      entityId: String(data.entityId),
+    });
 
     return this.auditLogRepository.save(auditLog);
   }

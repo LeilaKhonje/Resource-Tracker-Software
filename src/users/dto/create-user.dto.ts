@@ -12,10 +12,10 @@ export class CreateUserDto {
   fullName: string;
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
-  @ApiProperty({ example: 'alex@company.com', description: 'Company email address' })
+  @ApiProperty({ example: 'alex@gmail.com', description: 'a valid gmail address' })
   @IsEmail()
   @MaxLength(254)
-  @Matches(/@gmail\.com$/, { message: 'Email must be company email' })
+  @Matches(/@gmail\.com$/, { message: 'Email must be must be a valid email' })
   email: string;
 
   @ApiProperty({
