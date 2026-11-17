@@ -21,6 +21,9 @@ lerna-debug.log*
 # Tests
 /coverage
 /.nyc_output
+changes.md
+EMAIL_SETUP.md
+USE_CASES.md
 
 # IDEs and editors
 /.idea

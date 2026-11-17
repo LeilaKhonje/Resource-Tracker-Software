@@ -127,7 +127,7 @@ change it after logging in.
 | `POST /auth` | Checks the email and password and returns access and refresh tokens. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
 | `POST /auth/refresh` | Exchanges a valid refresh token for a new access and refresh token pair. | `401` refresh token is invalid, expired, revoked, or the account is inactive. |
 | `POST /auth/logout` | Revokes the supplied refresh token. | `401` refresh token is invalid, expired, or revoked. |
-| `POST /auth/forgot-password` | Accepts an email and returns a generic password reset request message to avoid disclosing whether an account exists. Email delivery and reset-token handling are not configured yet. | `400` invalid email format. |
+| `POST /auth/forgot-password` | Sends a password reset code to an active account and returns a generic confirmation with the submitted email masked, so the response does not disclose whether an account exists. | `400` invalid email format. |
 
 ### Users
 

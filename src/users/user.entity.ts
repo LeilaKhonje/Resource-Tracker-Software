@@ -21,6 +21,15 @@ export class User {
   @Column({ name: 'refresh_token_hash', type: 'varchar', length: 64, nullable: true, select: false })
   refreshTokenHash: string | null;
 
+  @Column({ name: 'password_reset_code_hash', type: 'varchar', length: 64, nullable: true, select: false })
+  passwordResetCodeHash: string | null;
+
+  @Column({ name: 'password_reset_expires_at', type: 'datetime', nullable: true, select: false })
+  passwordResetExpiresAt: Date | null;
+
+  @Column({ name: 'password_reset_attempts', type: 'tinyint', default: 0, select: false })
+  passwordResetAttempts: number;
+
   @Column({ name: 'phone_number', type: 'varchar', length: 30, nullable: true })
   phoneNumber: string | null;
 
