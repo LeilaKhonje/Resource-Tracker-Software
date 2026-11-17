@@ -88,7 +88,7 @@ async createOutsourced(@Body() dto: CreateOutsourcedResourceDto) {
 
   @Get('available')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.LINE_MANAGER)
+  @Roles(UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'List available resources and quantities by type (Line Manager only)',
@@ -143,12 +143,22 @@ async createOutsourced(@Body() dto: CreateOutsourcedResourceDto) {
     return this.resourcesService.createAllocation(id, dto, request.user!.sub);
   }
   
+
+  @ApiOperation({summary: 'view all insourced resources',
+    description: 'returns all insourced resources in the organisation with their descriptions'
+  })
+  @ApiForbiddenResponse({description: 'Only Line managers and managing directors can view the resources'})
+  @Roles(UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
   @Get('insourced')
   async findInsourced(@Query() query: QueryResourceDto){
     const resources = await this.resourcesService.findInsourced(query);
     return resources.map(toResourceResponse);
   }
 
+
+  @ApiOperation({summary:'View all outsourced resources'})
+  @Roles(UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
+  @ApiForbiddenResponse({description: 'Only Line managers and managing directors can view the resources'})
   @Get('outsourced')
   async findOutsourced(@Query() query: QueryResourceDto){
     const resources = await this.resourcesService.findOutsourced(query)
