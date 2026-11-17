@@ -12,3 +12,5 @@ Set these values in `.env` before starting the app:
 - `API_BASE_URL`: public base URL of this API, used to build backend-served password reset links.
 
 The app connects using `MAIL_HOST` and `MAIL_PORT` with TLS. Restart the app after changing `.env`. If either SMTP credential or the sender address is missing, the app skips delivery and logs a warning. `.env.example` provides a safe template; do not put real credentials in it or commit `.env`.
+
+Password reset emails include a six-digit code and a link to a reset form served by the API. Codes expire after 10 minutes and are invalidated after five incorrect attempts. Apply pending database migrations after upgrading the application.
