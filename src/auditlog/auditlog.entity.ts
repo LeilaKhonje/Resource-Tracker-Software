@@ -17,11 +17,11 @@ export class AuditLog {
   @Column({ length: 100 })
   entityType: string;
 
-  @Column({ type: 'int', nullable: true })
-  userId: number | null;
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  userId: string | null;
 
-  @Column({ type: 'int', nullable: true })
-  entityId: number | null;
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  entityId: string | null;
 
   @Column({ type: 'text', nullable: true })
   details: string | null;

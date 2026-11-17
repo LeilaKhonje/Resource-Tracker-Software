@@ -23,7 +23,7 @@ export class AuthController {
        properties:{
         email:{
           type: 'string',
-          example:'johndoe@company.com'
+          example:'johndoe@gmail.com'
         },
         password:{
           type: 'string',
