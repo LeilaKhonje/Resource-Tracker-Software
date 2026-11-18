@@ -47,6 +47,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (user.deletionRequestedAt) {
+      const deletionDeadline = user.deletionRequestedAt.getTime() + 5 * 24 * 60 * 60 * 1000;
+      if (Date.now() >= deletionDeadline) {
+        throw new UnauthorizedException('The account deletion grace period has expired');
+      }
+      user.deletionRequestedAt = null;
+      await this.usersRepository.save(user);
+    }
+
     if (!user.isActive) {
       throw new UnauthorizedException('Your account has been deactivated');
     }
@@ -140,6 +149,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     }
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -170,16 +180,28 @@ export class AuthService {
       typeof payload !== 'object' ||
       payload === null ||
       payload.tokenUse !== 'refresh' ||
-      typeof payload.sub !== 'string'
+      typeof payload.sub !== 'string' ||
+      !Number.isInteger(payload.tokenVersion)
     ) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     const user = await this.usersRepository.findOne({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, isActive: true, refreshTokenHash: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        refreshTokenHash: true,
+        tokenVersion: true,
+      },
     });
-    if (!user || !user.isActive) {
+    if (
+      !user ||
+      !user.isActive ||
+      user.tokenVersion !== payload.tokenVersion
+    ) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 

@@ -1,0 +1,123 @@
+@startuml ResourceTrackerUseCases
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "System Admin" as Admin
+actor "Team Lead" as Lead
+actor "Line Manager" as Manager
+actor "Department Head" as Head
+actor "Managing Director" as Director
+actor "Team Member" as Member
+
+rectangle "Resource Tracker System" {
+  package "Accounts and access" {
+    usecase "Log in / log out" as UC_Auth
+    usecase "Change password" as UC_Password
+    usecase "View and update own profile" as UC_Profile
+    usecase "Create user account" as UC_CreateUser
+    usecase "List users" as UC_ListUsers
+    usecase "Assign user role" as UC_AssignRole
+    usecase "Deactivate / reactivate account" as UC_AccountStatus
+  }
+
+  package "Resource requests" {
+    usecase "Create and submit resource request" as UC_SubmitRequest
+    usecase "Respond to request query and resubmit" as UC_RespondQuery
+    usecase "Track request status" as UC_TrackRequest
+    usecase "Review assigned requests" as UC_ReviewRequests
+    usecase "Approve request" as UC_Approve
+    usecase "Reject request" as UC_Reject
+    usecase "Query request for more information" as UC_Query
+    usecase "View request history and audit trail" as UC_RequestAudit
+  }
+
+  package "Resources and allocations" {
+    usecase "Manage departments, teams and projects" as UC_Org
+    usecase "Maintain resource catalogue" as UC_Catalogue
+    usecase "View available resources" as UC_Available
+    usecase "Allocate resource to team member" as UC_Allocate
+    usecase "Transfer active allocation" as UC_Transfer
+    usecase "Record resource return" as UC_Return
+    usecase "View active allocations" as UC_ActiveAllocations
+    usecase "View resource movement history" as UC_Movements
+  }
+
+  package "Oversight and notifications" {
+    usecase "View department request history" as UC_DepartmentHistory
+    usecase "View approval and spending reports" as UC_Reports
+    usecase "View allocation history by department" as UC_AllocationHistory
+    usecase "Receive request and allocation notifications" as UC_Notifications
+  }
+}
+
+Admin --> UC_Auth
+Admin --> UC_Password
+Admin --> UC_Profile
+Admin --> UC_CreateUser
+Admin --> UC_ListUsers
+Admin --> UC_AssignRole
+Admin --> UC_AccountStatus
+
+Lead --> UC_Auth
+Lead --> UC_Password
+Lead --> UC_Profile
+Lead --> UC_SubmitRequest
+Lead --> UC_RespondQuery
+Lead --> UC_TrackRequest
+Lead --> UC_Notifications
+
+Manager --> UC_Auth
+Manager --> UC_Password
+Manager --> UC_Profile
+Manager --> UC_ReviewRequests
+Manager --> UC_Approve
+Manager --> UC_Reject
+Manager --> UC_Query
+Manager --> UC_Available
+Manager --> UC_Allocate
+Manager --> UC_Transfer
+Manager --> UC_Return
+Manager --> UC_ActiveAllocations
+Manager --> UC_Movements
+Manager --> UC_Notifications
+
+Head --> UC_Auth
+Head --> UC_Password
+Head --> UC_Profile
+Head --> UC_AssignRole
+Head --> UC_DepartmentHistory
+Head --> UC_Reports
+Head --> UC_AllocationHistory
+Head --> UC_RequestAudit
+
+Director --> UC_Auth
+Director --> UC_Password
+Director --> UC_Profile
+Director --> UC_AssignRole
+Director --> UC_Org
+Director --> UC_Catalogue
+Director --> UC_DepartmentHistory
+Director --> UC_Reports
+Director --> UC_AllocationHistory
+Director --> UC_RequestAudit
+
+Member --> UC_Auth
+Member --> UC_Password
+Member --> UC_Profile
+Member --> UC_Notifications
+
+UC_RespondQuery ..> UC_TrackRequest : <<extend>>
+UC_Approve ..> UC_ReviewRequests : <<extend>>
+UC_Reject ..> UC_ReviewRequests : <<extend>>
+UC_Query ..> UC_ReviewRequests : <<extend>>
+UC_Allocate ..> UC_Available : <<include>>
+UC_Transfer ..> UC_ActiveAllocations : <<include>>
+UC_Return ..> UC_ActiveAllocations : <<include>>
+UC_Movements ..> UC_ActiveAllocations : <<include>>
+
+note bottom of UC_Catalogue
+  The catalogue tracks insourced and outsourced resources
+  and available quantities. It does not place purchase orders.
+end note
+@enduml
