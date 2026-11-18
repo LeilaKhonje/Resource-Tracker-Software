@@ -1,13 +1,12 @@
-import { Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from './user-role.enum';
-import { AssignUserRoleDto } from './dto/assign-user-role.dto';
+import { ManageUserDto, UserManagementAction } from './dto/manage-user.dto';
+import { ManageMyAccountDto, MyAccountAction } from './dto/manage-my-account.dto';
 import { CreateUserDto } from './dto/create-user.dto';
-import { ChangePasswordDto } from './dto/change-password.dto';
-import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
-import { ListUsersByCreatedAtDto } from './dto/list-users-by-created-at.dto';
+import { ListUsersDto } from './dto/list-users.dto';
 import { UsersService } from './users.service';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -31,26 +30,16 @@ export class UserController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List user accounts (System Admin and managing directors)' })
+  @ApiOperation({ summary: 'List user accounts, optionally filtered by creation date range (System Admin and managing directors)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date-time', example: '2026-11-01T00:00:00.000Z' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date-time', example: '2026-11-11T23:59:59.999Z' })
   @ApiResponse({ status: 200, description: 'User accounts without credential data' })
+  @ApiResponse({ status: 400, description: 'Both dates must be supplied as valid timestamps, and startDate must not be after endDate' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR)
   @ApiBearerAuth('access-token')
-  listUsers() {
-    return this.usersService.listUsers();
-  }
-
-  @Get('created-between')
-  @ApiOperation({ summary: 'List user accounts created within an inclusive timestamp range' })
-  @ApiQuery({ name: 'startDate', required: true, type: String, format: 'date-time', example: '2026-11-01T00:00:00.000Z' })
-  @ApiQuery({ name: 'endDate', required: true, type: String, format: 'date-time', example: '2026-11-11T23:59:59.999Z' })
-  @ApiResponse({ status: 200, description: 'User accounts without credential data' })
-  @ApiResponse({ status: 400, description: 'Invalid date format or startDate is after endDate' })
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR)
-  @ApiBearerAuth('access-token')
-  listUsersByCreatedAt(@Query() filter: ListUsersByCreatedAtDto) {
-    return this.usersService.listUsersByCreatedAt(filter);
+  listUsers(@Query() filter: ListUsersDto) {
+    return this.usersService.listUsers(filter);
   }
 
   @Get('line-managers')
@@ -77,29 +66,71 @@ export class UserController {
     return this.usersService.listActiveLineManagers();
   }
 
-@Patch(':id/role')
-@ApiOperation({ summary: 'Update a user role' })
+@Patch('me')
+@ApiOperation({ summary: 'Update profile or change password (one action per request)',
+  description: 'Only two types of actions are allowed: Update profile and change password, they are done one at a time'
+})
+@ApiBody({ type: ManageMyAccountDto })
+@ApiResponse({ status: 200, description: 'Requested profile or password action completed' })
+@ApiResponse({ status: 400, description: 'Invalid action, fields, profile data, or password' })
+@ApiResponse({ status: 401, description: 'Authentication required or current password is incorrect' })
+@ApiResponse({ status: 404, description: 'User not found' })
+@UseGuards(JwtAuthGuard)
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+@ApiBearerAuth('access-token')
+manageMyAccount(@Req() req: AuthenticatedRequest, @Body() dto: ManageMyAccountDto) {
+  const profileFields = ['phoneNumber', 'address', 'dateOfBirth', 'preferredPronoun'] as const;
+  const passwordFields = ['currentPassword', 'newPassword'] as const;
+  const suppliedProfileFields = profileFields.filter((field) => dto[field] !== undefined);
+  const suppliedPasswordFields = passwordFields.filter((field) => dto[field] !== undefined);
+
+  if (dto.action === MyAccountAction.UPDATE_PROFILE) {
+    if (suppliedProfileFields.length === 0 || suppliedPasswordFields.length > 0) {
+      throw new BadRequestException('Provide one or more profile fields only for update_profile');
+    }
+  } else if (
+    suppliedProfileFields.length > 0 ||
+    suppliedPasswordFields.length !== passwordFields.length
+  ) {
+    throw new BadRequestException('Provide currentPassword and newPassword only for change_password');
+  }
+
+  return this.usersService.manageMyAccount(req.user!.sub, dto);
+}
+
+@Post('me/delete')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth('access-token')
+@ApiOperation({ summary: 'Request deletion of your account; logging in within five days cancels it' })
+deleteMyAccount(@Req() req: AuthenticatedRequest) {
+  return this.usersService.requestAccountDeletion(req.user!.sub);
+}
+
+@Patch(':id')
+@ApiOperation({ summary: 'Perform one account action: deactivate, reactivate, or assign a role' })
 @ApiParam({ name: 'id', description: 'User UUID' })
-@ApiBody({ type: AssignUserRoleDto })
-@ApiResponse({ status: 200, description: 'User assignment updated', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole).filter((role) => role !== UserRole.SYSTEM_ADMIN) } } } })
+@ApiBody({ type: ManageUserDto })
+@ApiResponse({ status: 200, description: 'Requested account action completed' })
 @ApiResponse({ status: 401, description: 'Authentication required' })
 @ApiResponse({ status: 403, description: 'Insufficient permissions' })
-@ApiResponse({ status: 400, description: 'Invalid role value or role assignment is not permitted' })
-@ApiResponse({ status: 404, description: 'Target user or assigning user not found' })
+@ApiResponse({ status: 400, description: 'Invalid action, action fields, role, or account state' })
+@ApiResponse({ status: 404, description: 'Target user or acting user not found' })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 @Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR, UserRole.DEPARTMENT_HEAD)
 @ApiBearerAuth('access-token')
-assignRole(
+manageUser(
   @Param('id', ParseUUIDPipe) userId: string,
-  @Body() assignUserRoleDto: AssignUserRoleDto,
+  @Body() manageUserDto: ManageUserDto,
   @Req() request: AuthenticatedRequest,
   ) {
-    return this.usersService.assignRole(
-      userId,
-      assignUserRoleDto.role,
-      request.user!.sub,
-    );
+    if (manageUserDto.action === UserManagementAction.ASSIGN_ROLE && !manageUserDto.role) {
+      throw new BadRequestException('role is required when action is assign_role');
+    }
+    if (manageUserDto.action !== UserManagementAction.ASSIGN_ROLE && manageUserDto.role !== undefined) {
+      throw new BadRequestException('role can only be provided when action is assign_role');
+    }
+    return this.usersService.manageUser(userId, manageUserDto, request.user!.sub);
   }
 
 @Get('me')
@@ -114,69 +145,6 @@ assignRole(
    const userId = req.user!.sub;
 
    return this.usersService.getMyProfile(userId)
- }
-
- @Patch('me/profile')
- @ApiOperation({ summary: 'Update user profile details (every user in the system)' })
- @ApiBody({ type: UpdateMyProfileDto })
- @ApiResponse({ status: 200, description: 'Updated user profile details' })
- @ApiResponse({ status: 400, description: 'Invalid profile details or no fields supplied' })
- @ApiResponse({ status: 401, description: 'Authentication required' })
- @ApiResponse({ status: 404, description: 'User not found' })
- @UseGuards(JwtAuthGuard)
- @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
- @ApiBearerAuth('access-token')
- updateMyProfile(
-   @Req() req: AuthenticatedRequest,
-   @Body() updateMyProfileDto: UpdateMyProfileDto,
- ) {
-   return this.usersService.updateMyProfile(req.user!.sub, updateMyProfileDto);
- }
-
- @Patch('me/password')
- @ApiOperation({ summary: 'Change the password (every user in the system)' })
- @ApiBody({ type: ChangePasswordDto })
- @ApiResponse({ status: 200, description: 'Password changed successfully' })
- @ApiResponse({ status: 400, description: 'Invalid new password or new password matches the current password' })
- @ApiResponse({ status: 401, description: 'Authentication required or current password is incorrect' })
- @ApiResponse({ status: 404, description: 'User not found' })
- @UseGuards(JwtAuthGuard)
- @ApiBearerAuth('access-token')
- changeMyPassword(
-   @Req() req: AuthenticatedRequest,
-   @Body() changePasswordDto: ChangePasswordDto,
- ) {
-   return this.usersService.changeMyPassword(req.user!.sub, changePasswordDto);
- }
-
- @Patch(':id/deactivate')
- @ApiOperation({ summary: 'Deactivate a user account (System Admin only)' })
- @ApiParam({ name: 'id', description: 'User UUID' })
- @ApiResponse({ status: 200, description: 'Account deactivated successfully' })
- @ApiResponse({ status: 400, description: 'Account is already deactivated or the System Admin cannot deactivate their own account' })
- @ApiResponse({ status: 401, description: 'Authentication required' })
- @ApiResponse({ status: 403, description: 'Only the System Admin can deactivate user accounts' })
- @ApiResponse({ status: 404, description: 'User not found' })
- @UseGuards(JwtAuthGuard, RolesGuard)
- @Roles(UserRole.SYSTEM_ADMIN)
- @ApiBearerAuth('access-token')
- deactivateUser(@Param('id', ParseUUIDPipe) userId: string, @Req() req: AuthenticatedRequest) {
-  return this.usersService.deactivateUser(userId, req.user!.sub);
- }
-
- @Patch(':id/reactivate')
- @ApiOperation({ summary: 'Reactivate a user account (System Admin only)' })
- @ApiParam({ name: 'id', description: 'User UUID' })
- @ApiResponse({ status: 200, description: 'Account reactivated successfully' })
- @ApiResponse({ status: 400, description: 'Account is already active' })
- @ApiResponse({ status: 401, description: 'Authentication required' })
- @ApiResponse({ status: 403, description: 'Only the System Admin can reactivate user accounts' })
- @ApiResponse({ status: 404, description: 'User not found' })
- @UseGuards(JwtAuthGuard, RolesGuard)
- @Roles(UserRole.SYSTEM_ADMIN)
- @ApiBearerAuth('access-token')
- reactivateUser(@Param('id', ParseUUIDPipe) userId: string, @Req() req: AuthenticatedRequest) {
-  return this.usersService.reactivateUser(userId, req.user!.sub);
  }
 
 }

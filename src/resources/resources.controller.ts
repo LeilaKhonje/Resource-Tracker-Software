@@ -86,42 +86,6 @@ async createOutsourced(@Body() dto: CreateOutsourcedResourceDto) {
     return resources.map(toResourceResponse);
   }
 
-  @Get('available')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
-  @ApiBearerAuth('access-token')
-  @ApiOperation({
-    summary: 'List available resources and quantities by type (Line Manager only)',
-    description:
-      'Returns resource records with positive available quantity, grouped by type. Active allocations are deducted from recorded quantities.',
-  })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Resource groups for insourced and outsourced resources, including each group’s total available quantity.',
-  })
-  @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
-  @ApiForbiddenResponse({ description: 'Only Line Managers can view available resources.' })
-  async getAvailableResources() {
-    const groups = await this.resourcesService.getAvailableResourcesByType();
-    const categories = groups.map(({ resources, ...group }) => ({
-      ...group,
-      resources: resources
-        .filter(({ availableQuantity }) => availableQuantity > 0)
-        .map(({ resource, availableQuantity }) => ({
-          ...toResourceResponse(resource),
-          availableQuantity,
-        })),
-    }));
-    return {
-      totalAvailableQuantity: categories.reduce(
-        (total, category) => total + category.availableQuantity,
-        0,
-      ),
-      categories,
-    };
-  }
-
   @Post(':id/allocations')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.LINE_MANAGER)

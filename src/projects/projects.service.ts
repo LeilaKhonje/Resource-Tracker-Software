@@ -24,9 +24,11 @@ export class ProjectsService {
     if (user.role !== UserRole.DEPARTMENT_HEAD) {
       throw new ForbiddenException('Only department heads can create projects');
     }
+    const departmentId = await this.getDepartmentHeadDepartmentId(user);
     this.assertDateRange(createProjectDto.startDate, createProjectDto.endDate);
     const { teamIds = [], ...projectDetails } = createProjectDto;
     const teams = await this.findTeams(teamIds);
+    this.assertTeamsInDepartment(teams, departmentId);
     const project = this.projectRepository.create({
       ...projectDetails,
       teams,
@@ -157,7 +159,10 @@ export class ProjectsService {
   private async findTeams(teamIds: number[]) {
     if (teamIds.length === 0) return [];
 
-    const teams = await this.teamRepository.find({ where: { id: In(teamIds) } });
+    const teams = await this.teamRepository.find({
+      where: { id: In(teamIds) },
+      relations: { department: true },
+    });
     if (teams.length !== teamIds.length) {
       const foundIds = new Set(teams.map((team) => team.id));
       const missingIds = teamIds.filter((id) => !foundIds.has(id));

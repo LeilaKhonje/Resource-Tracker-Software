@@ -21,6 +21,12 @@ export class User {
   @Column({ name: 'refresh_token_hash', type: 'varchar', length: 64, nullable: true, select: false })
   refreshTokenHash: string | null;
 
+  @Column({ name: 'token_version', type: 'int', default: 0 })
+  tokenVersion: number;
+
+  @Column({ name: 'deletion_requested_at', type: 'datetime', nullable: true })
+  deletionRequestedAt: Date | null;
+
   @Column({ name: 'password_reset_code_hash', type: 'varchar', length: 64, nullable: true, select: false })
   passwordResetCodeHash: string | null;
 

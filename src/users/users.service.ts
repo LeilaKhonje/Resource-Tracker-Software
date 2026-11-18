@@ -8,7 +8,9 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { AuditLog } from '../auditlog/auditlog.entity';
-import { ListUsersByCreatedAtDto } from './dto/list-users-by-created-at.dto';
+import { ListUsersDto } from './dto/list-users.dto';
+import { ManageUserDto, UserManagementAction } from './dto/manage-user.dto';
+import { ManageMyAccountDto, MyAccountAction } from './dto/manage-my-account.dto';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -43,18 +45,22 @@ export class UsersService {
     };
   }
 
-  async listUsers() {
-    const users = await this.usersRepository.find({
-      select: { id: true, fullName: true, email: true, role: true, isActive: true, createdAt: true },
-      order: { fullName: 'ASC' },
-    });
-    return users;
-  }
+  async listUsers(filter: ListUsersDto) {
+    const hasStartDate = filter.startDate !== undefined;
+    const hasEndDate = filter.endDate !== undefined;
+    if (hasStartDate !== hasEndDate) {
+      throw new BadRequestException('startDate and endDate must be supplied together');
+    }
 
-  async listUsersByCreatedAt(filter: ListUsersByCreatedAtDto) {
-    const startDate = new Date(filter.startDate);
-    const endDate = new Date(filter.endDate);
+    if (!hasStartDate) {
+      return this.usersRepository.find({
+        select: { id: true, fullName: true, email: true, role: true, isActive: true, createdAt: true },
+        order: { fullName: 'ASC' },
+      });
+    }
 
+    const startDate = new Date(filter.startDate!);
+    const endDate = new Date(filter.endDate!);
     if (startDate > endDate) {
       throw new BadRequestException('startDate must be before or equal to endDate');
     }
@@ -74,6 +80,16 @@ export class UsersService {
       .orderBy('user.createdAt', 'ASC')
       .addOrderBy('user.fullName', 'ASC')
       .getMany();
+  }
+
+  async requestAccountDeletion(userId: string) {
+    const user = await this.usersRepository.findOneBy({ id: userId });
+    if (!user) throw new NotFoundException('User not found');
+    user.deletionRequestedAt = new Date();
+    user.refreshTokenHash = null;
+    user.tokenVersion += 1;
+    await this.usersRepository.save(user);
+    return { message: 'Account deletion scheduled in five days; log in before then to cancel it' };
   }
 
   async listActiveLineManagers() {
@@ -183,6 +199,38 @@ export class UsersService {
     };
   }
 
+  async manageMyAccount(userId: string, dto: ManageMyAccountDto) {
+    const profileFields = ['phoneNumber', 'address', 'dateOfBirth', 'preferredPronoun'] as const;
+    const passwordFields = ['currentPassword', 'newPassword'] as const;
+    const suppliedProfileFields = profileFields.filter((field) => dto[field] !== undefined);
+    const suppliedPasswordFields = passwordFields.filter((field) => dto[field] !== undefined);
+
+    if (dto.action === MyAccountAction.UPDATE_PROFILE) {
+      if (suppliedProfileFields.length === 0 || suppliedPasswordFields.length > 0) {
+        throw new BadRequestException('Provide one or more profile fields only for update_profile');
+      }
+      return this.updateMyProfile(userId, {
+        phoneNumber: dto.phoneNumber,
+        address: dto.address,
+        dateOfBirth: dto.dateOfBirth,
+        preferredPronoun: dto.preferredPronoun,
+      });
+    }
+
+    if (
+      dto.action !== MyAccountAction.CHANGE_PASSWORD ||
+      suppliedProfileFields.length > 0 ||
+      suppliedPasswordFields.length !== passwordFields.length
+    ) {
+      throw new BadRequestException('Provide currentPassword and newPassword only for change_password');
+    }
+
+    return this.changeMyPassword(userId, {
+      currentPassword: dto.currentPassword!,
+      newPassword: dto.newPassword!,
+    });
+  }
+
   async changeMyPassword(userId: string, changePasswordDto: ChangePasswordDto) {
     const user = await this.usersRepository
       .createQueryBuilder('user')
@@ -220,7 +268,11 @@ export class UsersService {
     if (userId === adminId) {
       throw new BadRequestException('The System Admin cannot deactivate their own account');
     }
-    const user = await this.usersRepository.findOne({where: {id: userId},});
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.refreshTokenHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
     if(!user){
       throw new NotFoundException('User Not Found');
     }
@@ -230,11 +282,35 @@ export class UsersService {
     }
 
     user.isActive = false;
+    user.refreshTokenHash = null;
+    user.tokenVersion += 1;
 
     await this.usersRepository.save(user);
     await this.logAccountAction('ACCOUNT_DEACTIVATED', user.id, adminId, 'Account deactivated');
 
     return 'User account deactivated successfully';
+  }
+
+  async manageUser(userId: string, dto: ManageUserDto, actorId: string) {
+    switch (dto.action) {
+      case UserManagementAction.DEACTIVATE:
+        if (dto.role !== undefined) {
+          throw new BadRequestException('role can only be provided when action is assign_role');
+        }
+        return this.deactivateUser(userId, actorId);
+      case UserManagementAction.REACTIVATE:
+        if (dto.role !== undefined) {
+          throw new BadRequestException('role can only be provided when action is assign_role');
+        }
+        return this.reactivateUser(userId, actorId);
+      case UserManagementAction.ASSIGN_ROLE:
+        if (!dto.role) {
+          throw new BadRequestException('role is required when action is assign_role');
+        }
+        return this.assignRole(userId, dto.role, actorId);
+      default:
+        throw new BadRequestException('Unsupported account action');
+    }
   }
 
   async reactivateUser(userId: string, adminId: string){
