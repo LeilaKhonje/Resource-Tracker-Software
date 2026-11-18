@@ -9,7 +9,7 @@ import { Repository, Brackets } from 'typeorm';
 
 import { AuditLog } from './auditlog.entity';
 
-interface AuditLogFilters {
+export interface AuditLogFilters {
   userId?: string;
   actionType?: string;
   entityType?: string;
@@ -24,147 +24,88 @@ export class AuditLogService {
     private readonly auditLogRepository: Repository<AuditLog>,
   ) {}
 
-  // Record an action performed in the system
-  async recordAction(data: {
-    userId: string | number;
-    actionType: string;
-    entityType: string;
-    entityId: string | number;
-    details?: string;
-  }): Promise<AuditLog> {
-    const auditLog = this.auditLogRepository.create({
-      ...data,
-      userId: String(data.userId),
-      entityId: String(data.entityId),
-    });
+  async getLogs(filters: AuditLogFilters) {
 
-    return this.auditLogRepository.save(auditLog);
-  }
-
-  // GET 1: Retrieve ALL audit logs
-  async getAllLogs(): Promise<AuditLog[]> {
-    return this.auditLogRepository.find({
-      order: {
-        createdAt: 'DESC',
-      },
-    });
-  }
-
-  // GET 2: Filter audit logs using OR logic
-  async filterLogs(
-    filters: AuditLogFilters,
-  ): Promise<AuditLog[]> {
     const query = this.auditLogRepository
-      .createQueryBuilder('auditLog');
+      .createQueryBuilder('log');
 
-    const conditions: {
-      condition: string;
-      parameters: Record<string, any>;
-    }[] = [];
+    const conditions: string[] = [];
+    const parameters: Record<string, any> = {};
 
     // Filter by user ID
-    if (filters.userId?.trim()) {
+    if (filters.userId) {
       const userId = Number(filters.userId);
 
       if (!Number.isInteger(userId) || userId <= 0) {
-        throw new BadRequestException('Invalid userId');
+        throw new BadRequestException('Invalid user ID');
       }
 
-      conditions.push({
-        condition: 'auditLog.userId = :userId',
-        parameters: { userId },
-      });
+      conditions.push('log.userId = :userId');
+      parameters.userId = userId;
     }
 
     // Filter by action type
-    if (filters.actionType?.trim()) {
-      conditions.push({
-        condition: 'auditLog.actionType = :actionType',
-        parameters: {
-          actionType: filters.actionType.trim(),
-        },
-      });
+    if (filters.actionType) {
+      conditions.push('log.actionType = :actionType');
+      parameters.actionType = filters.actionType;
     }
 
     // Filter by entity type
-    if (filters.entityType?.trim()) {
-      conditions.push({
-        condition: 'auditLog.entityType = :entityType',
-        parameters: {
-          entityType: filters.entityType.trim(),
-        },
-      });
+    if (filters.entityType) {
+      conditions.push('log.entityType = :entityType');
+      parameters.entityType = filters.entityType;
     }
 
-    const date = filters.date?.trim();
-    const time = filters.time?.trim();
-
-    // Validate date
-    if (date) {
-      const parsedDate = new Date(`${date}T00:00:00.000Z`);
-
-      if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-        Number.isNaN(parsedDate.getTime()) ||
-        parsedDate.toISOString().slice(0, 10) !== date
-      ) {
+    // Filter by date
+    if (filters.date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(filters.date)) {
         throw new BadRequestException(
-          'Invalid date. Use YYYY-MM-DD',
+          'Date must be in YYYY-MM-DD format',
         );
       }
+
+      conditions.push(
+        'DATE(log.createdAt) = :date',
+      );
+
+      parameters.date = filters.date;
     }
 
-    // Validate time
-    if (time) {
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    // Filter by time
+    if (filters.time) {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(filters.time)) {
         throw new BadRequestException(
-          'Invalid time. Use HH:mm',
+          'Time must be in HH:mm format',
         );
       }
+
+      conditions.push(
+        'TIME(log.createdAt) = :time',
+      );
+
+      parameters.time = filters.time;
     }
 
-    // Date and time together count as ONE criterion
-    if (date && time) {
-      conditions.push({
-        condition:
-          "DATE_FORMAT(auditLog.createdAt, '%Y-%m-%d %H:%i') = :dateTime",
-        parameters: {
-          dateTime: `${date} ${time}`,
-        },
-      });
-    } else if (date) {
-      conditions.push({
-        condition: 'DATE(auditLog.createdAt) = :date',
-        parameters: { date },
-      });
-    } else if (time) {
-      conditions.push({
-        condition:
-          "DATE_FORMAT(auditLog.createdAt, '%H:%i') = :time",
-        parameters: { time },
-      });
+    // Apply OR filtering only when filters are provided
+    if (conditions.length > 0) {
+      query.where(
+        new Brackets((qb) => {
+          conditions.forEach((condition, index) => {
+            if (index === 0) {
+              qb.where(condition);
+            } else {
+              qb.orWhere(condition);
+            }
+          });
+        }),
+      );
+
+      query.setParameters(parameters);
     }
 
-    // No filters: return all audit logs
-    if (conditions.length === 0) {
-      return this.getAllLogs();
-    }
-
-    // Apply OR logic between supplied criteria
-    query.where(
-      new Brackets((qb) => {
-        conditions.forEach((item, index) => {
-          if (index === 0) {
-            qb.where(item.condition, item.parameters);
-          } else {
-            qb.orWhere(item.condition, item.parameters);
-          }
-        });
-      }),
-    );
-
-    return query
-      .orderBy('auditLog.createdAt', 'DESC')
+    // If no filters are provided, retrieve ALL logs
+    return await query
+      .orderBy('log.createdAt', 'DESC')
       .getMany();
   }
 }

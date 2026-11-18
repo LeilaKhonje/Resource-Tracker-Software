@@ -23,80 +23,43 @@ export class AuditLogsController {
     private readonly auditLogsService: AuditLogService,
   ) {}
 
-  // GET 1: Retrieve all audit logs
   @Get()
   @ApiOperation({
-    summary: 'Get all audit logs',
-    description: 'Retrieves all audit logs without filters.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'All audit logs retrieved successfully',
-    schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, userId: { type: 'string', nullable: true }, entityId: { type: 'string', nullable: true }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } },
-  })
-  getAllLogs() {
-    return this.auditLogsService.getAllLogs();
-  }
-
-  // GET 2: Filter audit logs using OR logic
-  @Get('filter')
-  @ApiOperation({
-    summary: 'Filter audit logs',
+    summary: 'Get all or filter audit logs',
     description:
-      'All filters are optional. Multiple filters use OR logic, meaning a record matching ANY supplied criterion is returned. Date and time are treated as one combined criterion when both are supplied.',
+      'Returns all audit logs when no filters are provided. When filters are supplied, returns records matching ANY of the provided filters (OR logic).',
   })
-  @ApiQuery({
-    name: 'userId',
-    required: false,
-    type: Number,
-    description: 'Filter by user ID',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'actionType',
-    required: false,
-    type: String,
-    description: 'Filter by action type',
-    example: 'DELETE',
-  })
-  @ApiQuery({
-    name: 'entityType',
-    required: false,
-    type: String,
-    description: 'Filter by entity type',
-    example: 'ResourceRequest',
-  })
+  @ApiQuery({ name: 'userId', required: false, type: Number })
+  @ApiQuery({ name: 'actionType', required: false, type: String })
+  @ApiQuery({ name: 'entityType', required: false, type: String })
   @ApiQuery({
     name: 'date',
     required: false,
     type: String,
-    description: 'Filter by date (YYYY-MM-DD)',
     example: '2026-11-16',
   })
   @ApiQuery({
     name: 'time',
     required: false,
     type: String,
-    description: 'Filter by time (HH:mm)',
     example: '13:30',
   })
   @ApiResponse({
     status: 200,
-    description: 'Filtered audit logs retrieved successfully',
-    schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, userId: { type: 'string', nullable: true }, entityId: { type: 'string', nullable: true }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } },
+    description: 'Audit logs retrieved successfully',
   })
   @ApiResponse({
     status: 400,
     description: 'Invalid filter value',
   })
-  filterLogs(
+  getLogs(
     @Query('userId') userId?: string,
     @Query('actionType') actionType?: string,
     @Query('entityType') entityType?: string,
     @Query('date') date?: string,
     @Query('time') time?: string,
   ) {
-    return this.auditLogsService.filterLogs({
+    return this.auditLogsService.getLogs({
       userId,
       actionType,
       entityType,
@@ -105,4 +68,3 @@ export class AuditLogsController {
     });
   }
 }
-
