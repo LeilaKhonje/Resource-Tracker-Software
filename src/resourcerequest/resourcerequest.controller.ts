@@ -10,10 +10,38 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole as AuthRole } from '../users/user-role.enum';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
+
+const resourceRequestResponseSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    itemDescription: { type: 'string' },
+    manufacturerLabel: { type: 'string', nullable: true },
+    price: { type: 'number', nullable: true },
+    batchNumber: { type: 'string' },
+    vendor: { type: 'string', nullable: true },
+    quantity: { type: 'integer' },
+    expectedDurationDays: { type: 'integer', nullable: true },
+    status: { type: 'string', enum: ['SUBMITTED', 'QUERIED', 'APPROVED', 'REJECTED'] },
+    requestedBy: { type: 'string', format: 'uuid' },
+    lineManagerId: { type: 'string', format: 'uuid' },
+    projectId: { type: 'string' },
+    teamId: { type: 'string', nullable: true },
+    departmentId: { type: 'string', nullable: true },
+    reviewNote: { type: 'string', nullable: true },
+    reviewedBy: { type: 'string', nullable: true },
+    reviewedAt: { type: 'string', format: 'date-time', nullable: true },
+    submittedAt: { type: 'string', format: 'date-time', nullable: true },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+};
 
 
 
 @ApiTags('resource-requests')
+@ApiStandardErrorResponses(400, 401, 403, 500)
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('resource-requests')
 export class ResourcerequestController {
@@ -39,7 +67,7 @@ export class ResourcerequestController {
   @Roles(AuthRole.TEAM_LEAD)
   @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies projectName, lineManagerName, and teamName. The server resolves names to stored relationships, derives the department from the team, sets requestedBy from the caller, and creates an in-app notification for the active Line Manager.' })
   @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectName: 'Office Modernization', lineManagerName: 'Jordan Lee', teamName: 'Platform' } } } })
-  @ApiResponse({ status: 201, description: 'Request submitted with status SUBMITTED and notification created for the designated Line Manager.' })
+  @ApiResponse({ status: 201, description: 'Request submitted with status SUBMITTED and notification created for the designated Line Manager.', schema: resourceRequestResponseSchema })
   @ApiBadRequestResponse({ description: 'Invalid fields, ambiguous names, or project is not assigned to the named team.' })
   @ApiNotFoundResponse({ description: 'Team, project, active Line Manager, or requesting Team Lead not found.' })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
@@ -55,7 +83,7 @@ export class ResourcerequestController {
   @ApiOperation({ summary: 'List requests visible to the caller', description: 'Team leads see their own requests; line managers see requests routed to them; department heads see requests from their assigned department; managing directors see all requests.' })
   @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'SUBMITTED', 'QUERIED', 'APPROVED', 'REJECTED'] })
   @ApiQuery({ name: 'teamId', required: false, type: String, description: 'Filter by numeric team ID.' })
-  @ApiResponse({ status: 200, description: 'Requests ordered newest first.' })
+  @ApiResponse({ status: 200, description: 'Requests ordered newest first.', schema: { type: 'array', items: resourceRequestResponseSchema } })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
   findAll(@Query() query: QueryResourceRequestDto, @Req() req: AuthenticatedRequest) {
     return this.service.findAll(query, this.currentUser(req));
@@ -67,7 +95,7 @@ export class ResourcerequestController {
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD, AuthRole.LINE_MANAGER, AuthRole.DEPARTMENT_HEAD, AuthRole.MANAGING_DIRECTOR)
   @ApiOperation({ summary: 'Get a resource request', description: 'Pass include=audit to attach the request audit trail in chronological order.' })
-  @ApiResponse({ status: 200, description: 'Request details; includes auditTrail when requested.' })
+  @ApiResponse({ status: 200, description: 'Request details; includes auditTrail when requested.', schema: { allOf: [resourceRequestResponseSchema], properties: { auditTrail: { type: 'array', items: { type: 'object', additionalProperties: true } } } } })
   @ApiBadRequestResponse({ description: 'Request ID is not a UUID.' })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
   @ApiForbiddenResponse({ description: 'Caller is not the requester, assigned line manager, department head, or managing director.' })
@@ -86,7 +114,7 @@ export class ResourcerequestController {
   @Roles(AuthRole.TEAM_LEAD, AuthRole.LINE_MANAGER)
   @ApiOperation({ summary: 'Edit, submit, or review a resource request', description: 'Team leads may edit DRAFT or QUERIED requests and submit with status SUBMITTED. The assigned line manager may review a SUBMITTED request with APPROVED, REJECTED, or QUERIED. Rejection and query require a note.' })
   @ApiBody({ type: UpdateResourceRequestDto, examples: { submit: { summary: 'Submit a draft', value: { status: 'SUBMITTED' } }, approve: { summary: 'Approve after stock check', value: { status: 'APPROVED' } }, reject: { summary: 'Reject with reason', value: { status: 'REJECTED', note: 'The specification does not meet project requirements.' } }, query: { summary: 'Ask for more information', value: { status: 'QUERIED', note: 'Please provide a vendor quote.' } } } })
-  @ApiResponse({ status: 200, description: 'Updated request. On review, reviewedBy, reviewedAt, reviewNote, and status are updated.' })
+  @ApiResponse({ status: 200, description: 'Updated request. On review, reviewedBy, reviewedAt, reviewNote, and status are updated.', schema: resourceRequestResponseSchema })
   @ApiBadRequestResponse({ description: 'Invalid status transition, nothing to update, or incomplete submission.' })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
   @ApiForbiddenResponse({ description: 'Caller does not own the request or is not its assigned line manager.' })
