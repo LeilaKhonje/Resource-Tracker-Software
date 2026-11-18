@@ -10,8 +10,10 @@ import { ProjectsService } from './projects.service';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Projects')
+@ApiStandardErrorResponses(401, 403, 500)
 @Controller('api/v1/projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
@@ -60,7 +62,7 @@ export class ProjectsController {
 
   @ApiOperation({ summary: 'Get all projects in a department' })
   @ApiParam({ name: 'departmentId', type: Number, description: 'Numeric department ID' })
-  @ApiResponse({ status: 200, description: 'Projects assigned to teams in the specified department' })
+  @ApiResponse({ status: 200, description: 'Projects assigned to teams in the specified department', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string', nullable: true }, startDate: { type: 'string', format: 'date' }, endDate: { type: 'string', format: 'date' }, teams: { type: 'array', items: { type: 'object', additionalProperties: true } } } } } })
   @ApiResponse({ status: 400, description: 'Department ID must be an integer' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Only managing directors can view projects by department' })
@@ -77,6 +79,7 @@ export class ProjectsController {
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
   @ApiResponse({ status: 404, description: 'Not Found: Project does not exist' })
+  @ApiResponse({ status: 400, description: 'Project ID must be an integer.' })
   @Get(':id')
   @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
   @ApiBearerAuth('access-token')
@@ -147,6 +150,7 @@ export class ProjectsController {
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions or department access' })
   @ApiResponse({ status: 404, description: 'Project does not exist' })
+  @ApiResponse({ status: 400, description: 'Project ID must be an integer.' })
   @Get(':id/team-members')
   @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
   @ApiBearerAuth('access-token')
@@ -161,6 +165,7 @@ export class ProjectsController {
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions' })
   @ApiResponse({ status: 404, description: 'Not Found: Project does not exist' })
+  @ApiResponse({ status: 400, description: 'Project ID must be an integer.' })
   @Delete(':id')
   @ApiParam({ name: 'id', type: Number, description: 'Numeric project ID' })
   @ApiBearerAuth('access-token')

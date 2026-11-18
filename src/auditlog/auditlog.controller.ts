@@ -6,8 +6,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user-role.enum';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Audit Logs')
+@ApiStandardErrorResponses(401, 403, 500)
 @Controller('api/v1/audit-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(
@@ -30,6 +32,7 @@ export class AuditLogsController {
   @ApiResponse({
     status: 200,
     description: 'All audit logs retrieved successfully',
+    schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, userId: { type: 'string', nullable: true }, entityId: { type: 'string', nullable: true }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } },
   })
   getAllLogs() {
     return this.auditLogsService.getAllLogs();
@@ -80,6 +83,7 @@ export class AuditLogsController {
   @ApiResponse({
     status: 200,
     description: 'Filtered audit logs retrieved successfully',
+    schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, userId: { type: 'string', nullable: true }, entityId: { type: 'string', nullable: true }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } },
   })
   @ApiResponse({
     status: 400,

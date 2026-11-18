@@ -7,8 +7,10 @@ import { UserRole } from '../users/user-role.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Reports')
+@ApiStandardErrorResponses(400, 401, 403, 500)
 @Controller('api/v1/reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(
