@@ -1,7 +1,9 @@
-
 services:
   app:
-    image: babylon1340/resource-tracker-api:v1.0.3
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: resource-tracker-api:local
     container_name: resource-tracker-api
     ports:
       - "3000:3000"
