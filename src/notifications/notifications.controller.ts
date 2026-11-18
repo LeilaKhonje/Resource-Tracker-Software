@@ -31,7 +31,7 @@ export class NotificationsController {
   })
   @ApiResponse({ status: 400, description: 'The authenticated user identity is missing.' })
   getMyNotifications(@Req() req: any) {
-    const userId = req.user?.id;
+    const userId = req.user?.sub;
 
     if (!userId) {
       throw new BadRequestException(

@@ -47,7 +47,8 @@ rectangle "Resource Tracker System" {
     usecase "View department request history" as UC_DepartmentHistory
     usecase "View approval and spending reports" as UC_Reports
     usecase "View allocation history by department" as UC_AllocationHistory
-    usecase "Receive request and allocation notifications" as UC_Notifications
+    usecase "Receive in-app request submission notification" as UC_Notifications
+    usecase "View project members by team" as UC_ProjectMembers
   }
 }
 
@@ -65,7 +66,6 @@ Lead --> UC_Profile
 Lead --> UC_SubmitRequest
 Lead --> UC_RespondQuery
 Lead --> UC_TrackRequest
-Lead --> UC_Notifications
 
 Manager --> UC_Auth
 Manager --> UC_Password
@@ -90,6 +90,8 @@ Head --> UC_DepartmentHistory
 Head --> UC_Reports
 Head --> UC_AllocationHistory
 Head --> UC_RequestAudit
+Head --> UC_Org
+Head --> UC_ProjectMembers
 
 Director --> UC_Auth
 Director --> UC_Password
@@ -101,11 +103,11 @@ Director --> UC_DepartmentHistory
 Director --> UC_Reports
 Director --> UC_AllocationHistory
 Director --> UC_RequestAudit
+Director --> UC_ProjectMembers
 
 Member --> UC_Auth
 Member --> UC_Password
 Member --> UC_Profile
-Member --> UC_Notifications
 
 UC_RespondQuery ..> UC_TrackRequest : <<extend>>
 UC_Approve ..> UC_ReviewRequests : <<extend>>
