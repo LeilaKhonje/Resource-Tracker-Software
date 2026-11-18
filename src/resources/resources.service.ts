@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, FindOptionsWhere, ILike, MoreThan, Repository } from 'typeorm';
+import { DataSource, EntityManager, FindOptionsWhere, ILike, Repository } from 'typeorm';
 import { CreateInsourcedResourceDto } from './dto/create-insourced-resource.dto';
 import { CreateOutsourcedResourceDto } from './dto/create-outsourced-resource.dto';
 import { UpdateInsourcedResourceDto } from './dto/update-insourced-resource.dto';
@@ -14,6 +14,7 @@ import { UpdateOutsourcedResourceDto } from './dto/update-outsourced-resource.dt
 import { QueryResourceDto } from './dto/query-resource.dto';
 import { Resources } from './entities/resources.entity';
 import { ResourceType } from './enum/resource-type.enum';
+import { ResourceStatus } from './enum/resource-status.enum';
 import { Department } from '../departments/entities/department.entity';
 import { ResourceAllocation, AllocationStatus } from './entities/resource-allocation.entity';
 import { ResourceMovement, ResourceMovementType } from './entities/resource-movement.entity';
@@ -84,45 +85,6 @@ export class ResourcesService {
     return this.findAll({... query, type: ResourceType.OUTSOURCED});
   }
 
-  async getAvailableResourcesByType() {
-    const resources = await this.resourcesRepository.find({
-      where: { quantity: MoreThan(0) },
-      relations: { department: true },
-      order: { createdAt: 'DESC' },
-    });
-
-    const allocationTotals = await this.dataSource
-      .getRepository(ResourceAllocation)
-      .createQueryBuilder('allocation')
-      .select('allocation.resource_id', 'resourceId')
-      .addSelect('SUM(allocation.quantity)', 'allocatedQuantity')
-      .where('allocation.status = :status', { status: AllocationStatus.ACTIVE })
-      .groupBy('allocation.resource_id')
-      .getRawMany<{ resourceId: string; allocatedQuantity: string }>();
-    const allocatedByResource = new Map(
-      allocationTotals.map((row) => [row.resourceId, Number(row.allocatedQuantity)]),
-    );
-
-    return Object.values(ResourceType).map((type) => {
-      const categoryResources = resources.filter(
-        (resource) => resource.type === type,
-      );
-      return {
-        type,
-        availableQuantity: categoryResources.reduce((total, resource) => {
-          return total + Math.max(0, resource.quantity - (allocatedByResource.get(resource.id) ?? 0));
-        }, 0),
-        resources: categoryResources.map((resource) => ({
-          resource,
-          availableQuantity: Math.max(
-            0,
-            resource.quantity - (allocatedByResource.get(resource.id) ?? 0),
-          ),
-        })),
-      };
-    });
-  }
-
   async createAllocation(resourceId: string, dto: CreateResourceAllocationDto, actorId: string) {
     return this.dataSource.transaction(async (manager) => {
       const resource = await manager.getRepository(Resources).findOne({
@@ -190,6 +152,7 @@ export class ResourcesService {
         expectedReturnAt,
         returnedAt: null,
       }));
+      await this.refreshResourceStatus(manager, resource);
       await this.recordMovement(manager, {
         resource,
         allocation,
@@ -234,6 +197,7 @@ export class ResourcesService {
       allocation.status = AllocationStatus.RETURNED;
       allocation.returnedAt = new Date();
       await allocationRepo.save(allocation);
+      await this.refreshResourceStatus(manager, resource);
       await this.recordMovement(manager, {
         resource,
         allocation,
@@ -293,6 +257,7 @@ export class ResourcesService {
         expectedReturnAt: dto.expectedReturnAt ? new Date(dto.expectedReturnAt) : oldAllocation.expectedReturnAt,
         returnedAt: null,
       }));
+      await this.refreshResourceStatus(manager, resource);
       await this.recordMovement(manager, {
         resource,
         allocation: newAllocation,
@@ -353,6 +318,7 @@ export class ResourcesService {
     }
     Object.assign(resource, changes);
     await this.assertQuantityCoversAllocations(manager, resource);
+    await this.refreshResourceStatus(manager, resource);
     return manager.getRepository(Resources).save(resource);
   });
 }
@@ -362,6 +328,7 @@ async updateOutsourced(id: string, dto: UpdateOutsourcedResourceDto): Promise<Re
     const resource = await this.findLockedByType(manager, id, ResourceType.OUTSOURCED);
     Object.assign(resource, dto);
     await this.assertQuantityCoversAllocations(manager, resource);
+    await this.refreshResourceStatus(manager, resource);
     return manager.getRepository(Resources).save(resource);
   });
 }
@@ -400,6 +367,14 @@ private async assertQuantityCoversAllocations(manager: EntityManager, resource: 
       .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
       .getRawOne<{ quantity: string }>();
     return Number(result?.quantity ?? 0);
+  }
+
+  private async refreshResourceStatus(manager: EntityManager, resource: Resources) {
+    const activeQuantity = await this.getActiveAllocationQuantity(manager, resource.id);
+    resource.status = activeQuantity > 0
+      ? ResourceStatus.ASSIGNED
+      : ResourceStatus.AVAILABLE;
+    await manager.getRepository(Resources).save(resource);
   }
 
   private async validateDestination(

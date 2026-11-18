@@ -1,8 +1,8 @@
 export enum UserRole {
-  SYSTEM_ADMIN = "system_admin",
-  TEAM_LEAD = "team_lead",
-  LINE_MANAGER = "line_manager",
-  DEPARTMENT_HEAD = "department_head",
-  MANAGING_DIRECTOR = "managing_director",
-  TEAM_MEMBER = "team_member"
+  SYSTEM_ADMIN = "SYSTEM_ADMIN",
+  TEAM_LEAD = "TEAM_LEAD",
+  LINE_MANAGER = "LINE_MANAGER",
+  DEPARTMENT_HEAD = "DEPARTMENT_HEAD",
+  MANAGING_DIRECTOR = "MANAGING_DIRECTOR",
+  TEAM_MEMBER = "TEAM_MEMBER"
 }

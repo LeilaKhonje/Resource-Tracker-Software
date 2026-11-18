@@ -24,9 +24,11 @@ export class ProjectsService {
     if (user.role !== UserRole.DEPARTMENT_HEAD) {
       throw new ForbiddenException('Only department heads can create projects');
     }
+    const departmentId = await this.getDepartmentHeadDepartmentId(user);
     this.assertDateRange(createProjectDto.startDate, createProjectDto.endDate);
     const { teamIds = [], ...projectDetails } = createProjectDto;
     const teams = await this.findTeams(teamIds);
+    this.assertTeamsInDepartment(teams, departmentId);
     const project = this.projectRepository.create({
       ...projectDetails,
       teams,
@@ -102,23 +104,38 @@ export class ProjectsService {
     return this.projectRepository.save(project);
   }
 
-  async findTeamMembers(id: number, user: AuthTokenPayload) {
+  async findTeamMembers(id: number, user: AuthTokenPayload, teamId?: number) {
     const project = await this.findOne(id, user);
-    const teamIds = project.teams.map((team) => team.id);
-    if (teamIds.length === 0) return [];
+    const projectTeams = [...project.teams].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    const teams = teamId === undefined
+      ? projectTeams
+      : projectTeams.filter((team) => team.id === teamId);
+    if (teamId !== undefined && teams.length === 0) {
+      throw new NotFoundException(`Team ${teamId} is not assigned to project ${id}`);
+    }
+    if (teams.length === 0) {
+      return { projectId: project.id, projectName: project.name, teams: [] };
+    }
 
     const members = await this.users.find({
-      where: { team: { id: In(teamIds) } },
+      where: { team: { id: In(teams.map((team) => team.id)) } },
       relations: { team: true },
       select: { id: true, fullName: true, team: { id: true, name: true } },
-      order: { fullName: 'ASC' },
+      order: { team: { name: 'ASC' }, fullName: 'ASC' },
     });
-    return members.map((member) => ({
-      id: member.id,
-      fullName: member.fullName,
-      teamId: member.team?.id,
-      teamName: member.team?.name,
-    }));
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      teams: teams.map((team) => ({
+        teamId: team.id,
+        teamName: team.name,
+        members: members
+          .filter((member) => member.team?.id === team.id)
+          .map((member) => ({ id: member.id, fullName: member.fullName })),
+      })),
+    };
   }
 
   async remove(id: number, user: AuthTokenPayload) {
@@ -157,7 +174,10 @@ export class ProjectsService {
   private async findTeams(teamIds: number[]) {
     if (teamIds.length === 0) return [];
 
-    const teams = await this.teamRepository.find({ where: { id: In(teamIds) } });
+    const teams = await this.teamRepository.find({
+      where: { id: In(teamIds) },
+      relations: { department: true },
+    });
     if (teams.length !== teamIds.length) {
       const foundIds = new Set(teams.map((team) => team.id));
       const missingIds = teamIds.filter((id) => !foundIds.has(id));

@@ -23,7 +23,7 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 - Routes without an access label do not declare a JWT/role guard in their controller. Resource listing/view/update routes, notifications, and dashboard routes are currently unguarded; reports and audit-log routes are guarded. `GET /api/v1/notifications/me` still expects the request to contain a user identity.
 - The global validation pipe rejects unknown fields and transforms input values where configured. Required and optional fields below follow the endpoint DTOs.
 - Successful responses return the created/updated record, an array, or the summary described below. Error responses use NestJS HTTP errors (commonly 400, 401, 403, 404, or 409).
-- User roles: `system_admin`, `team_lead`, `line_manager`, `department_head`, `managing_director`, `team_member`.
+- User roles: `SYSTEM_ADMIN`, `TEAM_LEAD`, `LINE_MANAGER`, `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`, `TEAM_MEMBER`.
 
 ## Authentication — `/api/v1/auth`
 
@@ -46,95 +46,72 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 ## Users — `/api/v1/users`
 
 ### `POST /api/v1/users`
-- **Access:** Bearer token; role: `system_admin`
-- **Request:** `{ "fullName": "Alex Morgan", "email": "alex@company.com", "role": "team_member", "initialPassword": "Temp1234" }`. Email must end in `@company.com`; password is 8–12 characters and includes a digit. The initial `system_admin` role cannot be assigned here.
+- **Access:** Bearer token; role: `SYSTEM_ADMIN`
+- **Request:** `{ "fullName": "Alex Morgan", "email": "alex@company.com", "role": "TEAM_MEMBER", "initialPassword": "Temp1234" }`. Email must end in `@company.com`; password is 8–12 characters and includes a digit. The initial `SYSTEM_ADMIN` role cannot be assigned here.
 - **Response:** `201` created account; password is not returned.
 
 ### `GET /api/v1/users`
-- **Access:** Bearer token; role: `system_admin`, `managing_director`
-- **Request:** No body or query parameters.
+- **Access:** Bearer token; role: `SYSTEM_ADMIN`, `MANAGING_DIRECTOR`
+- **Request:** Optional `startDate` and `endDate` query parameters as ISO 8601 timestamps, for example `?startDate=2026-11-01T00:00:00.000Z&endDate=2026-11-11T23:59:59.999Z`. If either is supplied, both are required. Both boundaries are inclusive; `startDate` must be less than or equal to `endDate`.
 - **Response:** `200` array of user accounts without credential data.
-
-### `GET /api/v1/users/created-between`
-- **Access:** Bearer token; role: `system_admin`, `managing_director`
-- **Request:** Required `startDate` and `endDate` query parameters as ISO 8601 timestamps, for example `?startDate=2026-11-01T00:00:00.000Z&endDate=2026-11-11T23:59:59.999Z`. Both boundaries are inclusive; `startDate` must be less than or equal to `endDate`.
-- **Response:** `200` array of matching user accounts without credential data, ordered by creation time ascending.
-- **Errors:** `400` for invalid timestamps or a start later than the end; `401` missing/invalid token; `403` caller lacks permission.
+- **Errors:** `400` one date missing, invalid timestamp, or start later than end; `401` missing/invalid token; `403` caller lacks permission.
 
 ### `GET /api/v1/users/line-managers`
-- **Access:** Bearer token; role: `team_lead`
+- **Access:** Bearer token; role: `TEAM_LEAD`
 - **Request:** No body or query parameters.
 - **Response:** `200` array of active Line Managers, each with `id`, `fullName`, and `email`, ordered by name. Use `fullName` as `lineManagerName` when creating a resource request.
 
-### `PATCH /api/v1/users/{id}/role`
-- **Access:** Bearer token; role: `system_admin`, `managing_director`, `department_head`
-- **Request:** `{ "role": "team_lead" }`. Any supported role except `system_admin`.
-- **Response:** `200` user assignment `{ id, fullName, email, role }`.
+### `PATCH /api/v1/users/{id}`
+- **Access:** Bearer token; role: `SYSTEM_ADMIN`, `MANAGING_DIRECTOR`, `DEPARTMENT_HEAD`; each action still enforces its own role permissions.
+- **Request:** Exactly one action per request. Deactivate: `{ "action": "deactivate" }`; reactivate: `{ "action": "reactivate" }`; assign a role: `{ "action": "assign_role", "role": "TEAM_LEAD" }`. `role` is required only for `assign_role`; `SYSTEM_ADMIN` cannot be assigned. Reactivation is allowed only when the account is currently deactivated. The System Admin cannot deactivate their own account.
+- **Response:** `200` confirmation for deactivation or reactivation, or the updated user assignment for `assign_role`.
+- **Errors:** `400` invalid action/body, invalid role, account already active/deactivated, or self-deactivation; `401` missing/invalid token; `403` caller lacks permission; `404` acting or target user not found; `409` a Managing Director is already assigned.
 
 ### `GET /api/v1/users/me`
 - **Access:** Bearer token; role: any authenticated user
 - **Request:** No body or query parameters.
 - **Response:** `200` current profile `{ id, fullName, email, role, department, team }` (some values may be null).
 
-### `PATCH /api/v1/users/me/profile`
+### `PATCH /api/v1/users/me`
 - **Access:** Bearer token; role: any authenticated user
-- **Request:** Any one or more of: `phoneNumber` (string, max 30; digits only), `address` (string, max 255), `dateOfBirth` (`YYYY-MM-DD`), `preferredPronoun` (`Mr.`, `Mrs.`, or `Miss`). Send at least one field.
-- **Response:** `200` updated profile.
-
-### `PATCH /api/v1/users/me/password`
-- **Access:** Bearer token; role: any authenticated user
-- **Request:** `{ "currentPassword": "current123", "newPassword": "newSecure456" }`. Each is 8–12 characters; new password must contain a digit.
-- **Response:** `200` password change confirmation.
-
-### `PATCH /api/v1/users/{id}/deactivate`
-- **Access:** Bearer token; role: `system_admin`
-- **Request:** No body. UUID account ID in path.
-- **Response:** `200` deactivation confirmation.
-
-### `PATCH /api/v1/users/{id}/reactivate`
-- **Access:** Bearer token; role: `system_admin`
-- **Request:** No body. UUID account ID in path.
-- **Response:** `200` reactivation confirmation.
+- **Request:** Exactly one action per request. Update profile: `{ "action": "update_profile", "address": "Lilongwe, Malawi" }`, with one or more of `phoneNumber` (string, max 30; digits only), `address` (string, max 255), `dateOfBirth` (`YYYY-MM-DD`), and `preferredPronoun` (`Mr.`, `Mrs.`, or `Miss`). Change password: `{ "action": "change_password", "currentPassword": "current123", "newPassword": "newSecure456" }`; both passwords are 8–12 characters and the new password must contain a digit. Profile fields are rejected for password changes, and password fields are rejected for profile updates.
+- **Response:** `200` updated profile or password change confirmation.
+- **Errors:** `400` invalid action/fields, invalid profile data, or new password matching the current password; `401` missing/invalid token or current password is incorrect; `404` user not found.
 
 ## Resources — `/api/v1/resources`
 
-Resource types are `insourced` and `outsourced`. Responses include common fields `id`, `name`, `type`, `quantity`, `createdAt`, and `updatedAt`, plus type-specific fields.
+Resource types are `insourced` and `outsourced`. Responses include common fields `id`, `name`, `type`, `status`, `quantity`, `createdAt`, and `updatedAt`, plus type-specific fields. Resource status is `AVAILABLE` when there are no active allocations and `ASSIGNED` when one or more units have an active allocation.
 
 ### `POST /api/v1/resources`
-- **Access:** Bearer token; role: `managing_director`.
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`.
 - **Request:** Insourced JSON: `{ "name": "Office laptop", "type": "insourced", "description": "Existing inventory", "departmentName": "Information Technology", "quantity": 1 }`. The department name must match one existing department. Outsourced JSON: `{ "name": "Office laptop", "type": "outsourced", "price": 1250.50, "label": "Dell Latitude 5450", "batchNumber": "LOT-2026-04", "vendor": "Example Supplies Ltd", "quantity": 3 }`. Quantity is an integer of at least 1; outsourced price and vendor are required. Type-specific fields from the other resource type are rejected.
-- **Response:** `201` created resource. Insourced records include `description` and `departmentName`; outsourced records include `price`, `label`, `batchNumber`, and `vendor`. `401` missing/invalid token; `403` caller is not Managing Director.
+- **Response:** `201` created resource with status `AVAILABLE`. Insourced records include `description` and `departmentName`; outsourced records include `price`, `label`, `batchNumber`, and `vendor`. `401` missing/invalid token; `403` caller is not Managing Director.
 
 ### `GET /api/v1/resources`
 - **Request:** Optional query: `name` (case-insensitive substring), `type` (`insourced` or `outsourced`). Example: `?name=laptop&type=outsourced`.
-- **Response:** `200` matching resource array, newest first.
-
-### `GET /api/v1/resources/available`
-- **Access:** Bearer token; role: `line_manager`.
-- **Response:** `200` resources with positive available quantity grouped by type (`insourced`, `outsourced`), each with an `availableQuantity` total and resource records. The response also includes `totalAvailableQuantity`. Active allocations are deducted from recorded quantities.
-- **Errors:** `401` missing/invalid token; `403` caller is not a Line Manager.
+- **Response:** `200` matching resource array, newest first; each resource includes its `AVAILABLE` or `ASSIGNED` status.
 
 ### `POST /api/v1/resources/{id}/allocations`
-- **Access:** Bearer token; role: `line_manager`.
+- **Access:** Bearer token; role: `LINE_MANAGER`.
 - **Request:** `quantity`, `teamId`, `projectId`, and `assignedToUserId`; optional `expectedReturnAt` and approved `requestId`. When allocating against a request, omitting `expectedReturnAt` sets it from the request's `expectedDurationDays`. The project must be assigned to the team, and the active assigned user must belong to that team. A supplied request must be approved, routed to the caller, and match the team and project.
 - **Response:** `201` active allocation and an allocation movement event. The server rejects quantities exceeding available stock or the request's unfulfilled quantity.
 
 ### `GET /api/v1/resources/{id}/allocations`
-- **Access:** Bearer token; role: `line_manager`.
+- **Access:** Bearer token; role: `LINE_MANAGER`.
 - **Response:** `200` active allocations, including current user, team, project, request, allocation date, and return deadline.
 
 ### `PATCH /api/v1/resources/allocations/{allocationId}/return`
-- **Access:** Bearer token; role: `line_manager`.
+- **Access:** Bearer token; role: `LINE_MANAGER`.
 - **Request:** Optional `note`.
 - **Response:** `200` allocation marked returned and a return movement event recorded.
 
 ### `PATCH /api/v1/resources/allocations/{allocationId}/transfer`
-- **Access:** Bearer token; role: `line_manager`.
+- **Access:** Bearer token; role: `LINE_MANAGER`.
 - **Request:** New `teamId`, `projectId`, and `assignedToUserId`; optional `expectedReturnAt` and `note`.
 - **Response:** `200` prior assignment closed, new active assignment created, and transfer movement event recorded.
 
 ### `GET /api/v1/resources/{id}/movements`
-- **Access:** Bearer token; role: `line_manager`.
+- **Access:** Bearer token; role: `LINE_MANAGER`.
 - **Response:** `200` chronological allocation, transfer, and return events for the resource.
 
 ### `GET /api/v1/resources/{id}`
@@ -152,12 +129,12 @@ Resource types are `insourced` and `outsourced`. Responses include common fields
 Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`, `APPROVED`, and `REJECTED`. All four routes require a Bearer token.
 
 ### `POST /resource-requests/api/v1/resource-request`
-- **Access:** `team_lead`
+- **Access:** `TEAM_LEAD`
 - **Request:** JSON body: `{ "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "quantity": 3, "expectedDurationDays": 14, "projectName": "Office Modernization", "lineManagerName": "Jordan Lee", "teamName": "Platform" }`. Names must identify one project assigned to the named team and one active Line Manager; the department is taken from the team. Quantity and `expectedDurationDays` are positive integers. Unit price, manufacturer label, vendor, and department ID are not requested. `requestedBy`, relationship IDs, and initial status are set by the server.
 - **Response:** `201` submitted request. Duplicate team, project, or Line Manager names are rejected as ambiguous.
 
 ### `GET /resource-requests/api/v1/resource-request`
-- **Access:** `team_lead`, `line_manager`, `department_head`, `managing_director`
+- **Access:** `TEAM_LEAD`, `LINE_MANAGER`, `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
 - **Request:** Optional query: `status` (one of the statuses above), `teamId` (numeric ID encoded as string). Results are scoped to the caller's role.
 - **Response:** `200` request array, newest first.
 
@@ -167,164 +144,164 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 - **Response:** `200` request details; audit trail when requested.
 
 ### `PATCH /resource-requests/api/v1/resource-request/{id}`
-- **Access:** `team_lead` (own queried requests), `line_manager` (assigned submitted requests)
+- **Access:** `TEAM_LEAD` (own queried requests), `LINE_MANAGER` (assigned submitted requests)
 - **Request:** Partial request fields from create body (including the name fields `projectName`, `lineManagerName`, and `teamName`) plus optional `status` and `note`. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
 - **Response:** `200` updated request, with review fields updated on manager review.
 
 ## Departments — `/api/v1/departments`
 
 ### `POST /api/v1/departments`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** `{ "name": "Finance", "code": "FIN", "description": "Finance and accounting" }`. `name` required (3–100 chars); `code` optional (2–20 uppercase letters, digits, `_` or `-`); description optional (max 500).
 - **Response:** `201` department `{ id, name, code, description }`.
 - **Error:** `409` when a department with the same name already exists.
 
 ### `GET /api/v1/departments`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** No body.
 - **Response:** `200` department array.
 
 ### `GET /api/v1/departments/{id}`
-- **Access:** Bearer token; role: `managing_director`, `department_head`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`, `DEPARTMENT_HEAD`
 - **Request:** Numeric department ID.
 - **Response:** `200` department record.
 
 ### `GET /api/v1/departments/{id}/users`
-- **Access:** Bearer token; role: `managing_director`, `department_head`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`, `DEPARTMENT_HEAD`
 - **Request:** Numeric department ID.
 - **Response:** `200` user array with `id`, `fullName`, `email`, `role`.
 
 ### `GET /api/v1/departments/{id}/teams`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** Numeric department ID.
 - **Response:** `200` team array.
 
 ### `GET /api/v1/departments/{id}/projects`
-- **Access:** Bearer token; role: `managing_director`, `department_head`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`, `DEPARTMENT_HEAD`
 - **Request:** Numeric department ID.
 - **Response:** `200` project array with associated teams.
 
 ### `GET /api/v1/departments/{id}/resource-requests`
-- **Access:** Bearer token; role: `department_head`, `managing_director`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
 - **Request:** Numeric department ID.
 - **Response:** `200` resource request array visible to caller.
 
 ### `GET /api/v1/departments/{id}/teams/{teamId}/projects`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** Numeric department and team IDs.
 - **Response:** `200` projects associated with that team.
 
 ### `PATCH /api/v1/departments/{id}`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** Any of `name`, `code`, `description` with the create field constraints.
 - **Response:** `200` updated department.
 
 ### `DELETE /api/v1/departments/{id}`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** Numeric department ID.
 - **Response:** `200` deleted department record.
 
 ### `PATCH /api/v1/departments/{id}/assign-head/{userId}`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** Numeric department ID and user UUID in path; no body.
 - **Response:** `200` assignment confirmation.
 
 ## Teams — `/api/v1/teams`
 
 ### `POST /api/v1/teams`
-- **Access:** Bearer token; role: `department_head`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** `{ "name": "Procurement", "description": "Sources equipment", "departmentId": 2 }`. Name required (3–100 chars), departmentId positive integer, description optional (max 500).
 - **Response:** `201` team record with department.
 
 ### `GET /api/v1/teams`
-- **Access:** Bearer token; role: `department_head`, `managing_director`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
 - **Request:** No body.
 - **Response:** `200` team array.
 
 ### `GET /api/v1/teams/unassigned-users`
-- **Access:** Bearer token; role: `department_head`
-- **Request:** Optional `role` query parameter: `team_lead` or `team_member`. Omit to list both roles.
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
+- **Request:** Optional `role` query parameter: `TEAM_LEAD` or `TEAM_MEMBER`. Omit to list both roles.
 - **Response:** `200` active users without a team, each with `id`, `fullName`, `email`, and `role`, ordered by name.
 
 ### `GET /api/v1/teams/{id}/users`
-- **Access:** Bearer token; role: `department_head`, `team_lead`, `team_member`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `TEAM_LEAD`, `TEAM_MEMBER`
 - **Request:** Numeric team ID.
 - **Response:** `200` member array (`id`, `fullName`, `email`, `role`).
 
 ### `GET /api/v1/teams/{id}/projects`
-- **Access:** Bearer token; role: `department_head`, `team_lead`, `team_member`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `TEAM_LEAD`, `TEAM_MEMBER`
 - **Request:** Numeric team ID.
 - **Response:** `200` project array.
 
 ### `GET /api/v1/teams/{id}/resource-requests`
-- **Access:** Bearer token; role: `team_lead`, `team_member`
+- **Access:** Bearer token; role: `TEAM_LEAD`, `TEAM_MEMBER`
 - **Request:** Numeric team ID.
 - **Response:** `200` team request array.
 
 ### `GET /api/v1/teams/{id}`
-- **Access:** Bearer token; role: `department_head`, `team_lead`, `team_member`, `managing_director`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `TEAM_LEAD`, `TEAM_MEMBER`, `MANAGING_DIRECTOR`
 - **Request:** Numeric team ID.
 - **Response:** `200` team record.
 
 ### `PATCH /api/v1/teams/{id}/team-lead`
-- **Access:** Bearer token; role: `department_head`
-- **Request:** `{ "userId": "<user UUID>" }`; target user must have `team_lead` role.
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
+- **Request:** `{ "userId": "<user UUID>" }`; target user must have `TEAM_LEAD` role.
 - **Response:** `200` team lead assignment.
 
 ### `PATCH /api/v1/teams/{id}/assign-user`
-- **Access:** Bearer token; role: `department_head` for the team's department
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD` for the team's department
 - **Request:** `{ "userId": "<Team Lead or Team Member UUID>" }`
 - **Response:** `200` updated team record. The active user is assigned to the team and the team's department. `403` inactive user or unsupported role; `409` user already belongs to another team.
 
 ### `PATCH /api/v1/teams/{id}`
-- **Access:** Bearer token; role: `department_head`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** Any of `name` (3–50 chars), `description` (max 50), `departmentId` (positive integer).
 - **Response:** `200` updated team.
 
 ### `DELETE /api/v1/teams/{id}`
-- **Access:** Bearer token; role: `department_head`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** Numeric team ID.
 - **Response:** `200` deleted team record.
 
 ## Projects — `/api/v1/projects`
 
 ### `POST /api/v1/projects`
-- **Access:** Bearer token; role: `department_head`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** `{ "name": "Office Modernization", "description": "Upgrade shared equipment", "startDate": "2026-01-01", "endDate": "2026-12-31", "teamIds": [1] }`. Name required (1–150 chars); `startDate` and `endDate` required as `YYYY-MM-DD`, with `endDate` on or after `startDate`; description optional (max 1000); teamIds optional array of unique positive integers.
 - **Response:** `201` project with assigned teams.
 
 ### `GET /api/v1/projects`
-- **Access:** Bearer token; role: `department_head`, `managing_director`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
 - **Request:** No body.
 - **Response:** `200` projects visible to caller.
 
 ### `GET /api/v1/projects/department/{departmentId}`
-- **Access:** Bearer token; role: `managing_director`
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`
 - **Request:** Numeric department ID.
 - **Response:** `200` projects assigned to teams in that department.
 
 ### `GET /api/v1/projects/{id}`
-- **Access:** Bearer token; role: `department_head`, `managing_director`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
 - **Request:** Numeric project ID.
 - **Response:** `200` project record.
 
 ### `PATCH /api/v1/projects/{id}/teams`
-- **Access:** Bearer token; role: `department_head`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** `{ "teamIds": [1] }`. Array of unique positive integer IDs (the DTO currently caps the array at one item); replaces the assigned team list.
 - **Response:** `200` updated project.
 
 ### `PATCH /api/v1/projects/{id}`
-- **Access:** Bearer token; role: `department_head`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** One or more of `name` (1–150 chars), `description` (max 1000), `startDate`, and `endDate`. Dates use `YYYY-MM-DD`; if a date is changed, the resulting end date must be on or after the start date.
 - **Response:** `200` updated project.
 
 ### `GET /api/v1/projects/{id}/team-members`
-- **Access:** Bearer token; role: `department_head`, `managing_director`
-- **Request:** Numeric project ID.
-- **Response:** `200` array of `{ id, fullName, teamId, teamName }`.
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
+- **Request:** Numeric project ID; optional query `teamId` to return one team assigned to the project. Omit it to include all project teams.
+- **Response:** `200` `{ projectId, projectName, teams: [{ teamId, teamName, members: [{ id, fullName }] }] }`. Teams are sorted by name, and members within each team are sorted by name. An unassigned `teamId` returns `404`.
 
 ### `DELETE /api/v1/projects/{id}`
-- **Access:** Bearer token; role: `department_head`
+- **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** Numeric project ID.
 - **Response:** `200` `{ "message": "Project with id … deleted successfully" }`.
 
@@ -366,7 +343,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ## Reports — `/api/v1/reports`
 
-Report endpoints require a Bearer token for `system_admin` or `managing_director`. They accept optional query filters: `departmentId` (positive integer), `startDate`, and `endDate` (ISO date strings, e.g. `2026-01-01`). Dates are inclusive. No request body is used.
+Report endpoints require a Bearer token for `SYSTEM_ADMIN` or `MANAGING_DIRECTOR`. They accept optional query filters: `departmentId` (positive integer), `startDate`, and `endDate` (ISO date strings, e.g. `2026-01-01`). Dates are inclusive. No request body is used.
 
 ### `GET /api/v1/reports/approval-history`
 - **Response:** `200` array of approval history rows.
@@ -385,7 +362,7 @@ Report endpoints require a Bearer token for `system_admin` or `managing_director
 
 ## Audit logs — `/api/v1/audit-logs`
 
-Both routes require a Bearer token for `system_admin`, `department_head`, or `managing_director`.
+Both routes require a Bearer token for `SYSTEM_ADMIN`, `DEPARTMENT_HEAD`, or `MANAGING_DIRECTOR`.
 
 ### `GET /api/v1/audit-logs`
 - **Request:** No body/query.

@@ -8,8 +8,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user-role.enum';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Departments')
+@ApiStandardErrorResponses(401, 403, 500)
 @Controller('api/v1/departments')
 export class DepartmentsController {
     constructor(private readonly departmentsService: DepartmentsService) {}
@@ -88,7 +90,10 @@ export class DepartmentsController {
      @Get(':id/resource-requests')
      @ApiOperation({ summary: 'List resource requests for a department' })
      @ApiParam({ name: 'id', description: 'Department ID' })
-     @ApiResponse({ status: 200, description: 'Department resource requests returned' })
+     @ApiResponse({ status: 200, description: 'Department resource requests returned.', schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
+     @ApiResponse({ status: 400, description: 'Department ID must be an integer.' })
+     @ApiResponse({ status: 403, description: 'The caller is not authorized to view requests for this department.' })
+     @ApiResponse({ status: 404, description: 'Department not found or not visible to the caller.' })
      @ApiBearerAuth('access-token')
      @UseGuards(JwtAuthGuard, RolesGuard)
      @Roles(UserRole.DEPARTMENT_HEAD, UserRole.MANAGING_DIRECTOR)
@@ -150,7 +155,7 @@ export class DepartmentsController {
    @ApiOperation({ summary: 'Assign a department head to a department' })
    @ApiParam({ name: 'id', description: 'Numeric department ID', type: Number, example: 1 })
    @ApiParam({ name: 'userId', description: 'UUID of the user to be assigned as department head', type: String, example: '123e4567-e89b-12d3-a456-426614174000' })
-   @ApiResponse({ status: 200, description: 'Department head assigned successfully' })
+   @ApiResponse({ status: 200, description: 'Department head assigned successfully.', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, department: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } } } } })
    @ApiResponse({ status: 404, description: 'Department or user not found' })
    @ApiResponse({ status: 403, description: 'Forbidden. Only managing directors can assign department heads.' })
    @ApiBearerAuth('access-token')
