@@ -308,7 +308,7 @@ export class UsersService {
         if (!dto.role) {
           throw new BadRequestException('role is required when action is assign_role');
         }
-        return this.assignRole(userId, dto.role, actorId);
+        return this.assignRole(userId, { role: dto.role }, actorId);
       default:
         throw new BadRequestException('Unsupported account action');
     }
