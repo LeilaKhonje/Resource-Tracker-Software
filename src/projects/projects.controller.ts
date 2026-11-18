@@ -1,4 +1,4 @@
-import {Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Req, UseGuards} from '@nestjs/common';
+import {Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -6,6 +6,7 @@ import { UserRole } from '../users/user-role.enum';
 import { AssignProjectTeamsDto } from './dto/assign-project-teams.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { ProjectTeamMembersQueryDto } from './dto/project-team-members-query.dto';
 import { ProjectsService } from './projects.service';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
@@ -145,8 +146,8 @@ export class ProjectsController {
     return this.projectsService.update(id, updateProjectDto, request.user!);
   }
 
-  @ApiOperation({ summary: 'List team member names for a project' })
-  @ApiResponse({ status: 200, description: 'Project team members', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, teamId: { type: 'integer' }, teamName: { type: 'string' } } } } })
+  @ApiOperation({ summary: 'List project members grouped by team, optionally filtered to one team' })
+  @ApiResponse({ status: 200, description: 'Project members grouped by team', schema: { type: 'object', properties: { projectId: { type: 'integer' }, projectName: { type: 'string' }, teams: { type: 'array', items: { type: 'object', properties: { teamId: { type: 'integer' }, teamName: { type: 'string' }, members: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' } } } } } } } } } })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions or department access' })
   @ApiResponse({ status: 404, description: 'Project does not exist' })
@@ -156,8 +157,12 @@ export class ProjectsController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DEPARTMENT_HEAD, UserRole.MANAGING_DIRECTOR)
-  findTeamMembers(@Param('id', ParseIntPipe) id: number, @Req() request: AuthenticatedRequest) {
-    return this.projectsService.findTeamMembers(id, request.user!);
+  findTeamMembers(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: ProjectTeamMembersQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.projectsService.findTeamMembers(id, request.user!, query.teamId);
   }
 
   @ApiOperation({ summary: 'Delete a project by ID' })

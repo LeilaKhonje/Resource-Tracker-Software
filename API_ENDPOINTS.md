@@ -297,8 +297,8 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `GET /api/v1/projects/{id}/team-members`
 - **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
-- **Request:** Numeric project ID.
-- **Response:** `200` array of `{ id, fullName, teamId, teamName }`.
+- **Request:** Numeric project ID; optional query `teamId` to return one team assigned to the project. Omit it to include all project teams.
+- **Response:** `200` `{ projectId, projectName, teams: [{ teamId, teamName, members: [{ id, fullName }] }] }`. Teams are sorted by name, and members within each team are sorted by name. An unassigned `teamId` returns `404`.
 
 ### `DELETE /api/v1/projects/{id}`
 - **Access:** Bearer token; role: `DEPARTMENT_HEAD`
