@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { ResourceType } from '../enum/resource-type.enum';
+import { ResourceStatus } from '../enum/resource-status.enum';
 import { Department } from '../../departments/entities/department.entity';
 
 @Entity('resources')
@@ -12,6 +13,9 @@ export class Resources {
 
     @Column({type: 'enum', enum: ResourceType })
     type: ResourceType;
+
+    @Column({ type: 'enum', enum: ResourceStatus, default: ResourceStatus.AVAILABLE })
+    status: ResourceStatus;
 
     @Column({type: 'text', nullable: true})
     description: string | null;

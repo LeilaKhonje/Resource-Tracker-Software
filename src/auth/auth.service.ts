@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { LoginDto } from './dto/login.dto';
@@ -47,6 +47,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (user.deletionRequestedAt) {
+      const deletionDeadline = user.deletionRequestedAt.getTime() + 5 * 24 * 60 * 60 * 1000;
+      if (Date.now() >= deletionDeadline) {
+        throw new UnauthorizedException('The account deletion grace period has expired');
+      }
+      user.deletionRequestedAt = null;
+      await this.usersRepository.save(user);
+    }
+
     if (!user.isActive) {
       throw new UnauthorizedException('Your account has been deactivated');
     }
@@ -77,30 +86,62 @@ export class AuthService {
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const user = await this.usersRepository.findOneBy({ email: forgotPasswordDto.email.trim().toLowerCase() });
     if (user?.isActive) {
-      const token = await this.jwtService.signAsync(
-        { sub: user.id, tokenUse: 'password_reset' }, { expiresIn: '15m' },
-      );
-      const apiBaseUrl = this.config.get<string>('API_BASE_URL', 'http://localhost:3000').replace(/\/$/, '');
-      const url = `${apiBaseUrl}/api/v1/auth/reset-password?token=${encodeURIComponent(token)}`;
-      await this.email.send(user.email, 'Reset your password', `Use this link within 15 minutes to reset your password: ${url}`);
+      const code = String(randomInt(100000, 1000000));
+      user.passwordResetCodeHash = this.hashResetCode(user.email, code);
+      user.passwordResetExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      user.passwordResetAttempts = 0;
+      await this.usersRepository.save(user);
+      await this.email.send(user.email, 'Your password reset code', `Your password reset code is ${code}. It expires in 10 minutes.`);
     }
+    const email = forgotPasswordDto.email.trim().toLowerCase();
     return {
-      message:
-        'A reset password link has been sent to your email.',
+      message: ` A password reset code has been sent to ${this.maskEmail(email)}.`,
     };
   }
 
+  private maskEmail(email: string): string {
+    const [localPart, domain] = email.split('@');
+    if (!localPart || !domain) return 'your email address';
+
+    const visiblePrefix = localPart.slice(0, 1);
+    const visibleSuffix = localPart.length > 2 ? localPart.slice(-1) : '';
+    const maskedLocalPart = `${visiblePrefix}${'*'.repeat(Math.max(1, localPart.length - visiblePrefix.length - visibleSuffix.length))}${visibleSuffix}`;
+    return `${maskedLocalPart}@${domain}`;
+  }
+
   async resetPassword(dto: ResetPasswordDto) {
-    let payload: { sub?: string; tokenUse?: string };
-    try { payload = await this.jwtService.verifyAsync(dto.token); }
-    catch { throw new UnauthorizedException('Invalid or expired password reset link'); }
-    if (payload.tokenUse !== 'password_reset' || !payload.sub) throw new UnauthorizedException('Invalid or expired password reset link');
-    const user = await this.usersRepository.findOneBy({ id: payload.sub });
-    if (!user || !user.isActive) throw new UnauthorizedException('Invalid or expired password reset link');
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.usersRepository.createQueryBuilder('user')
+      .addSelect(['user.passwordResetCodeHash', 'user.passwordResetExpiresAt', 'user.passwordResetAttempts'])
+      .where('user.email = :email', { email })
+      .getOne();
+    if (!user || !user.isActive || !user.passwordResetCodeHash || !user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() <= Date.now() || user.passwordResetAttempts >= 5) {
+      throw new UnauthorizedException('Invalid or expired password reset code');
+    }
+    const expected = Buffer.from(user.passwordResetCodeHash, 'hex');
+    const actual = Buffer.from(this.hashResetCode(email, dto.code), 'hex');
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      user.passwordResetAttempts += 1;
+      if (user.passwordResetAttempts >= 5) {
+        user.passwordResetCodeHash = null;
+        user.passwordResetExpiresAt = null;
+      }
+      await this.usersRepository.save(user);
+      throw new UnauthorizedException('Invalid or expired password reset code');
+    }
     user.passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
     user.refreshTokenHash = null;
+    user.passwordResetCodeHash = null;
+    user.passwordResetExpiresAt = null;
+    user.passwordResetAttempts = 0;
     await this.usersRepository.save(user);
     return { message: 'Password reset successfully' };
+  }
+
+  private hashResetCode(email: string, code: string): string {
+    const secret = this.config.get<string>('JWT_SECRET');
+    if (!secret) throw new Error('JWT_SECRET is not configured');
+    return createHmac('sha256', secret).update(`${email}:${code}`).digest('hex');
   }
 
   private async loginUser(user: User){
@@ -108,6 +149,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     }
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -138,16 +180,28 @@ export class AuthService {
       typeof payload !== 'object' ||
       payload === null ||
       payload.tokenUse !== 'refresh' ||
-      typeof payload.sub !== 'string'
+      typeof payload.sub !== 'string' ||
+      !Number.isInteger(payload.tokenVersion)
     ) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     const user = await this.usersRepository.findOne({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, isActive: true, refreshTokenHash: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        refreshTokenHash: true,
+        tokenVersion: true,
+      },
     });
-    if (!user || !user.isActive) {
+    if (
+      !user ||
+      !user.isActive ||
+      user.tokenVersion !== payload.tokenVersion
+    ) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 

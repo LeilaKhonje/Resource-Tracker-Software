@@ -1,27 +1,15 @@
 
-import {
-  Controller,
-  Get,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
-
+import {Controller,Get,Query,UseGuards,} from '@nestjs/common';
 import { AuditLogService } from './auditlog.service';
-
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiQuery,
-} from '@nestjs/swagger';
-
+import {ApiTags,ApiOperation,ApiResponse,ApiBearerAuth,ApiQuery,} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user-role.enum';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Audit Logs')
+@ApiStandardErrorResponses(401, 403, 500)
 @Controller('api/v1/audit-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(

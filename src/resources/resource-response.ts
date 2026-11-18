@@ -6,6 +6,7 @@ export function toResourceResponse(resource: Resources) {
     id: resource.id,
     name: resource.name,
     type: resource.type,
+    status: resource.status,
     batchNumber: resource.batchNumber,
     quantity: resource.quantity,
     createdAt: resource.createdAt,

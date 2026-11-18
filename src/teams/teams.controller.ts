@@ -11,8 +11,10 @@ import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-requ
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { AssignTeamLeadDto } from './dto/assign-team-lead.dto';
 import { AssignTeamUserDto } from './dto/assign-team-user.dto';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Teams')
+@ApiStandardErrorResponses(401, 403, 500)
 @Controller('api/v1/teams')
 export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
@@ -49,8 +51,10 @@ export class TeamsController {
   @Roles(UserRole.DEPARTMENT_HEAD)
   @ApiOperation({ summary: 'List active Team Leads and Team Members without a team' })
   @ApiQuery({ name: 'role', required: false, enum: [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] })
-  @ApiResponse({ status: 200, description: 'Unassigned active users, ordered by name' })
+  @ApiResponse({ status: 200, description: 'Unassigned active users, ordered by name.', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] } } } } })
   @ApiResponse({ status: 400, description: 'Role filter must be team_lead or team_member' })
+  @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
+  @ApiResponse({ status: 403, description: 'Only department heads can list unassigned users.' })
   findUnassignedUsers(@Query('role') role?: string) {
     return this.teamsService.findUnassignedUsers(role);
   }
@@ -95,6 +99,7 @@ export class TeamsController {
   @ApiOperation({ summary: 'List resource requests for a team' })
   @ApiParam({ name: 'id', description: 'Team ID' })
   @ApiResponse({ status: 200, description: 'Team resource requests returned' })
+  @ApiResponse({ status: 400, description: 'Team ID must be an integer.' })
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER)
@@ -122,9 +127,11 @@ export class TeamsController {
   @ApiOperation({ summary: 'Assign a team lead to a team' })
   @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number })
   @ApiBody({ type: AssignTeamLeadDto })
-  @ApiResponse({ status: 200, description: 'Team lead assigned to the team' })
+  @ApiResponse({ status: 200, description: 'Team lead assigned to the team.', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true, additionalProperties: true } } } })
   @ApiResponse({ status: 403, description: 'Caller is not the department head for this team, or target user is not a team lead' })
   @ApiResponse({ status: 404, description: 'Team or user not found' })
+  @ApiResponse({ status: 400, description: 'Invalid team ID or assignment body.' })
+  @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DEPARTMENT_HEAD)
@@ -140,10 +147,12 @@ export class TeamsController {
   @ApiOperation({ summary: 'Assign a Team Lead or Team Member to a team' })
   @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number })
   @ApiBody({ type: AssignTeamUserDto })
-  @ApiResponse({ status: 200, description: 'User assigned to the team and its department' })
+  @ApiResponse({ status: 200, description: 'User assigned to the team and its department.', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true, additionalProperties: true } } } })
   @ApiResponse({ status: 403, description: 'Target is inactive, has an unsupported role, or caller is not the team department head' })
   @ApiResponse({ status: 409, description: 'Target user is already assigned to another team' })
   @ApiResponse({ status: 404, description: 'Team or user not found' })
+  @ApiResponse({ status: 400, description: 'Invalid team ID or assignment body.' })
+  @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DEPARTMENT_HEAD)
@@ -167,6 +176,8 @@ export class TeamsController {
   @ApiResponse({ status: 200, description: 'Updated team record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true } } } })
   @ApiResponse({ status: 400, description: 'Invalid team fields' })
   @ApiResponse({ status: 404, description: 'Team or requested department not found' })
+  @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
+  @ApiResponse({ status: 403, description: 'Only department heads can update teams.' })
   update(@Param('id') id: string, @Body() updateTeamDto: UpdateTeamDto) {
     return this.teamsService.update(Number(id), updateTeamDto);
   }
@@ -179,6 +190,8 @@ export class TeamsController {
   @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number, example: 1 })
   @ApiResponse({ status: 200, description: 'Deleted team record', schema: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' }, description: { type: 'string' }, department: { type: 'object', nullable: true } } } })
   @ApiResponse({ status: 404, description: 'Team not found' })
+  @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
+  @ApiResponse({ status: 403, description: 'Only department heads can delete teams.' })
   remove(@Param('id') id: string) {
     return this.teamsService.remove(Number(id));
   }

@@ -48,6 +48,7 @@ export class JwtAuthGuard implements CanActivate {
       payload.tokenUse === 'refresh' ||
       typeof payload.sub !== 'string' ||
       typeof payload.email !== 'string' ||
+      !Number.isInteger(payload.tokenVersion) ||
       (payload.role !== null &&
         !Object.values(UserRole).includes(payload.role))
     ) {
@@ -56,9 +57,19 @@ export class JwtAuthGuard implements CanActivate {
 
     const user = await this.usersRepository.findOne({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        tokenVersion: true,
+      },
     });
-    if (!user || !user.isActive) {
+    if (
+      !user ||
+      !user.isActive ||
+      user.tokenVersion !== payload.tokenVersion
+    ) {
       throw new UnauthorizedException('The account is inactive or no longer exists');
     }
 

@@ -3,19 +3,19 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 type RoleKey = {
   column: string;
   index: string;
-  role: 'managing_director' | 'system_admin';
+  role: 'MANAGING_DIRECTOR' | 'SYSTEM_ADMIN';
 };
 
 const ROLE_KEYS: RoleKey[] = [
   {
     column: 'managing_director_unique_role',
     index: 'IDX_users_single_managing_director',
-    role: 'managing_director',
+    role: 'MANAGING_DIRECTOR',
   },
   {
     column: 'system_admin_unique_role',
     index: 'IDX_users_single_system_admin',
-    role: 'system_admin',
+    role: 'SYSTEM_ADMIN',
   },
 ];
 
@@ -102,7 +102,7 @@ export class RoleColumnSupportsAllRoles1762800000000
     const duplicates = (await queryRunner.query(
       `SELECT role, COUNT(*) AS rowCount
        FROM users
-       WHERE role IN ('managing_director', 'system_admin')
+       WHERE role IN ('MANAGING_DIRECTOR', 'SYSTEM_ADMIN')
        GROUP BY role
        HAVING COUNT(*) > 1`,
     )) as Array<{ role: string; rowCount: number }>;
