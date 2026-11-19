@@ -35,7 +35,7 @@ export class ReportsService {
           r.departmentId,
           r.status,
           r.createdAt
-       FROM resource_requests r
+       FROM resource_request r
        WHERE ${conditions.join(' AND ')}
        ORDER BY r.createdAt DESC`,
       params,
@@ -68,11 +68,11 @@ export class ReportsService {
           d.id AS departmentId,
           d.name AS departmentName,
           COALESCE(
-            SUM(r.unitPrice * r.quantity),
+            SUM(r.price * r.quantity),
             0
           ) AS totalSpending
        FROM department d
-       LEFT JOIN resource_requests r
+       LEFT JOIN resource_request r
          ON r.departmentId = d.id
          AND ${conditions.join(' AND ')}
        GROUP BY d.id, d.name
