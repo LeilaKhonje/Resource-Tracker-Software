@@ -6,8 +6,10 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Authentication')
+@ApiStandardErrorResponses(400, 500)
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -23,7 +25,7 @@ export class AuthController {
        properties:{
         email:{
           type: 'string',
-          example:'johndoe@company.com'
+          example:'johndoe@gmail.com'
         },
         password:{
           type: 'string',
@@ -64,7 +66,7 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Log out and revoke the current refresh token' })
   @ApiBody({ type: LogoutDto })
-  @ApiResponse({ status: 200, description: 'Refresh token revoked' })
+  @ApiResponse({ status: 200, description: 'Refresh token revoked.', schema: { type: 'object', properties: { message: { type: 'string', example: 'Logged out successfully' } } } })
   @ApiResponse({ status: 401, description: 'Refresh token is invalid, expired, or already revoked' })
   @Post('logout')
   @HttpCode(HttpStatus.OK)
@@ -96,6 +98,8 @@ export class AuthController {
 
   @ApiBody({type: ResetPasswordDto})
   @ApiOperation({summary: 'Reset pasword, the user enters the code sent to their email and a new password of their choosing'})
+  @ApiResponse({ status: 200, description: 'Password reset completed.', schema: { type: 'object', properties: { message: { type: 'string', example: 'Password reset successfully' } } } })
+  @ApiResponse({ status: 401, description: 'Password reset code is invalid or expired.' })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() dto: ResetPasswordDto) {

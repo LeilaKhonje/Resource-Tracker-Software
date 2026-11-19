@@ -4,4 +4,5 @@ export interface AuthTokenPayload {
   sub: string;
   email: string;
   role: UserRole | null;
+  tokenVersion?: number;
 }

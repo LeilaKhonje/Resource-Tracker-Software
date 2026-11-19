@@ -3,9 +3,11 @@ import { Body,BadRequestException,Controller,Delete,Get,Param,Patch,Post,Req, Us
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {ApiBearerAuth,ApiBody,ApiOperation,ApiParam,ApiResponse, ApiTags,} from '@nestjs/swagger';
+import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
+@ApiStandardErrorResponses(500)
 @Controller('api/v1/notifications')
 export class NotificationsController {
   constructor(
@@ -21,13 +23,15 @@ export class NotificationsController {
   @ApiResponse({
     status: 200,
     description: 'Notifications for the authenticated user',
+    schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } },
   })
   @ApiResponse({
     status: 401,
     description: 'Unauthorized',
   })
+  @ApiResponse({ status: 400, description: 'The authenticated user identity is missing.' })
   getMyNotifications(@Req() req: any) {
-    const userId = req.user?.id;
+    const userId = req.user?.sub;
 
     if (!userId) {
       throw new BadRequestException(
@@ -54,6 +58,7 @@ export class NotificationsController {
   @ApiResponse({
     status: 200,
     description: 'Notifications for the specified user',
+    schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } },
   })
   getUserNotifications(@Param('id') id: string) {
     return this.notificationsService.getUserNotifications(id);
@@ -84,7 +89,9 @@ export class NotificationsController {
   @ApiResponse({
     status: 200,
     description: 'Updated notification',
+    schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } },
   })
+  @ApiResponse({ status: 400, description: 'Notification ID or userId was not supplied.' })
   @ApiResponse({
     status: 404,
     description: 'Notification not found for the supplied user ID',
@@ -129,7 +136,9 @@ export class NotificationsController {
   @ApiResponse({
     status: 201,
     description: 'Created notification',
+    schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, message: { type: 'string' }, isRead: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } },
   })
+  @ApiResponse({ status: 400, description: 'userId and message are required.' })
   createNotification(
     @Body() body: { userId: string; message: string },
   ) {
@@ -163,6 +172,7 @@ export class NotificationsController {
   @ApiResponse({
     status: 200,
     description: 'Deletion result',
+    schema: { type: 'object', properties: { message: { type: 'string', example: 'Notification deleted successfully' } } },
   })
   @ApiResponse({
     status: 404,
