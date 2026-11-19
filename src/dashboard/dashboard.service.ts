@@ -32,10 +32,10 @@ export class DashboardService {
     const [result] = await this.dataSource.query(
       `SELECT
          COUNT(*) AS totalRequests,
-         COALESCE(SUM(status = 'PENDING'), 0) AS pendingApprovals,
+         COALESCE(SUM(status IN ('SUBMITTED', 'QUERIED')), 0) AS pendingApprovals,
          COALESCE(SUM(status = 'APPROVED'), 0) AS approvedRequests,
          COALESCE(SUM(status = 'REJECTED'), 0) AS rejectedRequests
-       FROM resource_requests
+       FROM resource_request
        ${departmentCondition}`,
       params,
     );
@@ -70,13 +70,13 @@ export class DashboardService {
            SUM(
              CASE
                WHEN r.status = 'APPROVED'
-               THEN r.unitPrice * r.quantity
+               THEN r.price * r.quantity
                ELSE 0
              END
            ), 0
          ) AS totalSpending
        FROM department d
-       LEFT JOIN resource_requests r
+       LEFT JOIN resource_request r
          ON r.departmentId = d.id
        GROUP BY d.id, d.name
        ORDER BY totalSpending DESC`,
