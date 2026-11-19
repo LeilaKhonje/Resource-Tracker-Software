@@ -2,7 +2,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import {Controller,Get,Query,Param,ParseIntPipe,} from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { ReportFilterDto } from './dto/report-filter.dto';
-import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '../users/user-role.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -10,6 +10,7 @@ import { UseGuards } from '@nestjs/common';
 import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Reports')
+@ApiBearerAuth('access-token')
 @ApiStandardErrorResponses(400, 401, 403, 500)
 @Controller('api/v1/reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
