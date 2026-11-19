@@ -9,8 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user-role.enum';
-import { CreateInsourcedResourceDto } from './dto/create-insourced-resource.dto';
-import { CreateOutsourcedResourceDto } from './dto/create-outsourced-resource.dto';
+import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateInsourcedResourceDto } from './dto/update-insourced-resource.dto';
 import { UpdateOutsourcedResourceDto } from './dto/update-outsourced-resource.dto';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
@@ -37,44 +36,27 @@ import { ApiStandardErrorResponses } from '../common/swagger-response.decorators
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 
-  @Post('insourced')
+  @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.MANAGING_DIRECTOR)
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'Create a resource (Managing Director only)',
+    summary: 'Create an insourced or outsourced resource (Managing Director only)',
     description:
-       'Creates an insourced resource. Requires a name, a description, the name of an existing department, and a quantity of at least 1.',
-})
-@ApiBody({ type: CreateInsourcedResourceDto })
-@ApiResponse({ status: 201, description: 'Insourced resource created.', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, type: { type: 'string', enum: ['insourced', 'outsourced'] }, status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] }, batchNumber: { type: 'string' }, quantity: { type: 'integer' }, description: { type: 'string', nullable: true }, departmentName: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } })
-@ApiResponse({ status: 400, description: 'Invalid fields or quantity below 1.' })
-@ApiResponse({ status: 404, description: 'The named department does not exist.' })
-@ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
-@ApiForbiddenResponse({ description: 'Only the Managing Director can create resources.' })
-async createInsourced(@Body() dto: CreateInsourcedResourceDto) {
-  return toResourceResponse(await this.resourcesService.createInsourced(dto));
-}
-
-@Post('outsourced')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.MANAGING_DIRECTOR)
-@ApiBearerAuth('access-token')
-@ApiOperation({
-  summary: 'Create an outsourced resource (Managing Director only)',
-  description:
-    'Creates an outsourced (borrowed) resource. Requires a name, price, label, batchNumber, vendor, and a quantity of at least 1.',
-})
-@ApiBody({ type: CreateOutsourcedResourceDto })
-@ApiResponse({ status: 201, description: 'Outsourced resource created.', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, type: { type: 'string', enum: ['insourced', 'outsourced'] }, status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] }, batchNumber: { type: 'string' }, quantity: { type: 'integer' }, price: { type: 'number' }, label: { type: 'string' }, vendor: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } })
-@ApiResponse({ status: 400, description: 'Invalid fields, quantity below 1, or invalid price.' })
-@ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
-@ApiForbiddenResponse({ description: 'Only the Managing Director can create resources.' })
-async createOutsourced(@Body() dto: CreateOutsourcedResourceDto) {
-  return toResourceResponse(await this.resourcesService.createOutsourced(dto));
-}
+      'The required fields depend on type: insourced requires description and departmentName; outsourced requires price, label, batchNumber, and vendor.',
+  })
+  @ApiBody({ type: CreateResourceDto })
+  @ApiResponse({ status: 201, description: 'Resource created.' })
+  @ApiResponse({ status: 400, description: 'Invalid fields for the selected resource type.' })
+  @ApiResponse({ status: 404, description: 'The named department does not exist.' })
+  @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
+  @ApiForbiddenResponse({ description: 'Only the Managing Director can create resources.' })
+  async create(@Body() dto: CreateResourceDto) {
+    return toResourceResponse(await this.resourcesService.createResource(dto));
+  }
 
   @Get()
+  @Roles(UserRole.DEPARTMENT_HEAD, UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
   @ApiOperation({
     summary: 'List resources',
     description: 'Returns resources newest first. Optional filters can match a name substring and/or an exact resource type.',
@@ -109,31 +91,6 @@ async createOutsourced(@Body() dto: CreateOutsourcedResourceDto) {
     return this.resourcesService.createAllocation(id, dto, request.user!.sub);
   }
   
-
-  @ApiOperation({summary: 'view all insourced resources',
-    description: 'returns all insourced resources in the organisation with their descriptions'
-  })
-  @ApiResponse({ status: 200, description: 'Insourced resource records matching the filters.', schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
-  @ApiResponse({ status: 400, description: 'Invalid resource query filter.' })
-  @ApiForbiddenResponse({description: 'Only Line managers and managing directors can view the resources'})
-  @Roles(UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
-  @Get('insourced')
-  async findInsourced(@Query() query: QueryResourceDto){
-    const resources = await this.resourcesService.findInsourced(query);
-    return resources.map(toResourceResponse);
-  }
-
-
-  @ApiOperation({summary:'View all outsourced resources'})
-  @ApiResponse({ status: 200, description: 'Outsourced resource records matching the filters.', schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
-  @ApiResponse({ status: 400, description: 'Invalid resource query filter.' })
-  @Roles(UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
-  @ApiForbiddenResponse({description: 'Only Line managers and managing directors can view the resources'})
-  @Get('outsourced')
-  async findOutsourced(@Query() query: QueryResourceDto){
-    const resources = await this.resourcesService.findOutsourced(query)
-    return resources.map(toResourceResponse);
-  }
 
   @Get(':id/allocations')
   @UseGuards(JwtAuthGuard, RolesGuard)
