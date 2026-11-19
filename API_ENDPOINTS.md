@@ -84,11 +84,12 @@ Resource types are `insourced` and `outsourced`. Responses include common fields
 
 ### `POST /api/v1/resources`
 - **Access:** Bearer token; role: `MANAGING_DIRECTOR`.
-- **Request:** Insourced JSON: `{ "name": "Office laptop", "type": "insourced", "description": "Existing inventory", "departmentName": "Information Technology", "quantity": 1 }`. The department name must match one existing department. Outsourced JSON: `{ "name": "Office laptop", "type": "outsourced", "price": 1250.50, "label": "Dell Latitude 5450", "batchNumber": "LOT-2026-04", "vendor": "Example Supplies Ltd", "quantity": 3 }`. Quantity is an integer of at least 1; outsourced price and vendor are required. Type-specific fields from the other resource type are rejected.
+- **Request:** Use `type` to select the resource type. Insourced JSON: `{ "name": "Office laptop", "type": "insourced", "description": "Existing inventory", "departmentName": "Information Technology", "quantity": 1 }`. The department name must match one existing department. Outsourced JSON: `{ "name": "Office laptop", "type": "outsourced", "price": 1250.50, "label": "Dell Latitude 5450", "batchNumber": "LOT-2026-04", "vendor": "Example Supplies Ltd", "quantity": 3 }`. Quantity is an integer of at least 1; outsourced price and vendor are required. Type-specific fields from the other resource type are rejected.
 - **Response:** `201` created resource with status `AVAILABLE`. Insourced records include `description` and `departmentName`; outsourced records include `price`, `label`, `batchNumber`, and `vendor`. `401` missing/invalid token; `403` caller is not Managing Director.
 
 ### `GET /api/v1/resources`
-- **Request:** Optional query: `name` (case-insensitive substring), `type` (`insourced` or `outsourced`). Example: `?name=laptop&type=outsourced`.
+- **Access:** Bearer token; roles: `DEPARTMENT_HEAD`, `LINE_MANAGER`, or `MANAGING_DIRECTOR`.
+- **Request:** Optional query: `name` (case-insensitive substring), `type` (`insourced` or `outsourced`). Use `type` to filter to one resource type; without it, both types are returned. Example: `?name=laptop&type=outsourced`.
 - **Response:** `200` matching resource array, newest first; each resource includes its `AVAILABLE` or `ASSIGNED` status.
 
 ### `POST /api/v1/resources/{id}/allocations`

@@ -23,8 +23,7 @@ export class UppercaseUserRoles1762930000000 implements MigrationInterface {
   name = 'UppercaseUserRoles1762930000000';
 
   async up(queryRunner: QueryRunner): Promise<void> {
-    const usersTable = await queryRunner.getTable('users');
-    if (!usersTable) {
+    if (!(await this.usersTableExists(queryRunner))) {
       throw new Error('Cannot uppercase user roles: the users table does not exist.');
     }
 
@@ -37,14 +36,23 @@ export class UppercaseUserRoles1762930000000 implements MigrationInterface {
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {
-    const usersTable = await queryRunner.getTable('users');
-    if (!usersTable) return;
+    if (!(await this.usersTableExists(queryRunner))) return;
 
     await this.dropRoleKeys(queryRunner);
     await queryRunner.query(
       'UPDATE `users` SET `role` = LOWER(`role`) WHERE `role` IS NOT NULL',
     );
     await this.createRoleKeys(queryRunner, true);
+  }
+
+  private async usersTableExists(queryRunner: QueryRunner): Promise<boolean> {
+    const users = await queryRunner.query(
+      `SELECT 1
+       FROM INFORMATION_SCHEMA.TABLES
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'users'`,
+    );
+    return users.length > 0;
   }
 
   private async assertUniqueSingletonRoles(queryRunner: QueryRunner): Promise<void> {
