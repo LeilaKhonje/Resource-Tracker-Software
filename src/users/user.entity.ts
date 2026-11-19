@@ -73,6 +73,8 @@ export class User {
     length: 32,
     nullable: true,
     select: false,
+    insert: false,
+    update: false,
   })
   managingDirectorUniqueRole: string | null;
 
@@ -84,6 +86,8 @@ export class User {
     length: 32,
     nullable: true,
     select: false,
+    insert: false,
+    update: false,
   })
   systemAdminUniqueRole: string | null;
 
