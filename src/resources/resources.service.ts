@@ -7,8 +7,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, FindOptionsWhere, ILike, Repository } from 'typeorm';
-import { CreateInsourcedResourceDto } from './dto/create-insourced-resource.dto';
-import { CreateOutsourcedResourceDto } from './dto/create-outsourced-resource.dto';
+import {
+  CreateResourceDto,
+  isInsourcedResourceInput,
+  isOutsourcedResourceInput,
+} from './dto/create-resource.dto';
 import { UpdateInsourcedResourceDto } from './dto/update-insourced-resource.dto';
 import { UpdateOutsourcedResourceDto } from './dto/update-outsourced-resource.dto';
 import { QueryResourceDto } from './dto/query-resource.dto';
@@ -41,29 +44,34 @@ export class ResourcesService {
     private readonly email: EmailService,
   ) {}
 
-  async createInsourced(dto: CreateInsourcedResourceDto): Promise<Resources>{
-    const department = await this.findDepartmentByName(dto.departmentName);
-    const resource = this.resourcesRepository.create({
-      name: dto.name.trim(),
-      type: ResourceType.INSOURCED,
-      description: dto.description.trim(),
-      department,
-      quantity: dto.quantity,
-    });
-    return this.resourcesRepository.save(resource);
+  async createResource(dto: CreateResourceDto): Promise<Resources> {
+    if (isInsourcedResourceInput(dto)) {
+      const department = await this.findDepartmentByName(dto.departmentName);
+      const resource = this.resourcesRepository.create({
+        name: dto.name.trim(),
+        type: ResourceType.INSOURCED,
+        description: dto.description.trim(),
+        department,
+        quantity: dto.quantity,
+      });
+      return this.resourcesRepository.save(resource);
+    }
+
+    if (isOutsourcedResourceInput(dto)) {
+      const resource = this.resourcesRepository.create({
+        name: dto.name.trim(),
+        type: ResourceType.OUTSOURCED,
+        price: dto.price,
+        label: dto.label.trim(),
+        batchNumber: dto.batchNumber.trim(),
+        vendor: dto.vendor.trim(),
+        quantity: dto.quantity,
+      });
+      return this.resourcesRepository.save(resource);
+    }
+
+    throw new BadRequestException('Resource type must be insourced or outsourced.');
   }
-  async createOutsourced(dto: CreateOutsourcedResourceDto): Promise<Resources> {
-    const resource = this.resourcesRepository.create({
-      name: dto.name.trim(),
-      type: ResourceType.OUTSOURCED,
-      price: dto.price,
-      label: dto.label.trim(),
-      batchNumber: dto.batchNumber.trim(),
-      vendor: dto.vendor.trim(),
-      quantity: dto.quantity,
-    });
-    return this.resourcesRepository.save(resource);
-  } 
 
   async findAll(query: QueryResourceDto): Promise<Resources[]> {
     const where: FindOptionsWhere<Resources> = {};
@@ -75,14 +83,6 @@ export class ResourcesService {
       relations: { department: true },
       order: { createdAt: 'DESC' },
     });
-  }
-
-  async findInsourced(query: QueryResourceDto): Promise<Resources[]>{
-    return this.findAll({...query, type: ResourceType.INSOURCED});
-  }
-
-  async findOutsourced(query: QueryResourceDto): Promise<Resources[]>{
-    return this.findAll({... query, type: ResourceType.OUTSOURCED});
   }
 
   async createAllocation(resourceId: string, dto: CreateResourceAllocationDto, actorId: string) {
