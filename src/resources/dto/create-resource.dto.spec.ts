@@ -11,6 +11,10 @@ describe('CreateResourceDto', () => {
       description: 'Existing inventory',
       departmentName: 'Computing',
       quantity: 1,
+      price: '',
+      label: '',
+      batchNumber: '',
+      vendor: '',
     });
     const outsourced = plainToInstance(CreateResourceDto, {
       type: ResourceType.OUTSOURCED,
@@ -43,5 +47,30 @@ describe('CreateResourceDto', () => {
 
     await expect(validate(missingOutsourcedFields)).resolves.not.toHaveLength(0);
     await expect(validate(mixedTypes)).resolves.not.toHaveLength(0);
+  });
+
+  it('rejects other-type fields when they contain values', async () => {
+    const insourcedWithPrice = plainToInstance(CreateResourceDto, {
+      type: ResourceType.INSOURCED,
+      name: 'Office laptop',
+      description: 'Existing inventory',
+      departmentName: 'Computing',
+      price: 1250,
+      quantity: 1,
+    });
+
+    const errors = await validate(insourcedWithPrice);
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          property: 'type',
+          constraints: expect.objectContaining({
+            resourceFieldsMatchType:
+              'Fields price are not allowed for insourced resources.',
+          }),
+        }),
+      ]),
+    );
   });
 });

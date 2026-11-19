@@ -10,8 +10,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user-role.enum';
 import { CreateResourceDto } from './dto/create-resource.dto';
-import { UpdateInsourcedResourceDto } from './dto/update-insourced-resource.dto';
-import { UpdateOutsourcedResourceDto } from './dto/update-outsourced-resource.dto';
+import { UpdateResourceDto } from './dto/update-resource.dto';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import {
   ApiBearerAuth,
@@ -170,37 +169,21 @@ export class ResourcesController {
     return toResourceResponse(await this.resourcesService.findOne(id));
   }
 
-@Patch('insourced/:id')
+@Patch(':id')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.MANAGING_DIRECTOR)
 @ApiBearerAuth('access-token')
-@ApiOperation({ summary: 'Update an insourced resource' })
-@ApiBody({ type: UpdateInsourcedResourceDto })
-@ApiResponse({ status: 200, description: 'Updated insourced resource record.', schema: { type: 'object', additionalProperties: true } })
-@ApiResponse({ status: 404, description: 'Insourced resource not found.' })
+@ApiOperation({ summary: 'Update an insourced or outsourced resource' })
+@ApiBody({ type: UpdateResourceDto })
+@ApiResponse({ status: 200, description: 'Updated resource record.', schema: { type: 'object', additionalProperties: true } })
+@ApiResponse({ status: 400, description: 'Invalid fields for the resource type.' })
+@ApiResponse({ status: 404, description: 'Resource not found.' })
 @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
 @ApiForbiddenResponse({ description: 'Only the Managing Director can update resources.' })
-async updateInsourced(
+async updateResource(
   @Param('id', ParseUUIDPipe) id: string,
-  @Body() dto: UpdateInsourcedResourceDto,
+  @Body() dto: UpdateResourceDto,
 ) {
-  return toResourceResponse(await this.resourcesService.updateInsourced(id, dto));
-}
-
-@Patch('outsourced/:id')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.MANAGING_DIRECTOR)
-@ApiBearerAuth('access-token')
-@ApiOperation({ summary: 'Update an outsourced resource' })
-@ApiBody({ type: UpdateOutsourcedResourceDto })
-@ApiResponse({ status: 200, description: 'Updated outsourced resource record.', schema: { type: 'object', additionalProperties: true } })
-@ApiResponse({ status: 404, description: 'Outsourced resource not found.' })
-@ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
-@ApiForbiddenResponse({ description: 'Only the Managing Director can update resources.' })
-async updateOutsourced(
-  @Param('id', ParseUUIDPipe) id: string,
-  @Body() dto: UpdateOutsourcedResourceDto,
-) {
-  return toResourceResponse(await this.resourcesService.updateOutsourced(id, dto));
+  return toResourceResponse(await this.resourcesService.updateResource(id, dto));
 }
 }

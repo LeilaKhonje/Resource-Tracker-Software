@@ -120,7 +120,8 @@ Resource types are `insourced` and `outsourced`. Responses include common fields
 - **Response:** `200` resource record.
 
 ### `PATCH /api/v1/resources/{id}`
-- **Request:** Partial JSON body. Any fields applicable to the resource's existing type (same field requirements and validation as create); `type` cannot be changed.
+- **Access:** Bearer token; role: `MANAGING_DIRECTOR`.
+- **Request:** Partial JSON body. Common fields (`name`, `quantity`) apply to both types. Insourced resources also accept `description` and `departmentName`; outsourced resources accept `price`, `label`, `batchNumber`, and `vendor`. Fields for the other type are rejected, and `type` cannot be changed.
 - **Response:** `200` updated resource.
 
 ## Resource requests
