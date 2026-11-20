@@ -7,10 +7,11 @@ import { UsersService } from './users.service';
 import { UserController } from './user.controller';
 import { AuthSecurityModule } from '../auth/auth-security.module';
 import { AuditLog } from '../auditlog/auditlog.entity';
+import { EmailModule } from '../email/email.module';
 
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Department, Team, AuditLog]), AuthSecurityModule,],
+  imports: [TypeOrmModule.forFeature([User, Department, Team, AuditLog]), AuthSecurityModule, EmailModule],
   controllers: [UserController],
   providers: [UsersService],
   exports: [UsersService],

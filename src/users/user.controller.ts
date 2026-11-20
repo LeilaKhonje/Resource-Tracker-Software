@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post, Query, Delete } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -7,6 +7,7 @@ import { ManageUserDto, UserManagementAction } from './dto/manage-user.dto';
 import { ManageMyAccountDto, MyAccountAction } from './dto/manage-my-account.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersDto } from './dto/list-users.dto';
+import { RequestAccountDeletionDto } from './dto/request-account-deletion.dto';
 import { UsersService } from './users.service';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -19,13 +20,14 @@ export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('')
-  @ApiOperation({ summary: 'Create a user account and assign a role to the user(System Admin only)' })
+  @ApiOperation({ summary: 'Create a user account with a generated temporary password', description: 'System Admin only. The temporary password is emailed to the new account and must be changed at first login.' })
   @ApiBody({ type: CreateUserDto })
-  @ApiResponse({ status: 201, description: 'Active account created; the initial password is not returned', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
+  @ApiResponse({ status: 201, description: 'Active account created; a temporary password is emailed to the user and must be changed at first login', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
   @ApiResponse({ status: 400, description: 'Invalid account details' })
   @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiResponse({ status: 403, description: 'Only System Admins can create user accounts.' })
   @ApiResponse({ status: 409, description: 'Conflict: Email already exists' })
+  @ApiResponse({ status: 503, description: 'Email delivery is unavailable; no account was created' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SYSTEM_ADMIN)
   @ApiBearerAuth('access-token')
@@ -34,7 +36,7 @@ export class UserController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List user accounts, optionally filtered by creation date range (System Admin and managing directors)' })
+  @ApiOperation({ summary: 'List user accounts', description: 'System Admin and Managing Director only. If either creation-date filter is supplied, both are required and the range is inclusive.' })
   @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date-time', example: '2026-11-01T00:00:00.000Z' })
   @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date-time', example: '2026-11-11T23:59:59.999Z' })
   @ApiResponse({ status: 200, description: 'User accounts without credential data', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
@@ -49,7 +51,7 @@ export class UserController {
   }
 
   @Get('line-managers')
-  @ApiOperation({ summary: 'List active Line Managers for request routing (Team leads only)' })
+  @ApiOperation({ summary: 'List active Line Managers for request routing', description: 'Team Lead only. The returned IDs and full names can be used to select the request reviewer.' })
   @ApiResponse({
     status: 200,
     description: 'Active Line Managers available to receive resource requests',
@@ -75,8 +77,8 @@ export class UserController {
   }
 
 @Patch('me')
-@ApiOperation({ summary: 'Update profile or change password (one action per request)',
-  description: 'Only two types of actions are allowed: Update profile and change password, they are done one at a time'
+@ApiOperation({ summary: 'Update the current user profile or change password',
+  description: 'Any authenticated user. Choose one action per request. Profile updates accept profile fields only; password changes require currentPassword and newPassword only.'
 })
 @ApiBody({ type: ManageMyAccountDto })
 @ApiResponse({ status: 200, description: 'Requested profile or password action completed.', schema: { oneOf: [{ type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, role: { type: 'string', enum: Object.values(UserRole) }, phoneNumber: { type: 'string', nullable: true }, address: { type: 'string', nullable: true }, dateOfBirth: { type: 'string', format: 'date', nullable: true }, preferredPronoun: { type: 'string', nullable: true } } }, { type: 'object', properties: { message: { type: 'string', example: 'Password changed successfully' } } }] } })
@@ -107,20 +109,23 @@ manageMyAccount(@Req() req: AuthenticatedRequest, @Body() dto: ManageMyAccountDt
   return this.usersService.manageMyAccount(req.user!.sub, dto);
 }
 
-@Post('me/delete')
+@Delete('me/delete')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
-@ApiOperation({ summary: 'Request deletion of your account; logging in within five days cancels it' })
+@ApiOperation({ summary: 'Request deletion of your account; logging in within five days cancels it (any authenticated user)' })
+@ApiBody({ type: RequestAccountDeletionDto })
 @ApiResponse({ status: 200, description: 'Account deletion scheduled.', schema: { type: 'object', properties: { message: { type: 'string', example: 'Account deletion scheduled in five days; log in before then to cancel it' } } } })
-@ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
+@ApiResponse({ status: 400, description: 'Password is missing or invalid.' })
+@ApiResponse({ status: 401, description: 'Authentication is missing or invalid, or the password is incorrect.' })
 @ApiResponse({ status: 404, description: 'User not found.' })
 @ApiResponse({ status: 500, description: 'An unexpected server error occurred.' })
-deleteMyAccount(@Req() req: AuthenticatedRequest) {
-  return this.usersService.requestAccountDeletion(req.user!.sub);
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+deleteMyAccount(@Req() req: AuthenticatedRequest, @Body() dto: RequestAccountDeletionDto) {
+  return this.usersService.requestAccountDeletion(req.user!.sub, dto.password);
 }
 
 @Patch(':id')
-@ApiOperation({ summary: 'Perform one account action: deactivate, reactivate, or assign a role' })
+@ApiOperation({ summary: 'Perform one account action: deactivate, reactivate, or assign a role', description: 'The route guard permits System Admins and Managing Directors. Deactivate and reactivate actions are limited by the service to the System Admin; Managing Directors may assign roles subject to role rules.' })
 @ApiParam({ name: 'id', description: 'User UUID' })
 @ApiBody({ type: ManageUserDto })
 @ApiResponse({ status: 200, description: 'Requested account action completed.', schema: { oneOf: [{ type: 'object', properties: { id: { type: 'string', format: 'uuid' }, isActive: { type: 'boolean' } } }, { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, role: { type: 'string', enum: Object.values(UserRole) } } }] } })
@@ -131,7 +136,7 @@ deleteMyAccount(@Req() req: AuthenticatedRequest) {
 @ApiResponse({ status: 500, description: 'An unexpected server error occurred.' })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-@Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR, UserRole.DEPARTMENT_HEAD)
+@Roles(UserRole.SYSTEM_ADMIN, UserRole.MANAGING_DIRECTOR)
 @ApiBearerAuth('access-token')
 manageUser(
   @Param('id', ParseUUIDPipe) userId: string,
@@ -148,8 +153,8 @@ manageUser(
   }
 
 @Get('me')
-@ApiOperation({ summary: 'User must view his profile (every user in the system)' })
-@ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) }, department: { type: 'string', nullable: true }, team: { type: 'string', nullable: true } } } })
+@ApiOperation({ summary: 'Get the current user profile', description: 'Available to any authenticated user. Team Lead profiles include teamId for selecting team-specific project choices.' })
+@ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) }, department: { type: 'string', nullable: true }, team: { type: 'string', nullable: true }, teamId: { type: 'string', nullable: true } } } })
 @ApiResponse({ status: 401, description: 'Authentication required' })
 @ApiResponse({ status: 404, description: 'User not found' })
 @ApiResponse({ status: 403, description: 'Insufficient permissions' })

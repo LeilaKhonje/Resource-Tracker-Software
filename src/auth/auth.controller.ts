@@ -15,7 +15,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @ApiOperation({ summary: 'Login a user' })
-  @ApiResponse({ status: 200, description: 'User logged in successfully', schema: { type: 'object', properties: { accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }, refreshToken: { type: 'string' } }, required: ['accessToken', 'refreshToken'] } })
+  @ApiResponse({ status: 200, description: 'User logged in successfully. For a newly created account, mustChangePassword is true and the user must change the temporary password before using other endpoints.', schema: { type: 'object', properties: { accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }, refreshToken: { type: 'string' }, mustChangePassword: { type: 'boolean' } }, required: ['accessToken', 'refreshToken', 'mustChangePassword'] } })
   @ApiResponse({ status: 400, description: 'Invalid email or password field format' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid credentials' })
   @ApiBody({ 
@@ -44,14 +44,15 @@ export class AuthController {
   @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({
     status: 200,
-    description: 'New access and refresh tokens issued',
+    description: 'New access and refresh tokens issued. Includes mustChangePassword for accounts with a temporary password.',
     schema: {
       type: 'object',
       properties: {
         accessToken: { type: 'string' },
         refreshToken: { type: 'string' },
+        mustChangePassword: { type: 'boolean' },
       },
-      required: ['accessToken', 'refreshToken'],
+      required: ['accessToken', 'refreshToken', 'mustChangePassword'],
     },
   })
   @ApiResponse({
@@ -77,7 +78,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Forgot password, send a user the code to reset their password' })
   @ApiResponse({
     status: 200,
-    description: 'Password reset request accepted',
+    description: 'Password reset request accepted. The same masked-email response is returned whether or not the address belongs to an active account.',
     schema: {
       type: 'object',
       properties: {
@@ -97,9 +98,10 @@ export class AuthController {
   }
 
   @ApiBody({type: ResetPasswordDto})
-  @ApiOperation({summary: 'Reset pasword, the user enters the code sent to their email and a new password of their choosing'})
+  @ApiOperation({summary: 'Reset a password using the emailed code and a new password'})
   @ApiResponse({ status: 200, description: 'Password reset completed.', schema: { type: 'object', properties: { message: { type: 'string', example: 'Password reset successfully' } } } })
   @ApiResponse({ status: 401, description: 'Password reset code is invalid or expired.' })
+  @ApiResponse({ status: 400, description: 'Invalid email, code, or password format.' })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() dto: ResetPasswordDto) {

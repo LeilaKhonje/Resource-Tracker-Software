@@ -75,23 +75,27 @@ connects to the MySQL service on its internal port `3306`.
 ## Account and role management
 
 The System Admin creates an active account with `POST /users`, specifying the
-user's business role and initial password, then provides the user their email
-and initial password outside the system through a secure channel.
-The user can keep that password or log in and change it through
-`PATCH /users/me` with `{"action":"change_password", ...}`. The password is stored only as a bcrypt hash and
-is never returned by the API. Account creation, deactivation, reactivation,
-and role changes are recorded in the audit log.
+first name, optional middle name, surname, email, and business role. The system generates a temporary password
+and emails it to the user. On first login, the user must change it through
+`PATCH /users/me` with `{"action":"change_password", ...}` before accessing
+other protected endpoints. Passwords are stored only as bcrypt hashes and are
+never returned by the API. Account creation, deactivation, reactivation, and
+role changes are recorded in the audit log.
 
 Account creation body:
 
 ```json
 {
-  "fullName": "Alex Morgan",
+  "firstName": "Alex",
+  "middleName": "Jordan",
+  "surname": "Morgan",
   "email": "alex@company.com",
-  "role": "TEAM_MEMBER",
-  "initialPassword": "Temp1234"
+  "role": "TEAM_MEMBER"
 }
 ```
+
+Email delivery must be configured with the `MAIL_*` and `APP_MAIL_FROM`
+settings. If the credentials email cannot be sent, account creation fails.
 
 The System Admin role can only be assigned by the bootstrap seed. The Managing
 Director role can be assigned during account creation only when no Managing
@@ -120,14 +124,14 @@ response. Paths below are relative to `/api/v1` unless a full path is shown.
 
 ### Authentication
 
-Authentication lets active users log in to receive a bearer token for
-protected endpoints. Account creation is limited to `@company.com` addresses;
-the initial password must be 8–12 characters and contain a number. Users may
-change it after logging in.
+Authentication lets active users log in to receive bearer tokens. Newly created
+accounts must change their emailed temporary password before using other
+protected endpoints. User-selected passwords must be 8–12 characters and
+contain a number.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /auth` | Checks the email and password and returns access and refresh tokens. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
+| `POST /auth` | Checks the email and password and returns access and refresh tokens plus `mustChangePassword`. When true, the user must change the temporary password before using other protected endpoints. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
 | `POST /auth/refresh` | Exchanges a valid refresh token for a new access and refresh token pair. | `401` refresh token is invalid, expired, revoked, or the account is inactive. |
 | `POST /auth/logout` | Revokes the supplied refresh token. | `401` refresh token is invalid, expired, or revoked. |
 | `POST /auth/forgot-password` | Sends a password reset code to an active account and returns a generic confirmation with the submitted email masked, so the response does not disclose whether an account exists. | `400` invalid email format. |
@@ -140,14 +144,15 @@ business roles according to the role rules above.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /users` | System Admin creates an active account from `fullName`, `email`, `role`, and `initialPassword`. The password is not returned. | `400` invalid fields, role, or password; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned. |
+| `POST /users` | System Admin creates an active account from `firstName`, optional `middleName`, `surname`, `email`, and `role`. A generated temporary password is emailed to the user, who must change it at first login. | `400` invalid fields or role; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned; `503` email delivery is unavailable and the account was not created. |
 | `GET /users?startDate=<ISO-8601>&endDate=<ISO-8601>` | System Admin or Managing Director lists accounts without credential data. The date filters are optional; if either is supplied, both are required, and the inclusive range filters by creation time. | `400` one date missing, invalid timestamp, or start later than end; `401` missing/invalid token; `403` caller lacks permission. |
 | `GET /users/line-managers` | Team Lead lists active Line Managers to choose a recipient for a resource request. Returns `id`, `fullName`, and `email`, ordered by name. | `401` missing/invalid token; `403` caller is not a Team Lead. |
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `GET /users/me` | Returns the authenticated user's ID, name, email, and role. | `401` missing or invalid bearer token; `404` user record no longer exists. |
+| `GET /users/me` | Returns the authenticated user's profile; Team Leads also receive `teamId`, which can be used with `GET /teams/:id/projects` to populate a request form. | `401` missing or invalid bearer token; `404` user record no longer exists. |
 | `PATCH /users/me` | Performs exactly one action: update profile (`{"action":"update_profile","address":"Lilongwe, Malawi"}`) or change password (`{"action":"change_password","currentPassword":"current123","newPassword":"newSecure456"}`). Profile updates accept one or more of `phoneNumber`, `address`, `dateOfBirth`, and `preferredPronoun`; password changes require both password fields. Fields for the other action are rejected. | `400` invalid action/fields/profile data/password or same password supplied; `401` missing/invalid token or current password is incorrect; `404` user not found. |
+| `DELETE /users/me/delete` | Requests account deletion after verifying the supplied current password (`{"password":"currentPassword123"}`). Logging in within five days cancels the scheduled deletion. | `400` password missing or invalid; `401` missing/invalid token or password is incorrect; `404` user not found. |
 | `PATCH /users/:id` | Performs exactly one action: deactivate (`{"action":"deactivate"}`), reactivate (`{"action":"reactivate"}`), or assign a business role (`{"action":"assign_role","role":"TEAM_LEAD"}`). Reactivation requires a deactivated account; deactivation revokes existing tokens. | `400` invalid action/body/role, account already active/deactivated, or self-deactivation attempted; `401` missing/invalid token; `403` caller lacks permission; `404` assigning account or target user not found; `409` Managing Director already assigned. |
 
 ### Departments
@@ -210,7 +215,7 @@ are for Department Heads, while Managing Directors can also list and view.
 
 ### Resources
 
-The resources API manages catalog records and stores the count of units represented by each record. Line Managers can allocate units to a team member and project, record returns and transfers, and review movement history. A resource has status `AVAILABLE` when it has no active allocations and `ASSIGNED` when one or more units are actively allocated. Available quantity is still checked against recorded quantity minus active allocations. Creating resources requires a Managing Director; listing, viewing, and updating routes currently do not declare authentication guards. Resource IDs are UUIDs. The returned fields depend on the resource `type`:
+The resources API manages catalog records and stores the count of units represented by each record. Line Managers can allocate units to a team member and project, record returns and transfers, and review movement history. A resource has status `AVAILABLE` when it has no active allocations and `ASSIGNED` when one or more units are actively allocated. Available quantity is still checked against recorded quantity minus active allocations. Creating resources requires a Managing Director. Listing requires a bearer token and permits Department Heads, Line Managers, Managing Directors, and Team Leads; Team Leads use the catalog list to select a resource when creating a request. Resource IDs are UUIDs. The returned fields depend on the resource `type`:
 
 - `insourced`: `id`, `name`, `type`, `status`, `description`, `departmentName`, `quantity`, `createdAt`, `updatedAt`
 - `outsourced`: `id`, `name`, `type`, `status`, `price`, `label`, `batchNumber`, `vendor`, `createdAt`, `updatedAt`
@@ -218,7 +223,7 @@ The resources API manages catalog records and stores the count of units represen
 | Method and path | Request | What it does | Possible errors |
 | --- | --- | --- | --- |
 | `POST /resources` | Managing Director bearer token and JSON resource object; see examples below. | Creates a catalog resource. `type` is `insourced` or `outsourced`; insourced requires `description` and an existing `departmentName`, outsourced requires `price`, `label`, `batchNumber`, and `vendor`. Quantity must be at least 1. | `400` invalid or conflicting type-specific fields; `401` missing/invalid token; `403` caller is not Managing Director; `404` department not found; database errors. |
-| `GET /resources?name=lap&type=insourced` | Optional `name` substring and `type` filters. | Lists matching catalog resources, newest first. `name` matching is case-insensitive. | `400` invalid `type`; database errors. |
+| `GET /resources?name=lap&type=insourced` | Bearer token for Department Head, Line Manager, Managing Director, or Team Lead; optional `name` substring and `type` filters. | Lists matching catalog resources, newest first. `name` matching is case-insensitive. | `400` invalid `type`; `401` missing/invalid token; `403` caller lacks an allowed role. |
 | `POST /resources/:id/allocations` | Line Manager bearer token; quantity, team, project, assigned user; optional due date and approved request ID. | Assigns available units and records a movement. When linked to a request without an explicit due date, the due date is calculated from the Team Lead's requested duration. The project must be assigned to the team and the active user must belong to that team. | `400` invalid assignment; `401` missing/invalid token; `403` caller is not authorized; `404` referenced record not found; `409` insufficient availability/request quantity. |
 | `GET /resources/:id/allocations` | Line Manager bearer token. | Lists active assignments and current holders. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` resource not found. |
 | `PATCH /resources/allocations/:allocationId/return` | Line Manager bearer token; optional note. | Marks an assignment returned and records a movement. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` allocation not found; `409` allocation is not active. |
@@ -277,7 +282,7 @@ below: `/resource-requests/api/v1/resource-request...`.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /resource-requests/api/v1/resource-request` | Creates and submits a request; body includes item details, `quantity`, positive integer `expectedDurationDays`, and `teamName`, `projectName`, and `lineManagerName`. Department is derived from the team. | `400` invalid or ambiguous names/fields; `401` missing/invalid token; `403` caller is not a Team Lead; `404` team, project, or active Line Manager not found. |
+| `POST /resource-requests/api/v1/resource-request` | Creates and submits a request for a catalog resource. Select `resourceId` from `GET /resources`; optional `itemDescription` contains additional specifications. `teamId` comes from `/users/me` and `projectId` from `/teams/:id/projects`. Department is derived from the team. | `400` invalid fields or project/team mismatch; `401` missing/invalid token; `403` caller is not a Team Lead or selected team is not assigned to them; `404` resource, team, project, or active Line Manager not found. |
 | `GET /resource-requests/api/v1/resource-request` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing/invalid token; `403` unsupported role. |
 | `GET /resource-requests/api/v1/resource-request/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
 | `PATCH /resource-requests/api/v1/resource-request/:id` | Team Lead edits a queried request and may resubmit with `{"status":"SUBMITTED"}`. The assigned Line Manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires a `note`. | `400` invalid status/state or missing required fields; `401` missing/invalid token; `403` wrong owner/role/manager; `404` request not found. |

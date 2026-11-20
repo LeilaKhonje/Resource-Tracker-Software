@@ -26,6 +26,42 @@ import {
 } from '@nestjs/swagger';
 import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
+const resourceResponseSchema = {
+  oneOf: [
+    {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        name: { type: 'string' },
+        type: { type: 'string', enum: ['insourced'] },
+        status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] },
+        quantity: { type: 'integer' },
+        description: { type: 'string' },
+        departmentName: { type: 'string', nullable: true },
+        batchNumber: { type: 'string', nullable: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+    {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        name: { type: 'string' },
+        type: { type: 'string', enum: ['outsourced'] },
+        status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] },
+        quantity: { type: 'integer' },
+        price: { type: 'number' },
+        label: { type: 'string' },
+        batchNumber: { type: 'string' },
+        vendor: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  ],
+};
+
 @ApiTags('Resources')
 @ApiStandardErrorResponses(400, 401, 403, 500)
 @Controller('api/v1/resources')
@@ -41,12 +77,12 @@ export class ResourcesController {
   @Roles(UserRole.MANAGING_DIRECTOR)
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'Create an insourced or outsourced resource (Managing Director only)',
+    summary: 'Create an insourced or outsourced resource',
     description:
-      'The required fields depend on type: insourced requires description and departmentName; outsourced requires price, label, batchNumber, and vendor.',
+      'Managing Director only. The required fields depend on type: insourced requires description and departmentName; outsourced requires price, label, batchNumber, and vendor. Fields for the other type are rejected.',
   })
   @ApiBody({ type: CreateResourceDto })
-  @ApiResponse({ status: 201, description: 'Resource created.' })
+  @ApiResponse({ status: 201, description: 'Created resource with fields for its resource type.'})
   @ApiResponse({ status: 400, description: 'Invalid fields for the selected resource type.' })
   @ApiResponse({ status: 404, description: 'The named department does not exist.' })
   @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
@@ -56,10 +92,10 @@ export class ResourcesController {
   }
 
   @Get()
-  @Roles(UserRole.DEPARTMENT_HEAD, UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
+  @Roles(UserRole.DEPARTMENT_HEAD, UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR, UserRole.TEAM_LEAD)
   @ApiOperation({
     summary: 'List resources',
-    description: 'Returns resources newest first. Optional filters can match a name substring and/or an exact resource type.',
+    description: 'Department Heads, Line Managers, Managing Directors, and Team Leads can list catalog resources newest first. Team Leads use the resource ID to select a catalog item for a request. Optional filters can match a case-insensitive name substring and/or exact resource type.',
   })
   @ApiQuery({ name: 'name', required: false, type: String, description: 'Case-insensitive substring to match in the resource name.'})
   @ApiQuery({ name: 'type', required: false, enum: ['insourced', 'outsourced'], description: 'Return only resources of this type.' })
@@ -74,7 +110,7 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.LINE_MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Allocate available resource units to a team member (Line Manager only)' })
+  @ApiOperation({ summary: 'Allocate available resource units to a team member', description: 'Line Manager only. The project must belong to the selected team, the active assignee must belong to that team, and an optional request must be approved, routed to the caller, and match the team and project.' })
   @ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
   @ApiBody({ type: CreateResourceAllocationDto })
   @ApiResponse({ status: 201, description: 'Created active allocation and recorded an allocation movement.', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, quantity: { type: 'integer' }, status: { type: 'string', enum: ['ACTIVE'] }, resource: { type: 'object', additionalProperties: true }, team: { type: 'object', additionalProperties: true }, project: { type: 'object', additionalProperties: true }, assignedTo: { type: 'object', additionalProperties: true }, allocatedBy: { type: 'object', additionalProperties: true }, request: { type: 'object', nullable: true, additionalProperties: true }, expectedReturnAt: { type: 'string', format: 'date-time', nullable: true }, returnedAt: { type: 'string', format: 'date-time', nullable: true }, allocatedAt: { type: 'string', format: 'date-time' } } } })
@@ -96,7 +132,7 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.LINE_MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'List active allocations for a resource (Line Manager only)' })
+  @ApiOperation({ summary: 'List active allocations for a resource', description: 'Line Manager only. Returns allocations that are currently active.' })
   @ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Active assignments, including current user, team, project, and return deadline.', schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
   @ApiResponse({ status: 404, description: 'Resource not found.' })
@@ -110,7 +146,7 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.LINE_MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'View the movement history for a resource (Line Manager only)' })
+  @ApiOperation({ summary: 'View the movement history for a resource', description: 'Line Manager only. Returns recorded allocation, transfer, and return events for the resource.' })
   @ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Chronological allocation, transfer, and return events.', schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
   @ApiResponse({ status: 404, description: 'Resource not found.' })
@@ -124,7 +160,7 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.LINE_MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Record the return of an active allocation (Line Manager only)' })
+  @ApiOperation({ summary: 'Record the return of an active allocation', description: 'Line Manager only. Marks an active allocation returned and records the movement; an optional note is stored with the event.' })
   @ApiParam({ name: 'allocationId', description: 'Allocation UUID', format: 'uuid' })
   @ApiBody({ type: ReturnResourceAllocationDto })
   @ApiResponse({ status: 200, description: 'Allocation marked returned and movement event recorded.', schema: { type: 'object', additionalProperties: true } })
@@ -144,7 +180,7 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.LINE_MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Transfer an active allocation to another team member (Line Manager only)' })
+  @ApiOperation({ summary: 'Transfer an active allocation to another team member', description: 'Line Manager only. Closes the current assignment, creates a replacement assignment, and records the transfer.' })
   @ApiParam({ name: 'allocationId', description: 'Allocation UUID', format: 'uuid' })
   @ApiBody({ type: TransferResourceAllocationDto })
   @ApiResponse({ status: 200, description: 'Previous assignment closed, new assignment created, and transfer movement recorded.', schema: { type: 'object', additionalProperties: true } })
@@ -161,7 +197,7 @@ export class ResourcesController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a resource', description: 'Returns one resource by its UUID.' })
+  @ApiOperation({ summary: 'Get a resource', description: 'Department Head only. Returns one resource by its UUID, including its type-specific fields.' })
   @ApiParam({ name: 'id', description: 'UUID of the resource.', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' })
   @ApiResponse({ status: 200, description: 'Resource record with common fields and the fields for its type.', schema: { oneOf: [{ type: 'object', properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, type: { type: 'string', enum: ['insourced'] }, status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] }, batchNumber: { type: 'string' }, quantity: { type: 'integer' }, description: { type: 'string', nullable: true }, departmentName: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } }, { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, type: { type: 'string', enum: ['outsourced'] }, status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] }, batchNumber: { type: 'string' }, quantity: { type: 'integer' }, price: { type: 'number' }, label: { type: 'string' }, vendor: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } }] } })
   @ApiResponse({ status: 400, description: 'The id path parameter is not a valid UUID.' })
@@ -174,10 +210,12 @@ export class ResourcesController {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.MANAGING_DIRECTOR)
 @ApiBearerAuth('access-token')
-@ApiOperation({ summary: 'Update an insourced resource' })
+@ApiOperation({ summary: 'Update an insourced resource', description: 'Managing Director only. Updates an insourced resource and its department association.' })
+@ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
 @ApiBody({ type: UpdateInsourcedResourceDto })
-@ApiResponse({ status: 200, description: 'Updated insourced resource record.', schema: { type: 'object', additionalProperties: true } })
+@ApiResponse({ status: 200, description: 'Updated insourced resource record.', })
 @ApiResponse({ status: 404, description: 'Insourced resource not found.' })
+@ApiResponse({ status: 400, description: 'Invalid resource fields or UUID.' })
 @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
 @ApiForbiddenResponse({ description: 'Only the Managing Director can update resources.' })
 async updateInsourced(
@@ -191,10 +229,12 @@ async updateInsourced(
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.MANAGING_DIRECTOR)
 @ApiBearerAuth('access-token')
-@ApiOperation({ summary: 'Update an outsourced resource' })
+@ApiOperation({ summary: 'Update an outsourced resource', description: 'Managing Director only. Updates the price, label, batch number, vendor, or other supported outsourced resource fields.' })
+@ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
 @ApiBody({ type: UpdateOutsourcedResourceDto })
-@ApiResponse({ status: 200, description: 'Updated outsourced resource record.', schema: { type: 'object', additionalProperties: true } })
+@ApiResponse({ status: 200, description: 'Updated outsourced resource record.',  })
 @ApiResponse({ status: 404, description: 'Outsourced resource not found.' })
+@ApiResponse({ status: 400, description: 'Invalid resource fields or UUID.' })
 @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
 @ApiForbiddenResponse({ description: 'Only the Managing Director can update resources.' })
 async updateOutsourced(
