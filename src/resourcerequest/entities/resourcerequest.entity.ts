@@ -1,10 +1,13 @@
 import {
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Resources } from '../../resources/entities/resources.entity';
 
 
 
@@ -21,8 +24,12 @@ export class ResourceRequest {
   id: string;
 
   
-  @Column({ type: 'text' })
-  itemDescription: string;
+  @Column({ type: 'text', nullable: true })
+  itemDescription: string | null;
+
+  @ManyToOne(() => Resources, { nullable: true, onDelete: 'RESTRICT', eager: true })
+  @JoinColumn({ name: 'resource_id' })
+  resource: Resources | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   manufacturerLabel: string | null;

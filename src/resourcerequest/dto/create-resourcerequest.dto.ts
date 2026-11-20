@@ -1,8 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
+  IsUUID,
   Min,
 } from 'class-validator';
 
@@ -11,13 +13,20 @@ import {
 // NOT here: the server sets them.
 export class CreateResourceRequestDto {
   @ApiProperty({
-    description: 'Short description of the item being requested',
-    example: 'Laptop for design team',
+    description: 'ID of the existing catalog resource being requested.',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    format: 'uuid',
   })
-  @ApiProperty({ example: 'Laptop for field data collection' })
+  @IsUUID()
+  resourceId: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional specifications or context for the selected catalog resource.',
+    example: 'For field data collection; needs 16 GB RAM.',
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  itemDescription: string;
+  itemDescription?: string;
 
   @ApiProperty({
     description: 'Batch number printed on the item or its packaging',
@@ -46,18 +55,18 @@ export class CreateResourceRequestDto {
   @Min(1)
   expectedDurationDays: number;
 
-  @ApiProperty({ example: 'Office Modernization' })
+  @ApiProperty({ example: '3', description: 'Selected project ID from GET /api/v1/teams/{teamId}/projects.' })
   @IsString()
   @IsNotEmpty()
-  projectName: string;
+  projectId: string;
 
   @ApiProperty({ example: 'Jordan Lee', description: 'Full name of the active Line Manager who will review the request.' })
   @IsString()
   @IsNotEmpty()
   lineManagerName: string;
 
-  @ApiProperty({ example: 'Platform' })
+  @ApiProperty({ example: '2', description: 'Team ID from the authenticated Team Lead profile.' })
   @IsString()
   @IsNotEmpty()
-  teamName: string;
+  teamId: string;
 }

@@ -10,6 +10,7 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AuditLog } from '../auditlog/auditlog.entity';
 import { User } from '../users/user.entity';
+import { Resources } from '../resources/entities/resources.entity';
 import { UserRole as AccountUserRole } from '../users/user-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
@@ -34,6 +35,8 @@ export class ResourcerequestService {
     private readonly projects: Repository<Project>,
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(Resources)
+    private readonly resources: Repository<Resources>,
     private readonly notifications: NotificationsService,
     private readonly email: EmailService,
   ) {}
@@ -45,16 +48,25 @@ export class ResourcerequestService {
     if (user.role !== UserRole.TEAM_LEAD) {
       throw new ForbiddenException('Only team leads can create requests');
     }
+    const resource = await this.resources.findOne({ where: { id: dto.resourceId } });
+    if (!resource) {
+      throw new NotFoundException(`Catalog resource ${dto.resourceId} not found`);
+    }
     const references = await this.resolveOrganizationReferences(dto);
     const requester = await this.users.findOne({
       where: { id: user.id },
       select: { id: true, fullName: true },
+      relations: { team: true },
     });
     if (!requester) {
       throw new NotFoundException(`Team Lead ${user.id} not found`);
     }
+    if (requester.team?.id !== references.team.id) {
+      throw new ForbiddenException('You can only create requests for your assigned team');
+    }
 
     const request = this.requests.create({
+      resource,
       itemDescription: dto.itemDescription,
       batchNumber: dto.batchNumber,
       quantity: dto.quantity,
@@ -71,10 +83,10 @@ export class ResourcerequestService {
     await this.log(saved.id, 'SUBMITTED', user.id);
     await this.notifications.createNotification(
       references.lineManager.id,
-      `Team Lead ${requester.fullName} from team ${references.team.name}, working on project ${references.project.name}, requests ${dto.quantity} x ${dto.itemDescription} for ${dto.expectedDurationDays} day(s).`,
+      `Team Lead ${requester.fullName} from team ${references.team.name}, working on project ${references.project.name}, requests ${dto.quantity} x ${resource.name}${dto.itemDescription ? ` (${dto.itemDescription})` : ''} for ${dto.expectedDurationDays} day(s).`,
     );
     const manager = references.lineManager;
-    await this.email.send(manager.email, 'New resource request', `${requester.fullName} submitted a request for ${dto.quantity} x ${dto.itemDescription}.`);
+    await this.email.send(manager.email, 'New resource request', `${requester.fullName} submitted a request for ${dto.quantity} x ${resource.name}${dto.itemDescription ? ` (${dto.itemDescription})` : ''}.`);
     return saved;
   }
 
@@ -124,13 +136,14 @@ export class ResourcerequestService {
     const {
       status,
       note,
-      teamName,
-      projectName,
+      resourceId,
       lineManagerName,
+      teamId,
+      projectId,
       ...fields
     } = dto;
     const referenceChanges = Object.fromEntries(
-      Object.entries({ teamName, projectName, lineManagerName }).filter(
+      Object.entries({ resourceId, lineManagerName, teamId, projectId }).filter(
         ([, value]) => value !== undefined,
       ),
     );
@@ -164,15 +177,22 @@ export class ResourcerequestService {
     this.assertEditable(request);
     const previousTeamId = request.teamId;
     const previousDepartmentId = request.departmentId;
+    const previousResourceId = request.resource?.id ?? null;
     Object.assign(request, changes);
+
+    if (resourceId !== undefined) {
+      const selectedResource = await this.resources.findOne({ where: { id: resourceId } });
+      if (!selectedResource) {
+        throw new NotFoundException(`Catalog resource ${resourceId} not found`);
+      }
+      request.resource = selectedResource;
+    }
 
     if (Object.keys(referenceChanges).length > 0 || status === RequestStatus.SUBMITTED) {
       const references = await this.resolveOrganizationReferences({
-        teamName,
-        projectName,
         lineManagerName,
-        teamId: request.teamId,
-        projectId: request.projectId,
+        teamId: teamId ?? request.teamId,
+        projectId: projectId ?? request.projectId,
         lineManagerId: request.lineManagerId,
       });
       request.teamId = String(references.team.id);
@@ -190,6 +210,7 @@ export class ResourcerequestService {
       if (!request.departmentId) missing.push('department');
       if (!request.projectId) missing.push('project');
       if (!request.lineManagerId) missing.push('line manager');
+      if (!request.resource) missing.push('catalog resource');
       if (!request.expectedDurationDays) missing.push('expectedDurationDays');
       if (missing.length > 0) {
         throw new BadRequestException(
@@ -203,17 +224,20 @@ export class ResourcerequestService {
     const saved = await this.requests.save(request);
 
     // One audit entry per kind of change.
-    if (teamName !== undefined && request.teamId !== previousTeamId) {
+    if (request.teamId !== previousTeamId) {
       await this.log(id, 'TEAM_CHANGED', user.id, request.teamId);
     }
     if (request.departmentId !== previousDepartmentId) {
       await this.log(id, 'DEPARTMENT_CHANGED', user.id, request.departmentId);
     }
+    if ((request.resource?.id ?? null) !== previousResourceId) {
+      await this.log(id, 'RESOURCE_CHANGED', user.id, request.resource?.id ?? null);
+    }
     if (
       changedKeys.length > 0 ||
-      projectName !== undefined ||
+      resourceId !== undefined ||
       lineManagerName !== undefined ||
-      (teamName !== undefined && request.teamId === previousTeamId)
+      (request.teamId === previousTeamId)
     ) {
       await this.log(id, 'UPDATED', user.id);
     }
@@ -264,7 +288,8 @@ export class ResourcerequestService {
 
     const requester = await this.users.findOne({ where: { id: request.requestedBy } });
     if (requester) {
-      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${request.itemDescription} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
+      const resourceName = request.resource?.name ?? request.itemDescription ?? 'resource';
+      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${resourceName} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
     }
     return saved;
   }
@@ -287,7 +312,13 @@ export class ResourcerequestService {
     lineManagerId?: string;
   }): Promise<{ team: Team; project: Project; lineManager: User }> {
     let team: Team | null;
-    if (reference.teamName !== undefined) {
+    if (reference.teamId) {
+      const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
+      team = await this.teams.findOne({
+        where: { id: teamId },
+        relations: { department: true },
+      });
+    } else if (reference.teamName !== undefined) {
       const matches = await this.teams.find({
         where: { name: reference.teamName.trim() },
         relations: { department: true },
@@ -301,12 +332,6 @@ export class ResourcerequestService {
         );
       }
       team = matches[0];
-    } else if (reference.teamId) {
-      const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
-      team = await this.teams.findOne({
-        where: { id: teamId },
-        relations: { department: true },
-      });
     } else {
       throw new BadRequestException('A team name is required');
     }
@@ -318,7 +343,13 @@ export class ResourcerequestService {
     }
 
     let project: Project | null;
-    if (reference.projectName !== undefined) {
+    if (reference.projectId) {
+      const projectId = this.parseOrganizationId(reference.projectId, 'projectId');
+      project = await this.projects.findOne({
+        where: { id: projectId },
+        relations: { teams: true },
+      });
+    } else if (reference.projectName !== undefined) {
       const matches = await this.projects.find({
         where: { name: reference.projectName.trim(), teams: { id: team.id } },
         relations: { teams: true },
@@ -334,12 +365,6 @@ export class ResourcerequestService {
         );
       }
       project = matches[0];
-    } else if (reference.projectId) {
-      const projectId = this.parseOrganizationId(reference.projectId, 'projectId');
-      project = await this.projects.findOne({
-        where: { id: projectId },
-        relations: { teams: true },
-      });
     } else {
       throw new BadRequestException('A project name is required');
     }

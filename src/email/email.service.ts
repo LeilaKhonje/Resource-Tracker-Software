@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
@@ -31,6 +31,18 @@ export class EmailService {
       await this.transporter.sendMail({ from: this.from, to, subject, text, html });
     } catch (error) {
       this.logger.error(`Email delivery failed for ${to}`, error instanceof Error ? error.stack : undefined);
+    }
+  }
+
+  async sendRequired(to: string, subject: string, text: string, html?: string): Promise<void> {
+    if (!this.transporter || !this.from) {
+      throw new ServiceUnavailableException('Email delivery is not configured; account was not created');
+    }
+    try {
+      await this.transporter.sendMail({ from: this.from, to, subject, text, html });
+    } catch (error) {
+      this.logger.error(`Required email delivery failed for ${to}`, error instanceof Error ? error.stack : undefined);
+      throw new ServiceUnavailableException('Could not deliver account credentials; account was not created');
     }
   }
 }

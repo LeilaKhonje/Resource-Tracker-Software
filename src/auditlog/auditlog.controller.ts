@@ -29,24 +29,27 @@ export class AuditLogsController {
     description:
       'Returns all audit logs when no filters are provided. When filters are supplied, returns records matching ANY of the provided filters (OR logic).',
   })
-  @ApiQuery({ name: 'userId', required: false, type: Number })
-  @ApiQuery({ name: 'actionType', required: false, type: String })
-  @ApiQuery({ name: 'entityType', required: false, type: String })
+  @ApiQuery({ name: 'userId', required: false, type: Number, description: 'Positive numeric user ID. Filters are combined with OR when more than one is supplied.' })
+  @ApiQuery({ name: 'actionType', required: false, type: String, description: 'Exact action type; combined with other supplied filters using OR.' })
+  @ApiQuery({ name: 'entityType', required: false, type: String, description: 'Exact entity type; combined with other supplied filters using OR.' })
   @ApiQuery({
     name: 'date',
     required: false,
     type: String,
     example: '2026-11-16',
+    description: 'Creation date in YYYY-MM-DD format; combined with other supplied filters using OR.',
   })
   @ApiQuery({
     name: 'time',
     required: false,
     type: String,
     example: '13:30',
+    description: 'Creation time in HH:mm format; combined with other supplied filters using OR.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Audit logs retrieved successfully',
+    description: 'Audit log rows ordered newest first. If no filters are supplied, all rows are returned.',
+    schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, actionType: { type: 'string' }, entityType: { type: 'string' }, userId: { type: 'string', nullable: true }, entityId: { type: 'string', nullable: true }, details: { type: 'string', nullable: true }, requestId: { type: 'string', nullable: true }, action: { type: 'string', nullable: true }, performedBy: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } } },
   })
   @ApiResponse({
     status: 400,

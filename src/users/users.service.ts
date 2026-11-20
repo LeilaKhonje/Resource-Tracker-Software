@@ -11,6 +11,8 @@ import { AuditLog } from '../auditlog/auditlog.entity';
 import { ListUsersDto } from './dto/list-users.dto';
 import { ManageUserDto, UserManagementAction } from './dto/manage-user.dto';
 import { ManageMyAccountDto, MyAccountAction } from './dto/manage-my-account.dto';
+import { EmailService } from '../email/email.service';
+import { randomInt } from 'node:crypto';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -21,10 +23,19 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(AuditLog)
     private readonly auditLogsRepository: Repository<AuditLog>,
+    private readonly email: EmailService,
   ) {}
 
   async createAccount(dto: CreateUserDto, adminId: string) {
     const email = dto.email.trim().toLowerCase();
+    const role = dto.role;
+    const fullName = [dto.firstName, dto.middleName, dto.surname]
+      .map((part) => part?.trim())
+      .filter((part): part is string => Boolean(part))
+      .join(' ');
+    if (fullName.length > 120) {
+      throw new BadRequestException('Combined name must be 120 characters or fewer');
+    }
     if (await this.usersRepository.findOneBy({ email })) {
       throw new ConflictException('An account with this email already exists');
     }
@@ -32,17 +43,40 @@ export class UsersService {
       throw new ConflictException('A Managing Director is already assigned');
     }
 
+    const temporaryPassword = this.createTemporaryPassword();
     const user = await this.usersRepository.save(this.usersRepository.create({
-      fullName: dto.fullName.trim(),
+      fullName,
       email,
       role: dto.role,
-      passwordHash: await bcrypt.hash(dto.initialPassword, BCRYPT_ROUNDS),
+      passwordHash: await bcrypt.hash(temporaryPassword, BCRYPT_ROUNDS),
+      mustChangePassword: true,
       isActive: true,
     }));
+
+    try {
+      await this.email.sendRequired(
+        email,
+        'Your Resource Tracker account',
+        `Hello ${fullName},\n\nYour Resource Tracker account has been created.\n\nName: ${fullName}\nSign-in email: ${email}\n Role: ${role}\nTemporary password: ${temporaryPassword}\n\nSign in using the email address above and this temporary password. Change the password immediately when prompted.`,
+      );
+    } catch (error) {
+      await this.usersRepository.delete({ id: user.id });
+      throw error;
+    }
+
     await this.logAccountAction('ACCOUNT_CREATED', user.id, adminId, `Created active account for ${email} with role ${dto.role}`);
     return {
       user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, isActive: user.isActive },
     };
+  }
+
+  private createTemporaryPassword(): string {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const password = Array.from({ length: 12 }, () => alphabet[randomInt(alphabet.length)]);
+    if (!/\d/.test(password.join(''))) {
+      password[randomInt(password.length)] = '23456789'[randomInt(8)];
+    }
+    return password.join('');
   }
 
   async listUsers(filter: ListUsersDto) {
@@ -82,9 +116,16 @@ export class UsersService {
       .getMany();
   }
 
-  async requestAccountDeletion(userId: string) {
-    const user = await this.usersRepository.findOneBy({ id: userId });
+  async requestAccountDeletion(userId: string, password: string) {
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
     if (!user) throw new NotFoundException('User not found');
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
     user.deletionRequestedAt = new Date();
     user.refreshTokenHash = null;
     user.tokenVersion += 1;
@@ -137,6 +178,7 @@ export class UsersService {
           ...baseProfile,
             department: user.department?.name,
             team: user.team?.name,
+            teamId: user.team ? String(user.team.id) : null,
           
         }
       
@@ -258,6 +300,7 @@ export class UsersService {
       changePasswordDto.newPassword,
       BCRYPT_ROUNDS,
     );
+    user.mustChangePassword = false;
     await this.usersRepository.save(user);
 
     return { message: 'Password changed successfully' };
