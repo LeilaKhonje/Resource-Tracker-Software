@@ -107,8 +107,7 @@ send `{"action":"deactivate"}`, `{"action":"reactivate"}`, or
 only for a deactivated account. Department heads can assign `TEAM_LEAD`.
 Managing Directors can assign
 `LINE_MANAGER` and `DEPARTMENT_HEAD`. The System Admin can assign business
-roles, including the Managing Director role, but cannot assign another System
-Admin. The System Admin role is assigned only by the bootstrap seed.
+roles, including the Managing Director role, but cannot assign another System Admin. The System Admin role is assigned only by the bootstrap seed.
 
 Protect resource endpoints with `JwtAuthGuard` and apply `@Roles(...)` with
 `RolesGuard` to enforce role-specific access. A valid token is sent as

@@ -17,11 +17,14 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request =
       context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const authorization = request.headers.authorization;
-    const parts = authorization?.split(' ') ?? [];
-    const [scheme, token] = parts;
+    const authorization = request.headers.authorization?.trim();
+    const [scheme, token, ...extraParts] = authorization?.split(/\s+/) ?? [];
 
-    if (parts.length !== 2 || scheme !== 'Bearer' || !token) {
+    if (
+      scheme?.toLowerCase() !== 'bearer' ||
+      !token ||
+      extraParts.length > 0
+    ) {
       throw new UnauthorizedException('A bearer access token is required');
     }
 

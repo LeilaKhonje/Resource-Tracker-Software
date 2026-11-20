@@ -16,19 +16,42 @@ import { ResourceType } from '../enum/resource-type.enum';
 
 @ValidatorConstraint({ name: 'resourceFieldsMatchType', async: false })
 class ResourceFieldsMatchTypeConstraint implements ValidatorConstraintInterface {
+  private getDisallowedFields(type: ResourceType): string[] {
+    return type === ResourceType.INSOURCED
+      ? ['price', 'label', 'batchNumber', 'vendor']
+      : ['description', 'departmentName'];
+  }
+
   validate(type: ResourceType, args?: ValidationArguments): boolean {
     if (!args) return false;
     const resource = args.object as Record<string, unknown>;
-    const fieldsToReject =
-      type === ResourceType.INSOURCED
-        ? ['price', 'label', 'batchNumber', 'vendor']
-        : ['description', 'departmentName'];
-
-    return fieldsToReject.every((field) => resource[field] === undefined);
+    return this.getDisallowedFields(type).every((field) => {
+      const value = resource[field];
+      return (
+        value === undefined ||
+        value === null ||
+        (typeof value === 'string' && value.trim() === '')
+      );
+    });
   }
 
-  defaultMessage(): string {
-    return 'Fields for the other resource type are not allowed.';
+  defaultMessage(args?: ValidationArguments): string {
+    if (!args) return 'Fields for the other resource type are not allowed.';
+
+    const type = args.value as ResourceType;
+    const resource = args.object as Record<string, unknown>;
+    const fields = this.getDisallowedFields(type).filter((field) => {
+      const value = resource[field];
+      return (
+        value !== undefined &&
+        value !== null &&
+        !(typeof value === 'string' && value.trim() === '')
+      );
+    });
+    const typeName =
+      type === ResourceType.INSOURCED ? 'insourced' : 'outsourced';
+
+    return `Fields ${fields.join(', ')} are not allowed for ${typeName} resources.`;
   }
 }
 

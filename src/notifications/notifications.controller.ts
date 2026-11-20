@@ -1,11 +1,12 @@
-
-import { Body,BadRequestException,Controller,Delete,Get,Param,Patch,Post,Req, UseGuards,} from '@nestjs/common';
+import { Body, BadRequestException, Controller, Delete, Get, Param, Patch, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import {ApiBearerAuth,ApiBody,ApiOperation,ApiParam,ApiResponse, ApiTags,} from '@nestjs/swagger';
 import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Notifications')
+@ApiBearerAuth('access-token')
 @ApiStandardErrorResponses(500)
 @Controller('api/v1/notifications')
 export class NotificationsController {
@@ -29,14 +30,12 @@ export class NotificationsController {
     status: 401,
     description: 'Unauthorized',
   })
-  @ApiResponse({ status: 400, description: 'The authenticated user identity is missing.' })
-  getMyNotifications(@Req() req: any) {
+  @ApiResponse({ status: 401, description: 'The authenticated user identity is missing.' })
+  getMyNotifications(@Req() req: AuthenticatedRequest) {
     const userId = req.user?.sub;
 
     if (!userId) {
-      throw new BadRequestException(
-        'Authenticated user not found',
-      );
+      throw new UnauthorizedException('Authenticated user not found');
     }
 
     return this.notificationsService.getUserNotifications(

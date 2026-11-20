@@ -1,9 +1,6 @@
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: babylon1340/resource-tracker-api:1.0.4
     container_name: resource-tracker-api
     restart: unless-stopped
