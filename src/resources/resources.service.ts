@@ -12,8 +12,7 @@ import {
   isInsourcedResourceInput,
   isOutsourcedResourceInput,
 } from './dto/create-resource.dto';
-import { UpdateInsourcedResourceDto } from './dto/update-insourced-resource.dto';
-import { UpdateOutsourcedResourceDto } from './dto/update-outsourced-resource.dto';
+import { UpdateResourceDto } from './dto/update-resource.dto';
 import { QueryResourceDto } from './dto/query-resource.dto';
 import { Resources } from './entities/resources.entity';
 import { ResourceType } from './enum/resource-type.enum';
@@ -309,55 +308,45 @@ export class ResourcesService {
     return resource;
   }
 
- async updateInsourced(id: string, dto: UpdateInsourcedResourceDto): Promise<Resources> {
-  return this.dataSource.transaction(async (manager) => {
-    const resource = await this.findLockedByType(manager, id, ResourceType.INSOURCED);
-    const { departmentName, ...changes } = dto;
-    if (departmentName !== undefined) {
-      resource.department = await this.findDepartmentByName(departmentName);
+  async updateResource(id: string, dto: UpdateResourceDto): Promise<Resources> {
+    return this.dataSource.transaction(async (manager) => {
+      const resource = await manager.getRepository(Resources).findOne({
+        where: { id },
+        relations: { department: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!resource) {
+        throw new NotFoundException(`Resource with id "${id}" not found`);
+      }
+
+      if (resource.type === ResourceType.INSOURCED) {
+        this.assertFieldsAbsent(dto, ['price', 'label', 'batchNumber', 'vendor']);
+        if (dto.departmentName !== undefined) {
+          resource.department = await this.findDepartmentByName(dto.departmentName);
+        }
+      } else {
+        this.assertFieldsAbsent(dto, ['description', 'departmentName']);
+      }
+
+      for (const [field, value] of Object.entries(dto)) {
+        if (field !== 'departmentName' && value !== undefined) {
+          Object.assign(resource, { [field]: value });
+        }
+      }
+      await this.assertQuantityCoversAllocations(manager, resource);
+      await this.refreshResourceStatus(manager, resource);
+      return manager.getRepository(Resources).save(resource);
+    });
+  }
+
+  private async assertQuantityCoversAllocations(manager: EntityManager, resource: Resources) {
+    const active = await this.getActiveAllocationQuantity(manager, resource.id);
+    if (resource.quantity < active) {
+      throw new ConflictException(
+        `Quantity cannot be lower than the ${active} units currently allocated`,
+      );
     }
-    Object.assign(resource, changes);
-    await this.assertQuantityCoversAllocations(manager, resource);
-    await this.refreshResourceStatus(manager, resource);
-    return manager.getRepository(Resources).save(resource);
-  });
-}
-
-async updateOutsourced(id: string, dto: UpdateOutsourcedResourceDto): Promise<Resources> {
-  return this.dataSource.transaction(async (manager) => {
-    const resource = await this.findLockedByType(manager, id, ResourceType.OUTSOURCED);
-    Object.assign(resource, dto);
-    await this.assertQuantityCoversAllocations(manager, resource);
-    await this.refreshResourceStatus(manager, resource);
-    return manager.getRepository(Resources).save(resource);
-  });
-}
-
-private async findLockedByType(manager: EntityManager, id: string, type: ResourceType) {
-  const resource = await manager.getRepository(Resources).findOne({
-    where: { id },
-    relations: { department: true },
-    lock: { mode: 'pessimistic_write' },
-  });
-  if (!resource) {
-    throw new NotFoundException(`Resource with id "${id}" not found`);
   }
-  if (resource.type !== type) {
-    throw new BadRequestException(
-      `Resource "${id}" is ${resource.type}; use the ${resource.type} endpoint to update it`,
-    );
-  }
-  return resource;
-}
-
-private async assertQuantityCoversAllocations(manager: EntityManager, resource: Resources) {
-  const active = await this.getActiveAllocationQuantity(manager, resource.id);
-  if (resource.quantity < active) {
-    throw new ConflictException(
-      `Quantity cannot be lower than the ${active} units currently allocated`,
-    );
-  }
-}
 
   private async getActiveAllocationQuantity(manager: EntityManager, resourceId: string) {
     const result = await manager.getRepository(ResourceAllocation)
