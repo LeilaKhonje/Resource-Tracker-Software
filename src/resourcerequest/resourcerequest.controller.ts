@@ -16,6 +16,8 @@ const resourceRequestResponseSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
+    itemName: { type: 'string', nullable: true },
+    resourceId: { type: 'string', format: 'uuid', nullable: true },
     itemDescription: { type: 'string' },
     manufacturerLabel: { type: 'string', nullable: true },
     price: { type: 'number', nullable: true },
@@ -65,10 +67,10 @@ export class ResourcerequestController {
   @Post('api/v1/resource-request')
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD)
-  @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies projectName, lineManagerName, and teamName. The server resolves names to stored relationships, derives the department from the team, sets requestedBy from the caller, and creates an in-app notification for the active Line Manager.' })
-  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectName: 'Office Modernization', lineManagerName: 'Jordan Lee', teamName: 'Platform' } } } })
+  @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies a resourceId, request details, projectId, teamId, and lineManagerName. The resource ID is resolved against the catalog; the server derives the department from the team and sets requestedBy from the caller.' })
+  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { resourceId: '550e8400-e29b-41d4-a716-446655440000', itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectId: 12, lineManagerName: 'Jordan Lee', teamId: 4 } } } })
   @ApiResponse({ status: 201, description: 'Request submitted with status SUBMITTED and notification created for the designated Line Manager.', schema: resourceRequestResponseSchema })
-  @ApiBadRequestResponse({ description: 'Invalid fields, ambiguous names, or project is not assigned to the named team.' })
+  @ApiBadRequestResponse({ description: 'Invalid fields or IDs, or the project is not assigned to the team.' })
   @ApiNotFoundResponse({ description: 'Team, project, active Line Manager, or requesting Team Lead not found.' })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
   @ApiForbiddenResponse({ description: 'Only team leads can create requests.' })

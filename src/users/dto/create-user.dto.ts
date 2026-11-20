@@ -1,21 +1,35 @@
 import { Transform } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsNotIn, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsEnum, IsNotEmpty, IsNotIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { UserRole } from '../user-role.enum';
 
 export class CreateUserDto {
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @ApiProperty({ example: 'Alex Morgan' })
+  @ApiProperty({ example: 'Alex' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
-  fullName: string;
+  @MaxLength(60)
+  firstName: string;
+
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @ApiPropertyOptional({ example: 'James' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60)
+  middleName?: string;
+
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @ApiProperty({ example: 'Morgan' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60)
+  surname: string;
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
-  @ApiProperty({ example: 'alex@gmail.com', description: 'a valid gmail address' })
+  @ApiProperty({ example: 'alex@gmail.com' })
   @IsEmail()
   @MaxLength(254)
-  @Matches(/@gmail\.com$/, { message: 'Email must be must be a valid email' })
   email: string;
 
   @ApiProperty({
@@ -27,10 +41,4 @@ export class CreateUserDto {
   @IsNotIn([UserRole.SYSTEM_ADMIN], { message: 'The System Admin role is assigned only through the bootstrap process' })
   role: UserRole;
 
-  @ApiProperty({ example: 'Temp1234', minLength: 8, maxLength: 12, description: 'Initial password supplied to the designated user; must include a number' })
-  @IsString()
-  @MinLength(8)
-  @MaxLength(12)
-  @Matches(/\d/, { message: 'Initial password must contain at least one number' })
-  initialPassword: string;
 }

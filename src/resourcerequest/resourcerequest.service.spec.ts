@@ -8,6 +8,7 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { User } from '../users/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { Resources } from '../resources/entities/resources.entity';
 
 describe('ResourcerequestService', () => {
   let service: ResourcerequestService;
@@ -17,7 +18,7 @@ describe('ResourcerequestService', () => {
       providers: [
         ResourcerequestService,
         { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
-        ...[ResourceRequest, AuditLog, Department, Team, Project, User].map((entity) => ({
+        ...[ResourceRequest, AuditLog, Department, Team, Project, User, Resources].map((entity) => ({
           provide: getRepositoryToken(entity),
           useValue: {},
         })),

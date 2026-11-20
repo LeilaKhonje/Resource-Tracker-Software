@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards, Get, UsePipes, ValidationPipe, Post, Query, Delete } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -19,13 +19,14 @@ export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('')
-  @ApiOperation({ summary: 'Create a user account and assign a role to the user(System Admin only)' })
+  @ApiOperation({ summary: 'Create a user account and email a generated temporary password (System Admin only)' })
   @ApiBody({ type: CreateUserDto })
-  @ApiResponse({ status: 201, description: 'Active account created; the initial password is not returned', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
+  @ApiResponse({ status: 201, description: 'Active account created and generated temporary password emailed; password is not returned', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
   @ApiResponse({ status: 400, description: 'Invalid account details' })
   @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiResponse({ status: 403, description: 'Only System Admins can create user accounts.' })
   @ApiResponse({ status: 409, description: 'Conflict: Email already exists' })
+  @ApiResponse({ status: 503, description: 'Account could not be created because credential email delivery is unavailable' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SYSTEM_ADMIN)
   @ApiBearerAuth('access-token')
@@ -107,7 +108,7 @@ manageMyAccount(@Req() req: AuthenticatedRequest, @Body() dto: ManageMyAccountDt
   return this.usersService.manageMyAccount(req.user!.sub, dto);
 }
 
-@Post('me/delete')
+@Delete('me/delete')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 @ApiOperation({ summary: 'Request deletion of your account; logging in within five days cancels it' })

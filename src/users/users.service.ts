@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'node:crypto';
 import { UserRole } from './user-role.enum';
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -11,8 +12,11 @@ import { AuditLog } from '../auditlog/auditlog.entity';
 import { ListUsersDto } from './dto/list-users.dto';
 import { ManageUserDto, UserManagementAction } from './dto/manage-user.dto';
 import { ManageMyAccountDto, MyAccountAction } from './dto/manage-my-account.dto';
+import { EmailService } from '../email/email.service';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 const BCRYPT_ROUNDS = 12;
+const PASSWORD_CHARACTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
 @Injectable()
 export class UsersService {
@@ -21,9 +25,11 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(AuditLog)
     private readonly auditLogsRepository: Repository<AuditLog>,
+    private readonly email: EmailService,
   ) {}
 
   async createAccount(dto: CreateUserDto, adminId: string) {
+    const role = dto.role;
     const email = dto.email.trim().toLowerCase();
     if (await this.usersRepository.findOneBy({ email })) {
       throw new ConflictException('An account with this email already exists');
@@ -32,17 +38,64 @@ export class UsersService {
       throw new ConflictException('A Managing Director is already assigned');
     }
 
+    const fullName = [dto.firstName, dto.middleName, dto.surname]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(' ');
+    if (fullName.length > 120) {
+      throw new BadRequestException('The combined name must not exceed 120 characters');
+    }
+    const password = this.generateInitialPassword();
     const user = await this.usersRepository.save(this.usersRepository.create({
-      fullName: dto.fullName.trim(),
+      fullName,
       email,
       role: dto.role,
-      passwordHash: await bcrypt.hash(dto.initialPassword, BCRYPT_ROUNDS),
+      passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
       isActive: true,
     }));
+
+    try {
+      await this.email.sendRequired(
+        email,
+        'Your Resource Tracker account',
+        `Hello ${fullName},\n\nYour Resource Tracker account has been created.\nEmail: ${email}\n Role: ${role}\nTemporary password: ${password}\nRole: ${dto.role}\n\nPlease sign in and change your password as soon as possible.`,
+        `<p>Hello ${this.escapeHtml(fullName)},</p><p>Your Resource Tracker account has been created.</p><p><strong>Email:</strong> ${this.escapeHtml(email)}<br><strong>Temporary password:</strong> ${this.escapeHtml(password)}<br><strong>Role:</strong> ${this.escapeHtml(dto.role)}</p><p>Please sign in and change your password as soon as possible.</p>`,
+      );
+    } catch (error) {
+      // Do not leave an account behind when its only initial credential could
+      // not be delivered to the user.
+      await this.usersRepository.delete(user.id);
+      throw error;
+    }
+
     await this.logAccountAction('ACCOUNT_CREATED', user.id, adminId, `Created active account for ${email} with role ${dto.role}`);
     return {
       user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, isActive: user.isActive },
     };
+  }
+
+  private generateInitialPassword(): string {
+    const characters = [
+      'ABCDEFGHJKLMNPQRSTUVWXYZ'[randomInt(24)],
+      'abcdefghijkmnopqrstuvwxyz'[randomInt(25)],
+      '23456789'[randomInt(8)],
+      ...Array.from({ length: 9 }, () => PASSWORD_CHARACTERS[randomInt(PASSWORD_CHARACTERS.length)]),
+    ];
+    for (let index = characters.length - 1; index > 0; index -= 1) {
+      const swapIndex = randomInt(index + 1);
+      [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
+    }
+    return characters.join('');
+  }
+
+  private escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    })[character]!);
   }
 
   async listUsers(filter: ListUsersDto) {

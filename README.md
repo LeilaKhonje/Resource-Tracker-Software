@@ -75,9 +75,9 @@ connects to the MySQL service on its internal port `3306`.
 ## Account and role management
 
 The System Admin creates an active account with `POST /users`, specifying the
-user's business role and initial password, then provides the user their email
-and initial password outside the system through a secure channel.
-The user can keep that password or log in and change it through
+user's first name, optional middle name, surname, email, and business role. The
+system generates a random temporary password and emails it to the new user.
+The user should log in and change that password through
 `PATCH /users/me` with `{"action":"change_password", ...}`. The password is stored only as a bcrypt hash and
 is never returned by the API. Account creation, deactivation, reactivation,
 and role changes are recorded in the audit log.
@@ -86,12 +86,18 @@ Account creation body:
 
 ```json
 {
-  "fullName": "Alex Morgan",
-  "email": "alex@company.com",
-  "role": "TEAM_MEMBER",
-  "initialPassword": "Temp1234"
+  "firstName": "Alex",
+  "middleName": "James",
+  "surname": "Morgan",
+  "email": "alex@example.com",
+  "role": "TEAM_MEMBER"
 }
 ```
+
+`middleName` is optional. Account creation fails if the email is already
+registered or the generated-password email cannot be delivered; in the latter
+case the newly saved account is removed. Configure the SMTP settings in
+`.env` for account email delivery.
 
 The System Admin role can only be assigned by the bootstrap seed. The Managing
 Director role can be assigned during account creation only when no Managing
@@ -140,7 +146,7 @@ business roles according to the role rules above.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /users` | System Admin creates an active account from `fullName`, `email`, `role`, and `initialPassword`. The password is not returned. | `400` invalid fields, role, or password; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned. |
+| `POST /users` | System Admin creates an active account from `firstName`, optional `middleName`, `surname`, `email`, and `role`. The system generates and emails a temporary password; it is never returned by the API. | `400` invalid fields or role; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned; `503` credential email could not be delivered. |
 | `GET /users?startDate=<ISO-8601>&endDate=<ISO-8601>` | System Admin or Managing Director lists accounts without credential data. The date filters are optional; if either is supplied, both are required, and the inclusive range filters by creation time. | `400` one date missing, invalid timestamp, or start later than end; `401` missing/invalid token; `403` caller lacks permission. |
 | `GET /users/line-managers` | Team Lead lists active Line Managers to choose a recipient for a resource request. Returns `id`, `fullName`, and `email`, ordered by name. | `401` missing/invalid token; `403` caller is not a Team Lead. |
 
@@ -277,7 +283,7 @@ below: `/resource-requests/api/v1/resource-request...`.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /resource-requests/api/v1/resource-request` | Creates and submits a request; body includes item details, `quantity`, positive integer `expectedDurationDays`, and `teamName`, `projectName`, and `lineManagerName`. Department is derived from the team. | `400` invalid or ambiguous names/fields; `401` missing/invalid token; `403` caller is not a Team Lead; `404` team, project, or active Line Manager not found. |
+| `POST /resource-requests/api/v1/resource-request` | Creates and submits a request; body includes `resourceId`, item details, `quantity`, positive integer `expectedDurationDays`, `teamId`, `projectId`, and `lineManagerName`. Department is derived from the team. | `400` invalid fields or a project not assigned to the team; `401` missing/invalid token; `403` caller is not a Team Lead; `404` resource, team, project, or active Line Manager not found. |
 | `GET /resource-requests/api/v1/resource-request` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing/invalid token; `403` unsupported role. |
 | `GET /resource-requests/api/v1/resource-request/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
 | `PATCH /resource-requests/api/v1/resource-request/:id` | Team Lead edits a queried request and may resubmit with `{"status":"SUBMITTED"}`. The assigned Line Manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires a `note`. | `400` invalid status/state or missing required fields; `401` missing/invalid token; `403` wrong owner/role/manager; `404` request not found. |

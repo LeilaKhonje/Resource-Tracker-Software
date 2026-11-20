@@ -20,6 +20,12 @@ export class ResourceRequest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  itemName: string | null;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  resourceId: string | null;
+
   
   @Column({ type: 'text' })
   itemDescription: string;

@@ -12,10 +12,12 @@ import { RequestAuditLog } from './entities/request-audit-log.entity';
 import { User } from '../users/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
+import { Resources } from '../resources/entities/resources.entity';
+import { ResourceAllocation } from '../resources/entities/resource-allocation.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project, User]),
+    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project, User, Resources, ResourceAllocation]),
     AuthSecurityModule,
     NotificationsModule,
     EmailModule,

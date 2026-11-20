@@ -4,34 +4,32 @@ import {
   IsNotEmpty,
   IsString,
   Min,
+  MaxLength,
+  IsUUID,
 } from 'class-validator';
 
 
 // Only what the team lead is allowed to provide. status and requestedBy are
 // NOT here: the server sets them.
 export class CreateResourceRequestDto {
+  @ApiProperty({ format: 'uuid', description: 'ID of the resource catalog item being requested' })
+  @IsUUID()
+  resourceId: string;
+
   @ApiProperty({
     description: 'Short description of the item being requested',
     example: 'Laptop for design team',
   })
-  @ApiProperty({ example: 'Laptop for field data collection' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(2000)
   itemDescription: string;
 
-  @ApiProperty({
-    description: 'Batch number printed on the item or its packaging',
-    example: 'B-2024-001',
-  })
-  @ApiProperty({ example: 'LOT-2026-04' })
+  @ApiProperty({ description: 'Batch number printed on the item or its packaging', example: 'LOT-2026-04' })
   @IsString()
   @IsNotEmpty()
   batchNumber: string;
 
-  @ApiProperty({
-    description: 'How many units are requested (at least 1)',
-    example: 3,
-  })
   @ApiProperty({ example: 3, minimum: 1 })
   @IsInt()
   @Min(1)
@@ -46,18 +44,19 @@ export class CreateResourceRequestDto {
   @Min(1)
   expectedDurationDays: number;
 
-  @ApiProperty({ example: 'Office Modernization' })
-  @IsString()
-  @IsNotEmpty()
-  projectName: string;
+  @ApiProperty({ example: 12, description: 'Numeric ID of the project assigned to the team' })
+  @IsInt()
+  @Min(1)
+  projectId: number;
 
   @ApiProperty({ example: 'Jordan Lee', description: 'Full name of the active Line Manager who will review the request.' })
   @IsString()
   @IsNotEmpty()
   lineManagerName: string;
 
-  @ApiProperty({ example: 'Platform' })
-  @IsString()
-  @IsNotEmpty()
-  teamName: string;
+
+  @ApiProperty({ example: 4, description: 'Numeric ID of the team submitting the request' })
+  @IsInt()
+  @Min(1)
+  teamId: number;
 }
