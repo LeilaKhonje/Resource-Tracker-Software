@@ -25,9 +25,9 @@ export class AddCatalogResourceToResourceRequests1762970000000
       'CREATE INDEX `IDX_resource_request_resource_id` ON `resource_request` (`resource_id`)',
     );
     await queryRunner.query(`
-      ALTER TABLE `resource_request`
-      ADD CONSTRAINT `FK_resource_request_resource_id`
-      FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`)
+      ALTER TABLE \`resource_request\`
+      ADD CONSTRAINT \`FK_resource_request_resource_id\`
+      FOREIGN KEY (\`resource_id\`) REFERENCES \`resources\` (\`id\`)
       ON DELETE RESTRICT ON UPDATE NO ACTION
     `);
   }
@@ -37,8 +37,8 @@ export class AddCatalogResourceToResourceRequests1762970000000
     if (!requestTable?.findColumnByName('resource_id')) return;
 
     await queryRunner.query(`
-      UPDATE `resource_request` request
-      LEFT JOIN `resources` resource ON resource.id = request.resource_id
+      UPDATE \`resource_request\` request
+      LEFT JOIN \`resources\` resource ON resource.id = request.resource_id
       SET request.itemDescription = COALESCE(request.itemDescription, resource.name, 'Resource')
       WHERE request.itemDescription IS NULL
     `);
