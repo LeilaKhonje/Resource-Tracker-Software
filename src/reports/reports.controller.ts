@@ -2,7 +2,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import {Controller,Get,Query,Param,ParseIntPipe,} from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { ReportFilterDto } from './dto/report-filter.dto';
-import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '../users/user-role.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -10,6 +10,7 @@ import { UseGuards } from '@nestjs/common';
 import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Reports')
+@ApiBearerAuth('access-token')
 @ApiStandardErrorResponses(400, 401, 403, 500)
 @Controller('api/v1/reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -21,7 +22,7 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('approval-history')
-  @ApiOperation({ summary: 'Get resource request approval history' })
+  @ApiOperation({ summary: 'Get resource request approval history', description: 'Available to System Admins and Managing Directors. Optional department and inclusive date filters narrow the returned approval rows.' })
   @ApiQuery({ name: 'departmentId', required: false, type: Number })
   @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date', example: '2026-01-01', description: 'Inclusive start date (ISO 8601)' })
   @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date', example: '2026-01-31', description: 'Inclusive end date (ISO 8601)' })
@@ -32,7 +33,7 @@ export class ReportsController {
   }
 
   @Get('departmental-spending')
-  @ApiOperation({ summary: 'Get departmental spending' })
+  @ApiOperation({ summary: 'Get departmental spending', description: 'Available to System Admins and Managing Directors. Returns spending totals grouped by department, optionally filtered by department and date range.' })
   @ApiQuery({ name: 'departmentId', required: false, type: Number })
   @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date', example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date', example: '2026-01-31' })
@@ -43,7 +44,7 @@ export class ReportsController {
   }
 
   @Get('allocation-history')
-  @ApiOperation({ summary: 'Get resource allocation history' })
+  @ApiOperation({ summary: 'Get resource allocation history', description: 'Available to System Admins and Managing Directors. Optional department and inclusive date filters narrow the returned allocation rows.' })
   @ApiQuery({ name: 'departmentId', required: false, type: Number })
   @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date', example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date', example: '2026-01-31' })
@@ -54,7 +55,7 @@ export class ReportsController {
   }
 
   @Get('department/:departmentId')
-  @ApiOperation({ summary: 'Get a report for one department' })
+  @ApiOperation({ summary: 'Get a report for one department', description: 'Available to System Admins and Managing Directors. Combines approval, spending, and allocation data for one department.' })
   @ApiParam({ name: 'departmentId', description: 'Department ID', type: Number })
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
@@ -71,7 +72,7 @@ export class ReportsController {
   }
 
   @Get('organization')
-  @ApiOperation({ summary: 'Get the organization report' })
+  @ApiOperation({ summary: 'Get the organization report', description: 'Available to System Admins and Managing Directors. Combines organization-wide approval, spending, and allocation data; optional filters can narrow the results.' })
   @ApiQuery({ name: 'departmentId', required: false, type: Number })
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })

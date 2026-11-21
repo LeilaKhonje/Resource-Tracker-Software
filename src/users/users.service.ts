@@ -31,6 +31,14 @@ export class UsersService {
   async createAccount(dto: CreateUserDto, adminId: string) {
     const role = dto.role;
     const email = dto.email.trim().toLowerCase();
+    const role = dto.role;
+    const fullName = [dto.firstName, dto.middleName, dto.surname]
+      .map((part) => part?.trim())
+      .filter((part): part is string => Boolean(part))
+      .join(' ');
+    if (fullName.length > 120) {
+      throw new BadRequestException('Combined name must be 120 characters or fewer');
+    }
     if (await this.usersRepository.findOneBy({ email })) {
       throw new ConflictException('An account with this email already exists');
     }
@@ -135,9 +143,16 @@ export class UsersService {
       .getMany();
   }
 
-  async requestAccountDeletion(userId: string) {
-    const user = await this.usersRepository.findOneBy({ id: userId });
+  async requestAccountDeletion(userId: string, password: string) {
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
     if (!user) throw new NotFoundException('User not found');
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
     user.deletionRequestedAt = new Date();
     user.refreshTokenHash = null;
     user.tokenVersion += 1;
@@ -190,6 +205,7 @@ export class UsersService {
           ...baseProfile,
             department: user.department?.name,
             team: user.team?.name,
+            teamId: user.team ? String(user.team.id) : null,
           
         }
       
@@ -311,6 +327,7 @@ export class UsersService {
       changePasswordDto.newPassword,
       BCRYPT_ROUNDS,
     );
+    user.mustChangePassword = false;
     await this.usersRepository.save(user);
 
     return { message: 'Password changed successfully' };

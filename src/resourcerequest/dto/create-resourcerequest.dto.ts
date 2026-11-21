@@ -1,8 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
+  IsUUID,
   Min,
   MaxLength,
   IsUUID,
@@ -17,8 +19,9 @@ export class CreateResourceRequestDto {
   resourceId: string;
 
   @ApiProperty({
-    description: 'Short description of the item being requested',
-    example: 'Laptop for design team',
+    description: 'ID of the existing catalog resource being requested.',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    format: 'uuid',
   })
   @IsString()
   @IsNotEmpty()

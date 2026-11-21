@@ -109,8 +109,7 @@ send `{"action":"deactivate"}`, `{"action":"reactivate"}`, or
 only for a deactivated account. Department heads can assign `TEAM_LEAD`.
 Managing Directors can assign
 `LINE_MANAGER` and `DEPARTMENT_HEAD`. The System Admin can assign business
-roles, including the Managing Director role, but cannot assign another System
-Admin. The System Admin role is assigned only by the bootstrap seed.
+roles, including the Managing Director role, but cannot assign another System Admin. The System Admin role is assigned only by the bootstrap seed.
 
 Protect resource endpoints with `JwtAuthGuard` and apply `@Roles(...)` with
 `RolesGuard` to enforce role-specific access. A valid token is sent as
@@ -126,14 +125,14 @@ response. Paths below are relative to `/api/v1` unless a full path is shown.
 
 ### Authentication
 
-Authentication lets active users log in to receive a bearer token for
-protected endpoints. Account creation is limited to `@company.com` addresses;
-the initial password must be 8–12 characters and contain a number. Users may
-change it after logging in.
+Authentication lets active users log in to receive bearer tokens. Newly created
+accounts must change their emailed temporary password before using other
+protected endpoints. User-selected passwords must be 8–12 characters and
+contain a number.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /auth` | Checks the email and password and returns access and refresh tokens. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
+| `POST /auth` | Checks the email and password and returns access and refresh tokens plus `mustChangePassword`. When true, the user must change the temporary password before using other protected endpoints. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
 | `POST /auth/refresh` | Exchanges a valid refresh token for a new access and refresh token pair. | `401` refresh token is invalid, expired, revoked, or the account is inactive. |
 | `POST /auth/logout` | Revokes the supplied refresh token. | `401` refresh token is invalid, expired, or revoked. |
 | `POST /auth/forgot-password` | Sends a password reset code to an active account and returns a generic confirmation with the submitted email masked, so the response does not disclose whether an account exists. | `400` invalid email format. |
@@ -152,8 +151,9 @@ business roles according to the role rules above.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `GET /users/me` | Returns the authenticated user's ID, name, email, and role. | `401` missing or invalid bearer token; `404` user record no longer exists. |
+| `GET /users/me` | Returns the authenticated user's profile; Team Leads also receive `teamId`, which can be used with `GET /teams/:id/projects` to populate a request form. | `401` missing or invalid bearer token; `404` user record no longer exists. |
 | `PATCH /users/me` | Performs exactly one action: update profile (`{"action":"update_profile","address":"Lilongwe, Malawi"}`) or change password (`{"action":"change_password","currentPassword":"current123","newPassword":"newSecure456"}`). Profile updates accept one or more of `phoneNumber`, `address`, `dateOfBirth`, and `preferredPronoun`; password changes require both password fields. Fields for the other action are rejected. | `400` invalid action/fields/profile data/password or same password supplied; `401` missing/invalid token or current password is incorrect; `404` user not found. |
+| `DELETE /users/me/delete` | Requests account deletion after verifying the supplied current password (`{"password":"currentPassword123"}`). Logging in within five days cancels the scheduled deletion. | `400` password missing or invalid; `401` missing/invalid token or password is incorrect; `404` user not found. |
 | `PATCH /users/:id` | Performs exactly one action: deactivate (`{"action":"deactivate"}`), reactivate (`{"action":"reactivate"}`), or assign a business role (`{"action":"assign_role","role":"TEAM_LEAD"}`). Reactivation requires a deactivated account; deactivation revokes existing tokens. | `400` invalid action/body/role, account already active/deactivated, or self-deactivation attempted; `401` missing/invalid token; `403` caller lacks permission; `404` assigning account or target user not found; `409` Managing Director already assigned. |
 
 ### Departments
@@ -216,7 +216,7 @@ are for Department Heads, while Managing Directors can also list and view.
 
 ### Resources
 
-The resources API manages catalog records and stores the count of units represented by each record. Line Managers can allocate units to a team member and project, record returns and transfers, and review movement history. A resource has status `AVAILABLE` when it has no active allocations and `ASSIGNED` when one or more units are actively allocated. Available quantity is still checked against recorded quantity minus active allocations. Creating resources requires a Managing Director; listing, viewing, and updating routes currently do not declare authentication guards. Resource IDs are UUIDs. The returned fields depend on the resource `type`:
+The resources API manages catalog records and stores the count of units represented by each record. Line Managers can allocate units to a team member and project, record returns and transfers, and review movement history. A resource has status `AVAILABLE` when it has no active allocations and `ASSIGNED` when one or more units are actively allocated. Available quantity is still checked against recorded quantity minus active allocations. Creating resources requires a Managing Director. Listing requires a bearer token and permits Department Heads, Line Managers, Managing Directors, and Team Leads; Team Leads use the catalog list to select a resource when creating a request. Resource IDs are UUIDs. The returned fields depend on the resource `type`:
 
 - `insourced`: `id`, `name`, `type`, `status`, `description`, `departmentName`, `quantity`, `createdAt`, `updatedAt`
 - `outsourced`: `id`, `name`, `type`, `status`, `price`, `label`, `batchNumber`, `vendor`, `createdAt`, `updatedAt`
@@ -224,7 +224,7 @@ The resources API manages catalog records and stores the count of units represen
 | Method and path | Request | What it does | Possible errors |
 | --- | --- | --- | --- |
 | `POST /resources` | Managing Director bearer token and JSON resource object; see examples below. | Creates a catalog resource. `type` is `insourced` or `outsourced`; insourced requires `description` and an existing `departmentName`, outsourced requires `price`, `label`, `batchNumber`, and `vendor`. Quantity must be at least 1. | `400` invalid or conflicting type-specific fields; `401` missing/invalid token; `403` caller is not Managing Director; `404` department not found; database errors. |
-| `GET /resources?name=lap&type=insourced` | Optional `name` substring and `type` filters. | Lists matching catalog resources, newest first. `name` matching is case-insensitive. | `400` invalid `type`; database errors. |
+| `GET /resources?name=lap&type=insourced` | Bearer token for Department Head, Line Manager, Managing Director, or Team Lead; optional `name` substring and `type` filters. | Lists matching catalog resources, newest first. `name` matching is case-insensitive. | `400` invalid `type`; `401` missing/invalid token; `403` caller lacks an allowed role. |
 | `POST /resources/:id/allocations` | Line Manager bearer token; quantity, team, project, assigned user; optional due date and approved request ID. | Assigns available units and records a movement. When linked to a request without an explicit due date, the due date is calculated from the Team Lead's requested duration. The project must be assigned to the team and the active user must belong to that team. | `400` invalid assignment; `401` missing/invalid token; `403` caller is not authorized; `404` referenced record not found; `409` insufficient availability/request quantity. |
 | `GET /resources/:id/allocations` | Line Manager bearer token. | Lists active assignments and current holders. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` resource not found. |
 | `PATCH /resources/allocations/:allocationId/return` | Line Manager bearer token; optional note. | Marks an assignment returned and records a movement. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` allocation not found; `409` allocation is not active. |

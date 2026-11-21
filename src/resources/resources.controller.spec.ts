@@ -12,7 +12,7 @@ describe('ResourcesController', () => {
     createResource: jest.fn(),
     findAll: jest.fn(),
     findOne: jest.fn(),
-    update: jest.fn(),
+    updateResource: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -78,5 +78,16 @@ describe('ResourcesController', () => {
     await controller.findAll(query);
 
     expect(mockService.findAll).toHaveBeenCalledWith(query);
+  });
+
+  it.each([
+    [ResourceType.INSOURCED, { name: 'Updated laptop', description: 'Existing stock' }],
+    [ResourceType.OUTSOURCED, { name: 'Updated laptop', price: 1400 }],
+  ])('updates a %s resource through the shared endpoint', async (_type, dto) => {
+    mockService.updateResource.mockResolvedValue(dto);
+
+    await controller.updateResource('resource-id', dto);
+
+    expect(mockService.updateResource).toHaveBeenCalledWith('resource-id', dto);
   });
 });

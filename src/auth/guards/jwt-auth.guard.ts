@@ -1,4 +1,4 @@
-import {CanActivate, ExecutionContext, Injectable, UnauthorizedException,} from '@nestjs/common';
+import {CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException,} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '../../users/user-role.enum';
 import { AuthenticatedRequest } from '../interfaces/authenticated-request.interface';
@@ -17,11 +17,14 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request =
       context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const authorization = request.headers.authorization;
-    const parts = authorization?.split(' ') ?? [];
-    const [scheme, token] = parts;
+    const authorization = request.headers.authorization?.trim();
+    const [scheme, token, ...extraParts] = authorization?.split(/\s+/) ?? [];
 
-    if (parts.length !== 2 || scheme !== 'Bearer' || !token) {
+    if (
+      scheme?.toLowerCase() !== 'bearer' ||
+      !token ||
+      extraParts.length > 0
+    ) {
       throw new UnauthorizedException('A bearer access token is required');
     }
 
@@ -62,6 +65,7 @@ export class JwtAuthGuard implements CanActivate {
         email: true,
         role: true,
         isActive: true,
+        mustChangePassword: true,
         tokenVersion: true,
       },
     });
@@ -71,6 +75,13 @@ export class JwtAuthGuard implements CanActivate {
       user.tokenVersion !== payload.tokenVersion
     ) {
       throw new UnauthorizedException('The account is inactive or no longer exists');
+    }
+
+    if (
+      user.mustChangePassword &&
+      !(request.method === 'PATCH' && request.path === '/api/v1/users/me' && request.body?.action === 'change_password')
+    ) {
+      throw new ForbiddenException('Change your temporary password before using the account');
     }
 
     request.user = { ...payload, email: user.email, role: user.role };

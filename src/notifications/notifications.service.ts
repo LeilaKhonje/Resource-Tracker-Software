@@ -38,6 +38,10 @@ export class NotificationsService {
   async getUserNotifications(
     userId: string,
   ): Promise<Notification[]> {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+
     return this.notificationRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },

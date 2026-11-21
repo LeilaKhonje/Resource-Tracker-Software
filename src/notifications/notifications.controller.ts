@@ -1,12 +1,12 @@
-
-import { Body,BadRequestException,Controller,Delete,Get,Param,Patch,Post,Req, UseGuards,} from '@nestjs/common';
+import { Body, BadRequestException, Controller, Delete, Get, Param, Patch, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import {ApiBearerAuth,ApiBody,ApiOperation,ApiParam,ApiResponse, ApiTags,} from '@nestjs/swagger';
 import { ApiStandardErrorResponses } from '../common/swagger-response.decorators';
 
 @ApiTags('Notifications')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @ApiStandardErrorResponses(500)
 @Controller('api/v1/notifications')
 export class NotificationsController {
@@ -17,6 +17,7 @@ export class NotificationsController {
   // Get notifications for the authenticated user
   @UseGuards(JwtAuthGuard)
   @Get('me')
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Get notifications for the authenticated user',
   })
@@ -29,14 +30,12 @@ export class NotificationsController {
     status: 401,
     description: 'Unauthorized',
   })
-  @ApiResponse({ status: 400, description: 'The authenticated user identity is missing.' })
-  getMyNotifications(@Req() req: any) {
+  @ApiResponse({ status: 401, description: 'The authenticated user identity is missing.' })
+  getMyNotifications(@Req() req: AuthenticatedRequest) {
     const userId = req.user?.sub;
 
     if (!userId) {
-      throw new BadRequestException(
-        'Authenticated user not found',
-      );
+      throw new UnauthorizedException('Authenticated user not found');
     }
 
     return this.notificationsService.getUserNotifications(
@@ -48,6 +47,7 @@ export class NotificationsController {
   @Get('users/:id')
   @ApiOperation({
     summary: 'Get notifications for a user ID',
+    description: 'This route does not declare an authentication guard; it returns notifications for the supplied user UUID.',
   })
   @ApiParam({
     name: 'id',
@@ -68,6 +68,7 @@ export class NotificationsController {
   @Patch(':id/read')
   @ApiOperation({
     summary: 'Mark a notification as read for a user',
+    description: 'This route does not declare an authentication guard. Supply the owning user UUID in the body.',
   })
   @ApiParam({
     name: 'id',
@@ -116,6 +117,7 @@ export class NotificationsController {
   @Post()
   @ApiOperation({
     summary: 'Create a notification',
+    description: 'This route does not declare an authentication guard. Creates an unread notification for the supplied user UUID.',
   })
   @ApiBody({
     schema: {
@@ -158,6 +160,7 @@ export class NotificationsController {
   @Delete('users/:userId/notifications/:notificationId')
   @ApiOperation({
     summary: 'Delete a user notification',
+    description: 'This route does not declare an authentication guard. Deletes the notification only when it belongs to the supplied user UUID.',
   })
   @ApiParam({
     name: 'userId',

@@ -10,6 +10,7 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AuditLog } from '../auditlog/auditlog.entity';
 import { User } from '../users/user.entity';
+import { Resources } from '../resources/entities/resources.entity';
 import { UserRole as AccountUserRole } from '../users/user-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
@@ -53,6 +54,10 @@ export class ResourcerequestService {
     if (user.role !== UserRole.TEAM_LEAD) {
       throw new ForbiddenException('Only team leads can create requests');
     }
+    const resource = await this.resources.findOne({ where: { id: dto.resourceId } });
+    if (!resource) {
+      throw new NotFoundException(`Catalog resource ${dto.resourceId} not found`);
+    }
     const references = await this.resolveOrganizationReferences(dto);
     const catalogItem = await this.resources.findOne({ where: { id: dto.resourceId } });
     if (!catalogItem) throw new NotFoundException(`Resource ${dto.resourceId} not found`);
@@ -61,9 +66,13 @@ export class ResourcerequestService {
     const requester = await this.users.findOne({
       where: { id: user.id },
       select: { id: true, fullName: true },
+      relations: { team: true },
     });
     if (!requester) {
       throw new NotFoundException(`Team Lead ${user.id} not found`);
+    }
+    if (requester.team?.id !== references.team.id) {
+      throw new ForbiddenException('You can only create requests for your assigned team');
     }
 
     const request = this.requests.create({
@@ -141,6 +150,8 @@ export class ResourcerequestService {
       teamId,
       projectId,
       lineManagerName,
+      teamId,
+      projectId,
       ...fields
     } = dto;
     const referenceChanges = Object.fromEntries(
@@ -178,7 +189,16 @@ export class ResourcerequestService {
     this.assertEditable(request);
     const previousTeamId = request.teamId;
     const previousDepartmentId = request.departmentId;
+    const previousResourceId = request.resource?.id ?? null;
     Object.assign(request, changes);
+
+    if (resourceId !== undefined) {
+      const selectedResource = await this.resources.findOne({ where: { id: resourceId } });
+      if (!selectedResource) {
+        throw new NotFoundException(`Catalog resource ${resourceId} not found`);
+      }
+      request.resource = selectedResource;
+    }
 
     if (Object.keys(referenceChanges).length > 0 || status === RequestStatus.SUBMITTED) {
       const references = await this.resolveOrganizationReferences({
@@ -202,6 +222,7 @@ export class ResourcerequestService {
       if (!request.departmentId) missing.push('department');
       if (!request.projectId) missing.push('project');
       if (!request.lineManagerId) missing.push('line manager');
+      if (!request.resource) missing.push('catalog resource');
       if (!request.expectedDurationDays) missing.push('expectedDurationDays');
       if (missing.length > 0) {
         throw new BadRequestException(
@@ -220,6 +241,9 @@ export class ResourcerequestService {
     }
     if (request.departmentId !== previousDepartmentId) {
       await this.log(id, 'DEPARTMENT_CHANGED', user.id, request.departmentId);
+    }
+    if ((request.resource?.id ?? null) !== previousResourceId) {
+      await this.log(id, 'RESOURCE_CHANGED', user.id, request.resource?.id ?? null);
     }
     if (
       changedKeys.length > 0 ||
@@ -302,7 +326,8 @@ export class ResourcerequestService {
 
     const requester = await this.users.findOne({ where: { id: request.requestedBy } });
     if (requester) {
-      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${request.itemDescription} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
+      const resourceName = request.resource?.name ?? request.itemDescription ?? 'resource';
+      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${resourceName} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
     }
     return saved;
   }
