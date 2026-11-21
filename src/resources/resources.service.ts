@@ -98,11 +98,7 @@ export class ResourcesService {
         dto.projectId,
         dto.assignedToUserId,
       );
-      const activeQuantity = await this.getActiveAllocationQuantity(manager, resourceId);
-      const availableQuantity = resource.quantity - activeQuantity;
-      if (dto.quantity > availableQuantity) {
-        throw new ConflictException(`Only ${Math.max(0, availableQuantity)} units are available`);
-      }
+      const availableQuantity = await this.getAvailableQuantity(manager, resourceId);
 
       let request: ResourceRequest | null = null;
       if (dto.requestId) {
@@ -127,6 +123,11 @@ export class ResourcesService {
         if (dto.quantity > remainingRequestQuantity) {
           throw new ConflictException(`Only ${Math.max(0, remainingRequestQuantity)} units remain to fulfill this request`);
         }
+        if (dto.quantity > availableQuantity + Math.max(0, remainingRequestQuantity)) {
+          throw new ConflictException(`Only ${Math.max(0, availableQuantity + remainingRequestQuantity)} units are available for allocation`);
+        }
+      } else if (dto.quantity > availableQuantity) {
+        throw new ConflictException(`Only ${Math.max(0, availableQuantity)} units are available`);
       }
 
       const expectedReturnAt = dto.expectedReturnAt
@@ -358,11 +359,27 @@ export class ResourcesService {
     return Number(result?.quantity ?? 0);
   }
 
+  private async getAvailableQuantity(manager: EntityManager, resourceId: string) {
+    const resource = await manager.getRepository(Resources).findOne({ where: { id: resourceId } });
+    if (!resource) throw new NotFoundException(`Resource with id "${resourceId}" not found`);
+    const activeQuantity = await this.getActiveAllocationQuantity(manager, resourceId);
+    const approved = await manager.getRepository(ResourceRequest).createQueryBuilder('request')
+      .where('request.resourceId = :resourceId', { resourceId })
+      .andWhere('request.status = :status', { status: RequestStatus.APPROVED })
+      .select('COALESCE(SUM(request.quantity), 0)', 'quantity')
+      .getRawOne<{ quantity: string }>();
+    const fulfilled = await manager.getRepository(ResourceAllocation).createQueryBuilder('allocation')
+      .innerJoin('allocation.request', 'request')
+      .where('request.resourceId = :resourceId', { resourceId })
+      .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
+      .getRawOne<{ quantity: string }>();
+    const reservation = Math.max(0, Number(approved?.quantity ?? 0) - Number(fulfilled?.quantity ?? 0));
+    return Math.max(0, resource.quantity - activeQuantity - reservation);
+  }
+
   private async refreshResourceStatus(manager: EntityManager, resource: Resources) {
-    const activeQuantity = await this.getActiveAllocationQuantity(manager, resource.id);
-    resource.status = activeQuantity > 0
-      ? ResourceStatus.ASSIGNED
-      : ResourceStatus.AVAILABLE;
+    const availableQuantity = await this.getAvailableQuantity(manager, resource.id);
+    resource.status = availableQuantity > 0 ? ResourceStatus.AVAILABLE : ResourceStatus.ASSIGNED;
     await manager.getRepository(Resources).save(resource);
   }
 

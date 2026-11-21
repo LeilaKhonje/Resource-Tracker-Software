@@ -16,8 +16,9 @@ const resourceRequestResponseSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
-    itemDescription: { type: 'string', nullable: true, description: 'Additional specifications supplied by the requester.' },
-    resource: { type: 'object', nullable: true, properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, type: { type: 'string', enum: ['insourced', 'outsourced'] } } },
+    itemName: { type: 'string', nullable: true },
+    resourceId: { type: 'string', format: 'uuid', nullable: true },
+    itemDescription: { type: 'string' },
     manufacturerLabel: { type: 'string', nullable: true },
     price: { type: 'number', nullable: true },
     batchNumber: { type: 'string' },
@@ -65,11 +66,11 @@ export class ResourcerequestController {
   @Post('api/v1/resource-request')
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD)
-  @ApiOperation({ summary: 'Submit a resource request', description: 'Team Leads select an existing catalog resource by resourceId, may add specifications, and provide team/project and active Line Manager details. The server verifies the catalog resource exists and the selected team is assigned to the caller, derives the department, sets requestedBy from the authenticated user, submits immediately, and notifies the Line Manager.' })
-  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { resourceId: '123e4567-e89b-12d3-a456-426614174000', itemDescription: 'For field data collection; needs 16 GB RAM', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectId: '3', lineManagerName: 'Jordan Lee', teamId: '2' } } } })
+  @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies a resourceId, request details, projectId, teamId, and lineManagerName. The resource ID is resolved against the catalog; the server derives the department from the team and sets requestedBy from the caller.' })
+  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { resourceId: '550e8400-e29b-41d4-a716-446655440000', itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectId: 12, lineManagerName: 'Jordan Lee', teamId: 4 } } } })
   @ApiResponse({ status: 201, description: 'Request submitted with status SUBMITTED and notification created for the designated Line Manager.', schema: resourceRequestResponseSchema })
-  @ApiBadRequestResponse({ description: 'Invalid fields or the selected project is not assigned to the selected team.' })
-  @ApiNotFoundResponse({ description: 'Catalog resource, team, project, active Line Manager, or requesting Team Lead not found.' })
+  @ApiBadRequestResponse({ description: 'Invalid fields or IDs, or the project is not assigned to the team.' })
+  @ApiNotFoundResponse({ description: 'Team, project, active Line Manager, or requesting Team Lead not found.' })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
   @ApiForbiddenResponse({ description: 'Only Team Leads can create requests, and only for their assigned team.' })
   create(@Body() dto: CreateResourceRequestDto, @Req() req: AuthenticatedRequest) {

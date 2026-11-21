@@ -1,29 +1,29 @@
 import { Transform } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsEnum, IsNotEmpty, IsNotIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { UserRole } from '../user-role.enum';
 
 export class CreateUserDto {
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @ApiProperty({ example: 'Alex', maxLength: 120 })
+  @ApiProperty({ example: 'Alex' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(60)
   firstName: string;
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @ApiProperty({ example: 'Jordan', required: false, maxLength: 120 })
+  @ApiPropertyOptional({ example: 'James' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(60)
   middleName?: string;
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @ApiProperty({ example: 'Morgan', maxLength: 120 })
+  @ApiProperty({ example: 'Morgan' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(60)
   surname: string;
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
@@ -40,4 +40,5 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   @IsNotIn([UserRole.SYSTEM_ADMIN], { message: 'The System Admin role is assigned only through the bootstrap process' })
   role: UserRole;
+
 }
