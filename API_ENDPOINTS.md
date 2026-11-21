@@ -139,8 +139,8 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `POST /resource-requests/api/v1/resource-request`
 - **Access:** `TEAM_LEAD`
-- **Request:** JSON body: `{ "resourceId": "123e4567-e89b-12d3-a456-426614174000", "itemDescription": "For field data collection; needs 16 GB RAM", "batchNumber": "LOT-2026-04", "quantity": 3, "expectedDurationDays": 14, "projectId": "3", "lineManagerName": "Jordan Lee", "teamId": "2" }`. Select `resourceId` from `GET /api/v1/resources`; Team Leads may list catalog resources. `itemDescription` is optional extra detail, not a resource name. `teamId` comes from `GET /api/v1/users/me`; select `projectId` from `GET /api/v1/teams/{id}/projects`. The server verifies the catalog resource exists, project belongs to the selected team, and the team belongs to the Team Lead. The active Line Manager is resolved by name. Department is derived from the team. Quantity and `expectedDurationDays` are positive integers. `requestedBy` and initial status are set by the server.
-- **Response:** `201` submitted request. Duplicate team, project, or Line Manager names are rejected as ambiguous.
+- **Request:** JSON body: `{ "resourceId": "550e8400-e29b-41d4-a716-446655440000", "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "quantity": 3, "expectedDurationDays": 14, "projectId": 12, "lineManagerName": "Jordan Lee", "teamId": 4 }`. `resourceId` must identify a catalog resource; `projectId` must be assigned to `teamId`; `lineManagerName` must identify an active Line Manager. Quantity and `expectedDurationDays` are positive integers. The department is derived from the team and `requestedBy` from the caller.
+- **Response:** `201` submitted request. The Line Manager is notified whether a matching catalog resource is marked `AVAILABLE` with enough quantity; missing resources and insufficient quantities are reported as unavailable for review.
 
 ### `GET /resource-requests/api/v1/resource-request`
 - **Access:** `TEAM_LEAD`, `LINE_MANAGER`, `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
@@ -154,7 +154,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `PATCH /resource-requests/api/v1/resource-request/{id}`
 - **Access:** `TEAM_LEAD` (own queried requests), `LINE_MANAGER` (assigned submitted requests)
-- **Request:** Partial request fields from create body (including the name fields `projectName`, `lineManagerName`, and `teamName`) plus optional `status` and `note`. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
+- **Request:** Partial request fields from create body (including `resourceId`, `projectId`, `lineManagerName`, and `teamId`) plus optional `status` and `note`. Approving reserves the unfulfilled quantity against available inventory; approval fails if stock is insufficient. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
 - **Response:** `200` updated request, with review fields updated on manager review.
 
 ## Departments — `/api/v1/departments`

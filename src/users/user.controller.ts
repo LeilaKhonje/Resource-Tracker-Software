@@ -20,14 +20,14 @@ export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('')
-  @ApiOperation({ summary: 'Create a user account with a generated temporary password', description: 'System Admin only. The temporary password is emailed to the new account and must be changed at first login.' })
+  @ApiOperation({ summary: 'Create a user account and email a generated temporary password (System Admin only)' })
   @ApiBody({ type: CreateUserDto })
-  @ApiResponse({ status: 201, description: 'Active account created; a temporary password is emailed to the user and must be changed at first login', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
+  @ApiResponse({ status: 201, description: 'Active account created and generated temporary password emailed; password is not returned', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
   @ApiResponse({ status: 400, description: 'Invalid account details' })
   @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiResponse({ status: 403, description: 'Only System Admins can create user accounts.' })
   @ApiResponse({ status: 409, description: 'Conflict: Email already exists' })
-  @ApiResponse({ status: 503, description: 'Email delivery is unavailable; no account was created' })
+  @ApiResponse({ status: 503, description: 'Account could not be created because credential email delivery is unavailable' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SYSTEM_ADMIN)
   @ApiBearerAuth('access-token')
