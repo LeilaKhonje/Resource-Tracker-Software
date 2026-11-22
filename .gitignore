@@ -23,7 +23,6 @@ lerna-debug.log*
 /.nyc_output
 changes.md
 EMAIL_SETUP.md
-USE_CASES.md
 
 # IDEs and editors
 /.idea
