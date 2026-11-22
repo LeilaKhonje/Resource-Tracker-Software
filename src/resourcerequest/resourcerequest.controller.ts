@@ -45,7 +45,7 @@ const resourceRequestResponseSchema = {
 @ApiTags('resource-requests')
 @ApiStandardErrorResponses(400, 401, 403, 500)
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('api/v1')
+@Controller('api/v1/resource-request')
 export class ResourcerequestController {
   constructor(private readonly service: ResourcerequestService) {}
 
@@ -63,7 +63,7 @@ export class ResourcerequestController {
     return { id: req.user!.sub, role };
   }
   
-  @Post('api/v1/resource-request')
+  @Post()
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD)
   @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies a resourceId, request details, projectId, teamId, and lineManagerName. The resource ID is resolved against the catalog; the server derives the department from the team and sets requestedBy from the caller.' })
@@ -78,7 +78,7 @@ export class ResourcerequestController {
   }
 
  
-  @Get('api/v1/resource-request')
+  @Get()
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD, AuthRole.LINE_MANAGER, AuthRole.DEPARTMENT_HEAD, AuthRole.MANAGING_DIRECTOR)
   @ApiOperation({ summary: 'List requests visible to the caller', description: 'Team leads see their own requests; line managers see requests routed to them; department heads see requests from their assigned department; managing directors see all requests.' })
@@ -92,7 +92,7 @@ export class ResourcerequestController {
 
   
   @ApiQuery({ name: 'include', required: false, enum: ['audit'] })
-  @Get('api/v1/resource-request/:id')
+  @Get(':id')
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD, AuthRole.LINE_MANAGER, AuthRole.DEPARTMENT_HEAD, AuthRole.MANAGING_DIRECTOR)
   @ApiOperation({ summary: 'Get a resource request', description: 'Pass include=audit to attach the request audit trail in chronological order.' })
@@ -110,7 +110,7 @@ export class ResourcerequestController {
   }
 
   
-  @Patch('api/v1/resource-request/:id')
+  @Patch(':id')
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD, AuthRole.LINE_MANAGER)
   @ApiOperation({ summary: 'Edit, submit, or review a resource request', description: 'The owning Team Lead may edit a QUERIED request, including changing the selected catalog resource, and resubmit it with status SUBMITTED. The assigned Line Manager may review a SUBMITTED request with APPROVED, REJECTED, or QUERIED. Rejection and query require a note.' })

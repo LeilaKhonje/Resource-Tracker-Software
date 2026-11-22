@@ -94,23 +94,28 @@ export class DepartmentsService {
   }
 
   async findResourceRequests(id: number, user: AuthTokenPayload) {
-    if (user.role !== UserRole.DEPARTMENT_HEAD) {
-      throw new ForbiddenException('Only department heads can view department requests');
-    }
+    let departmentId = id;
 
-    const account = await this.userRepository.findOne({
-      where: { id: user.sub },
-      relations: { department: true },
-    });
-    if (!account?.department) {
-      throw new ForbiddenException('Your account is not assigned to a department');
-    }
-    if (account.department.id !== id) {
-      throw new NotFoundException(`Department with id ${id} not found`);
+    if (user.role === UserRole.DEPARTMENT_HEAD) {
+      const account = await this.userRepository.findOne({
+        where: { id: user.sub },
+        relations: { department: true },
+      });
+      if (!account?.department) {
+        throw new ForbiddenException('Your account is not assigned to a department');
+      }
+      if (account.department.id !== id) {
+        throw new NotFoundException(`Department with id ${id} not found`);
+      }
+      departmentId = account.department.id;
+    } else if (user.role === UserRole.MANAGING_DIRECTOR) {
+      await this.findOne(id);
+    } else {
+      throw new ForbiddenException('Only department heads and managing directors can view department requests');
     }
 
     return this.resourceRequestRepository.find({
-      where: { departmentId: String(account.department.id) },
+      where: { departmentId: String(departmentId) },
       order: { createdAt: 'DESC' },
     });
   }

@@ -241,7 +241,7 @@ export class ResourcerequestService {
       await this.log(id, 'DEPARTMENT_CHANGED', user.id, request.departmentId);
     }
     if ((request.resource?.id ?? null) !== previousResourceId) {
-      await this.log(id, 'RESOURCE_CHANGED', user.id, request.resource?.id);
+      await this.log(id, 'RESOURCE_CHANGED', user.id, request.resource?.id ?? undefined);
     }
     if (
       changedKeys.length > 0 ||
