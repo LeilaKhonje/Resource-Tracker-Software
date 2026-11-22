@@ -16,6 +16,8 @@ const resourceRequestResponseSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
+    itemName: { type: 'string', nullable: true },
+    resourceId: { type: 'string', format: 'uuid', nullable: true },
     itemDescription: { type: 'string' },
     manufacturerLabel: { type: 'string', nullable: true },
     price: { type: 'number', nullable: true },
@@ -43,7 +45,7 @@ const resourceRequestResponseSchema = {
 @ApiTags('resource-requests')
 @ApiStandardErrorResponses(400, 401, 403, 500)
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('resource-requests')
+@Controller('api/v1')
 export class ResourcerequestController {
   constructor(private readonly service: ResourcerequestService) {}
 
@@ -60,18 +62,17 @@ export class ResourcerequestController {
     }
     return { id: req.user!.sub, role };
   }
-
   
   @Post('api/v1/resource-request')
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD)
-  @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies projectName, lineManagerName, and teamName. The server resolves names to stored relationships, derives the department from the team, sets requestedBy from the caller, and creates an in-app notification for the active Line Manager.' })
-  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectName: 'Office Modernization', lineManagerName: 'Jordan Lee', teamName: 'Platform' } } } })
+  @ApiOperation({ summary: 'Submit a resource request', description: 'The Team Lead supplies a resourceId, request details, projectId, teamId, and lineManagerName. The resource ID is resolved against the catalog; the server derives the department from the team and sets requestedBy from the caller.' })
+  @ApiBody({ type: CreateResourceRequestDto, examples: { laptopRequest: { summary: 'Request laptops', value: { resourceId: '550e8400-e29b-41d4-a716-446655440000', itemDescription: 'Laptop for field data collection', batchNumber: 'LOT-2026-04', quantity: 3, expectedDurationDays: 14, projectId: 12, lineManagerName: 'Jordan Lee', teamId: 4 } } } })
   @ApiResponse({ status: 201, description: 'Request submitted with status SUBMITTED and notification created for the designated Line Manager.', schema: resourceRequestResponseSchema })
-  @ApiBadRequestResponse({ description: 'Invalid fields, ambiguous names, or project is not assigned to the named team.' })
+  @ApiBadRequestResponse({ description: 'Invalid fields or IDs, or the project is not assigned to the team.' })
   @ApiNotFoundResponse({ description: 'Team, project, active Line Manager, or requesting Team Lead not found.' })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
-  @ApiForbiddenResponse({ description: 'Only team leads can create requests.' })
+  @ApiForbiddenResponse({ description: 'Only Team Leads can create requests, and only for their assigned team.' })
   create(@Body() dto: CreateResourceRequestDto, @Req() req: AuthenticatedRequest) {
     return this.service.create(dto, this.currentUser(req));
   }
@@ -81,7 +82,7 @@ export class ResourcerequestController {
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD, AuthRole.LINE_MANAGER, AuthRole.DEPARTMENT_HEAD, AuthRole.MANAGING_DIRECTOR)
   @ApiOperation({ summary: 'List requests visible to the caller', description: 'Team leads see their own requests; line managers see requests routed to them; department heads see requests from their assigned department; managing directors see all requests.' })
-  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'SUBMITTED', 'QUERIED', 'APPROVED', 'REJECTED'] })
+  @ApiQuery({ name: 'status', required: false, enum: ['SUBMITTED', 'QUERIED', 'APPROVED', 'REJECTED'] })
   @ApiQuery({ name: 'teamId', required: false, type: String, description: 'Filter by numeric team ID.' })
   @ApiResponse({ status: 200, description: 'Requests ordered newest first.', schema: { type: 'array', items: resourceRequestResponseSchema } })
   @ApiUnauthorizedResponse({ description: 'No caller identity was supplied.' })
@@ -112,7 +113,7 @@ export class ResourcerequestController {
   @Patch('api/v1/resource-request/:id')
   @ApiBearerAuth('access-token')
   @Roles(AuthRole.TEAM_LEAD, AuthRole.LINE_MANAGER)
-  @ApiOperation({ summary: 'Edit, submit, or review a resource request', description: 'Team leads may edit DRAFT or QUERIED requests and submit with status SUBMITTED. The assigned line manager may review a SUBMITTED request with APPROVED, REJECTED, or QUERIED. Rejection and query require a note.' })
+  @ApiOperation({ summary: 'Edit, submit, or review a resource request', description: 'The owning Team Lead may edit a QUERIED request, including changing the selected catalog resource, and resubmit it with status SUBMITTED. The assigned Line Manager may review a SUBMITTED request with APPROVED, REJECTED, or QUERIED. Rejection and query require a note.' })
   @ApiBody({ type: UpdateResourceRequestDto, examples: { submit: { summary: 'Submit a draft', value: { status: 'SUBMITTED' } }, approve: { summary: 'Approve after stock check', value: { status: 'APPROVED' } }, reject: { summary: 'Reject with reason', value: { status: 'REJECTED', note: 'The specification does not meet project requirements.' } }, query: { summary: 'Ask for more information', value: { status: 'QUERIED', note: 'Please provide a vendor quote.' } } } })
   @ApiResponse({ status: 200, description: 'Updated request. On review, reviewedBy, reviewedAt, reviewNote, and status are updated.', schema: resourceRequestResponseSchema })
   @ApiBadRequestResponse({ description: 'Invalid status transition, nothing to update, or incomplete submission.' })

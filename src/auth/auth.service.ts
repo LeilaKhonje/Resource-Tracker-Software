@@ -130,6 +130,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired password reset code');
     }
     user.passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
+    user.mustChangePassword = false;
     user.refreshTokenHash = null;
     user.passwordResetCodeHash = null;
     user.passwordResetExpiresAt = null;
@@ -163,7 +164,7 @@ export class AuthService {
     user.refreshTokenHash = this.hashToken(refreshToken);
     await this.usersRepository.save(user);
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, mustChangePassword: user.mustChangePassword };
   }
 
   private async getRefreshTokenUser(refreshToken: string) {
@@ -193,6 +194,7 @@ export class AuthService {
         email: true,
         role: true,
         isActive: true,
+        mustChangePassword: true,
         refreshTokenHash: true,
         tokenVersion: true,
       },

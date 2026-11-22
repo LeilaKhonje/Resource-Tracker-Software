@@ -1,6 +1,6 @@
 import { BadRequestException,  ForbiddenException,Injectable,NotFoundException,} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
 import {RequestStatus, ResourceRequest,} from './entities/resourcerequest.entity';
 import { CreateResourceRequestDto } from './dto/create-resourcerequest.dto';
 import { UpdateResourceRequestDto } from './dto/update-resourcerequest.dto';
@@ -10,9 +10,12 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AuditLog } from '../auditlog/auditlog.entity';
 import { User } from '../users/user.entity';
+import { Resources } from '../resources/entities/resources.entity';
 import { UserRole as AccountUserRole } from '../users/user-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
+import { ResourceStatus } from '../resources/enum/resource-status.enum';
+import { ResourceAllocation, AllocationStatus } from '../resources/entities/resource-allocation.entity';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -34,6 +37,11 @@ export class ResourcerequestService {
     private readonly projects: Repository<Project>,
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(Resources)
+    private readonly resources: Repository<Resources>,
+    @InjectRepository(ResourceAllocation)
+    private readonly allocations: Repository<ResourceAllocation>,
+    private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
     private readonly email: EmailService,
   ) {}
@@ -45,16 +53,29 @@ export class ResourcerequestService {
     if (user.role !== UserRole.TEAM_LEAD) {
       throw new ForbiddenException('Only team leads can create requests');
     }
+    const resource = await this.resources.findOne({ where: { id: dto.resourceId } });
+    if (!resource) {
+      throw new NotFoundException(`Catalog resource ${dto.resourceId} not found`);
+    }
     const references = await this.resolveOrganizationReferences(dto);
+    const catalogItem = resource;
+    const availableQuantity = await this.getAvailableQuantity(catalogItem.id);
+    const isAvailable = availableQuantity >= dto.quantity;
     const requester = await this.users.findOne({
       where: { id: user.id },
       select: { id: true, fullName: true },
+      relations: { team: true },
     });
     if (!requester) {
       throw new NotFoundException(`Team Lead ${user.id} not found`);
     }
+    if (requester.team?.id !== references.team.id) {
+      throw new ForbiddenException('You can only create requests for your assigned team');
+    }
 
     const request = this.requests.create({
+      itemName: catalogItem.name,
+      resourceId: catalogItem.id,
       itemDescription: dto.itemDescription,
       batchNumber: dto.batchNumber,
       quantity: dto.quantity,
@@ -71,10 +92,10 @@ export class ResourcerequestService {
     await this.log(saved.id, 'SUBMITTED', user.id);
     await this.notifications.createNotification(
       references.lineManager.id,
-      `Team Lead ${requester.fullName} from team ${references.team.name}, working on project ${references.project.name}, requests ${dto.quantity} x ${dto.itemDescription} for ${dto.expectedDurationDays} day(s).`,
+      `Team Lead ${requester.fullName} from team ${references.team.name}, working on project ${references.project.name}, requests ${dto.quantity} x ${catalogItem.name} (${dto.itemDescription}) for ${dto.expectedDurationDays} day(s). ${isAvailable ? `${availableQuantity} unit(s) are currently available.` : `Only ${availableQuantity} unit(s) are currently available; please review availability.`}`,
     );
     const manager = references.lineManager;
-    await this.email.send(manager.email, 'New resource request', `${requester.fullName} submitted a request for ${dto.quantity} x ${dto.itemDescription}.`);
+    await this.email.send(manager.email, 'New resource request', `${requester.fullName} submitted a request for ${dto.quantity} x ${catalogItem.name}: ${dto.itemDescription}. ${isAvailable ? `${availableQuantity} unit(s) are currently available.` : `Only ${availableQuantity} unit(s) are currently available; please review availability.`}`);
     return saved;
   }
 
@@ -124,13 +145,14 @@ export class ResourcerequestService {
     const {
       status,
       note,
-      teamName,
-      projectName,
+      teamId,
+      projectId,
       lineManagerName,
+      resourceId,
       ...fields
     } = dto;
     const referenceChanges = Object.fromEntries(
-      Object.entries({ teamName, projectName, lineManagerName }).filter(
+      Object.entries({ teamId, projectId, lineManagerName }).filter(
         ([, value]) => value !== undefined,
       ),
     );
@@ -164,15 +186,23 @@ export class ResourcerequestService {
     this.assertEditable(request);
     const previousTeamId = request.teamId;
     const previousDepartmentId = request.departmentId;
+    const previousResourceId = request.resource?.id ?? null;
     Object.assign(request, changes);
+
+    if (resourceId !== undefined) {
+      const selectedResource = await this.resources.findOne({ where: { id: resourceId } });
+      if (!selectedResource) {
+        throw new NotFoundException(`Catalog resource ${resourceId} not found`);
+      }
+      request.resource = selectedResource;
+      request.resourceId = selectedResource.id;
+    }
 
     if (Object.keys(referenceChanges).length > 0 || status === RequestStatus.SUBMITTED) {
       const references = await this.resolveOrganizationReferences({
-        teamName,
-        projectName,
+        teamId: teamId ?? request.teamId,
+        projectId: projectId ?? request.projectId,
         lineManagerName,
-        teamId: request.teamId,
-        projectId: request.projectId,
         lineManagerId: request.lineManagerId,
       });
       request.teamId = String(references.team.id);
@@ -190,6 +220,7 @@ export class ResourcerequestService {
       if (!request.departmentId) missing.push('department');
       if (!request.projectId) missing.push('project');
       if (!request.lineManagerId) missing.push('line manager');
+      if (!request.resource) missing.push('catalog resource');
       if (!request.expectedDurationDays) missing.push('expectedDurationDays');
       if (missing.length > 0) {
         throw new BadRequestException(
@@ -203,17 +234,18 @@ export class ResourcerequestService {
     const saved = await this.requests.save(request);
 
     // One audit entry per kind of change.
-    if (teamName !== undefined && request.teamId !== previousTeamId) {
+    if (request.teamId !== previousTeamId) {
       await this.log(id, 'TEAM_CHANGED', user.id, request.teamId);
     }
     if (request.departmentId !== previousDepartmentId) {
       await this.log(id, 'DEPARTMENT_CHANGED', user.id, request.departmentId);
     }
+    if ((request.resource?.id ?? null) !== previousResourceId) {
+      await this.log(id, 'RESOURCE_CHANGED', user.id, request.resource?.id);
+    }
     if (
       changedKeys.length > 0 ||
-      projectName !== undefined ||
-      lineManagerName !== undefined ||
-      (teamName !== undefined && request.teamId === previousTeamId)
+      Object.keys(referenceChanges).length > 0
     ) {
       await this.log(id, 'UPDATED', user.id);
     }
@@ -255,16 +287,45 @@ export class ResourcerequestService {
       );
     }
 
-    request.status = status;
-    request.reviewNote = note ?? null;
-    request.reviewedBy = user.id;
-    request.reviewedAt = new Date();
-    const saved = await this.requests.save(request);
+    let saved: ResourceRequest;
+    if (status === RequestStatus.APPROVED) {
+      if (!request.resourceId) {
+        throw new BadRequestException('This request is not linked to a resource catalog item');
+      }
+      saved = await this.dataSource.transaction(async (manager) => {
+        const resource = await manager.getRepository(Resources).findOne({
+          where: { id: request.resourceId! },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!resource) throw new NotFoundException(`Resource ${request.resourceId} not found`);
+        const available = await this.getAvailableQuantity(resource.id, manager);
+        if (available < request.quantity) {
+          throw new BadRequestException(`Cannot approve: only ${available} unit(s) of ${resource.name} are available`);
+        }
+        request.status = status;
+        request.reviewNote = note ?? null;
+        request.reviewedBy = user.id;
+        request.reviewedAt = new Date();
+        const savedRequest = await manager.getRepository(ResourceRequest).save(request);
+        resource.status = available - request.quantity > 0
+          ? ResourceStatus.AVAILABLE
+          : ResourceStatus.ASSIGNED;
+        await manager.getRepository(Resources).save(resource);
+        return savedRequest;
+      });
+    } else {
+      request.status = status;
+      request.reviewNote = note ?? null;
+      request.reviewedBy = user.id;
+      request.reviewedAt = new Date();
+      saved = await this.requests.save(request);
+    }
     await this.log(request.id, status, user.id, note);
 
     const requester = await this.users.findOne({ where: { id: request.requestedBy } });
     if (requester) {
-      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${request.itemDescription} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
+      const resourceName = request.resource?.name ?? request.itemDescription ?? 'resource';
+      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${resourceName} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
     }
     return saved;
   }
@@ -278,37 +339,49 @@ export class ResourcerequestService {
     return request;
   }
 
+  private async getAvailableQuantity(resourceId: string, manager?: import('typeorm').EntityManager) {
+    const allocationRepo = manager?.getRepository(ResourceAllocation) ?? this.allocations;
+    const requestRepo = manager?.getRepository(ResourceRequest) ?? this.requests;
+    const resourceRepo = manager?.getRepository(Resources) ?? this.resources;
+    const resource = await resourceRepo.findOne({ where: { id: resourceId } });
+    if (!resource) throw new NotFoundException(`Resource ${resourceId} not found`);
+    const active = await allocationRepo.createQueryBuilder('allocation')
+      .where('allocation.resource_id = :resourceId', { resourceId })
+      .andWhere('allocation.status = :active', { active: AllocationStatus.ACTIVE })
+      .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
+      .getRawOne<{ quantity: string }>();
+    const approved = await requestRepo.createQueryBuilder('request')
+      .where('request.resourceId = :resourceId', { resourceId })
+      .andWhere('request.status = :status', { status: RequestStatus.APPROVED })
+      .select('COALESCE(SUM(request.quantity), 0)', 'quantity')
+      .getRawOne<{ quantity: string }>();
+    const fulfilled = await allocationRepo.createQueryBuilder('allocation')
+      .innerJoin('allocation.request', 'request')
+      .where('request.resourceId = :resourceId', { resourceId })
+      .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
+      .getRawOne<{ quantity: string }>();
+    const committed = Number(active?.quantity ?? 0) + Math.max(
+      0,
+      Number(approved?.quantity ?? 0) - Number(fulfilled?.quantity ?? 0),
+    );
+    return Math.max(0, resource.quantity - committed);
+  }
+
   private async resolveOrganizationReferences(reference: {
-    teamName?: string;
-    projectName?: string;
     lineManagerName?: string;
-    teamId?: string;
-    projectId?: string;
+    teamId?: number | string;
+    projectId?: number | string;
     lineManagerId?: string;
   }): Promise<{ team: Team; project: Project; lineManager: User }> {
     let team: Team | null;
-    if (reference.teamName !== undefined) {
-      const matches = await this.teams.find({
-        where: { name: reference.teamName.trim() },
-        relations: { department: true },
-      });
-      if (matches.length === 0) {
-        throw new NotFoundException(`Team '${reference.teamName}' not found`);
-      }
-      if (matches.length > 1) {
-        throw new BadRequestException(
-          `Team name '${reference.teamName}' is ambiguous; team names must be unique to use name-based requests`,
-        );
-      }
-      team = matches[0];
-    } else if (reference.teamId) {
+    if (reference.teamId !== undefined) {
       const teamId = this.parseOrganizationId(reference.teamId, 'teamId');
       team = await this.teams.findOne({
         where: { id: teamId },
         relations: { department: true },
       });
     } else {
-      throw new BadRequestException('A team name is required');
+      throw new BadRequestException('teamId is required');
     }
     if (!team) {
       throw new NotFoundException('Team not found');
@@ -318,30 +391,14 @@ export class ResourcerequestService {
     }
 
     let project: Project | null;
-    if (reference.projectName !== undefined) {
-      const matches = await this.projects.find({
-        where: { name: reference.projectName.trim(), teams: { id: team.id } },
-        relations: { teams: true },
-      });
-      if (matches.length === 0) {
-        throw new NotFoundException(
-          `Project '${reference.projectName}' not found for team '${team.name}'`,
-        );
-      }
-      if (matches.length > 1) {
-        throw new BadRequestException(
-          `Project name '${reference.projectName}' is ambiguous for team '${team.name}'`,
-        );
-      }
-      project = matches[0];
-    } else if (reference.projectId) {
+    if (reference.projectId !== undefined) {
       const projectId = this.parseOrganizationId(reference.projectId, 'projectId');
       project = await this.projects.findOne({
         where: { id: projectId },
         relations: { teams: true },
       });
     } else {
-      throw new BadRequestException('A project name is required');
+      throw new BadRequestException('projectId is required');
     }
     if (!project) {
       throw new NotFoundException('Project not found');
@@ -400,10 +457,10 @@ export class ResourcerequestService {
   }
 
   private parseOrganizationId(
-    value: string | undefined,
+    value: number | string | undefined,
     field: string,
   ): number {
-    if (!value || !/^\d+$/.test(value)) {
+    if (value === undefined || !/^\d+$/.test(String(value))) {
       throw new BadRequestException(`${field} must be a positive integer`);
     }
     const id = Number(value);

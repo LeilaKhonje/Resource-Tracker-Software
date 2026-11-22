@@ -3,8 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: resource-tracker-api:local
+    image: babylon1340/resource-tracker-api:v1.0.6
     container_name: resource-tracker-api
+    restart: unless-stopped
     ports:
       - "3000:3000"
     env_file:
@@ -15,7 +16,6 @@ services:
 
   mysql:
     image: mysql:8.4
-    container_name: resource-tracker-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
@@ -35,3 +35,4 @@ services:
 
 volumes:
   mysql_data:
+ 

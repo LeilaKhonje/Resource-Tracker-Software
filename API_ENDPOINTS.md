@@ -29,11 +29,11 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 
 ### `POST /api/v1/auth`
 - **Request:** JSON `{ "email": "alex@company.com", "password": "secure123" }`. Both strings; email must be valid, password must contain a digit and be at most 12 characters.
-- **Response:** `200` `{ "accessToken": "…", "refreshToken": "…" }`
+- **Response:** `200` `{ "accessToken": "…", "refreshToken": "…", "mustChangePassword": false }`. Newly created accounts receive `true` until they change the emailed temporary password.
 
 ### `POST /api/v1/auth/refresh`
 - **Request:** JSON `{ "refreshToken": "<JWT>" }`
-- **Response:** `200` with a new `{ "accessToken": "…", "refreshToken": "…" }`
+- **Response:** `200` with new access and refresh tokens plus `mustChangePassword`.
 
 ### `POST /api/v1/auth/logout`
 - **Request:** JSON `{ "refreshToken": "<JWT>" }`
@@ -47,8 +47,9 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 
 ### `POST /api/v1/users`
 - **Access:** Bearer token; role: `SYSTEM_ADMIN`
-- **Request:** `{ "fullName": "Alex Morgan", "email": "alex@company.com", "role": "TEAM_MEMBER", "initialPassword": "Temp1234" }`. Email must end in `@company.com`; password is 8–12 characters and includes a digit. The initial `SYSTEM_ADMIN` role cannot be assigned here.
-- **Response:** `201` created account; password is not returned.
+- **Request:** `{ "firstName": "Alex", "middleName": "Jordan", "surname": "Morgan", "email": "alex@company.com", "role": "TEAM_MEMBER" }`. `firstName`, `surname`, email, and role are required; `middleName` is optional. No password is accepted in the request. The initial `SYSTEM_ADMIN` role cannot be assigned here.
+- **Response:** `201` created account; a generated temporary password is emailed to the user, who must change it at first login. The password is not returned by the API.
+- **Errors:** `400` invalid fields or role; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned; `503` email delivery is unavailable and the account was not created.
 
 ### `GET /api/v1/users`
 - **Access:** Bearer token; role: `SYSTEM_ADMIN`, `MANAGING_DIRECTOR`
@@ -70,13 +71,19 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 ### `GET /api/v1/users/me`
 - **Access:** Bearer token; role: any authenticated user
 - **Request:** No body or query parameters.
-- **Response:** `200` current profile `{ id, fullName, email, role, department, team }` (some values may be null).
+- **Response:** `200` current profile `{ id, fullName, email, role, department, team, teamId }` (some values may be null). Team Leads can use `teamId` with `GET /api/v1/teams/{id}/projects` to populate a request form from their assigned team and project choices.
 
 ### `PATCH /api/v1/users/me`
 - **Access:** Bearer token; role: any authenticated user
 - **Request:** Exactly one action per request. Update profile: `{ "action": "update_profile", "address": "Lilongwe, Malawi" }`, with one or more of `phoneNumber` (string, max 30; digits only), `address` (string, max 255), `dateOfBirth` (`YYYY-MM-DD`), and `preferredPronoun` (`Mr.`, `Mrs.`, or `Miss`). Change password: `{ "action": "change_password", "currentPassword": "current123", "newPassword": "newSecure456" }`; both passwords are 8–12 characters and the new password must contain a digit. Profile fields are rejected for password changes, and password fields are rejected for profile updates.
 - **Response:** `200` updated profile or password change confirmation.
 - **Errors:** `400` invalid action/fields, invalid profile data, or new password matching the current password; `401` missing/invalid token or current password is incorrect; `404` user not found.
+
+### `DELETE /api/v1/users/me/delete`
+- **Access:** Bearer token; role: any authenticated user
+- **Request:** JSON body `{ "password": "currentPassword123" }`. The current password is required and verified before the deletion request is scheduled.
+- **Response:** `200` deletion scheduled in five days; logging in during that period cancels it.
+- **Errors:** `400` password missing or invalid; `401` missing/invalid token or password is incorrect; `404` user not found.
 
 ## Resources — `/api/v1/resources`
 
@@ -88,7 +95,7 @@ Resource types are `insourced` and `outsourced`. Responses include common fields
 - **Response:** `201` created resource with status `AVAILABLE`. Insourced records include `description` and `departmentName`; outsourced records include `price`, `label`, `batchNumber`, and `vendor`. `401` missing/invalid token; `403` caller is not Managing Director.
 
 ### `GET /api/v1/resources`
-- **Access:** Bearer token; roles: `DEPARTMENT_HEAD`, `LINE_MANAGER`, or `MANAGING_DIRECTOR`.
+- **Access:** Bearer token; roles: `DEPARTMENT_HEAD`, `LINE_MANAGER`, `MANAGING_DIRECTOR`, or `TEAM_LEAD`.
 - **Request:** Optional query: `name` (case-insensitive substring), `type` (`insourced` or `outsourced`). Use `type` to filter to one resource type; without it, both types are returned. Example: `?name=laptop&type=outsourced`.
 - **Response:** `200` matching resource array, newest first; each resource includes its `AVAILABLE` or `ASSIGNED` status.
 
@@ -128,12 +135,12 @@ Resource types are `insourced` and `outsourced`. Responses include common fields
 
 **Route prefix note:** the controller combines `@Controller('resource-requests')` with route decorators that already contain `api/v1/resource-request`. The implemented paths therefore begin `/resource-requests/api/v1/resource-request`, as listed below.
 
-Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`, `APPROVED`, and `REJECTED`. All four routes require a Bearer token.
+Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`, `APPROVED`, and `REJECTED`. All routes require a Bearer token.
 
 ### `POST /resource-requests/api/v1/resource-request`
 - **Access:** `TEAM_LEAD`
-- **Request:** JSON body: `{ "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "quantity": 3, "expectedDurationDays": 14, "projectName": "Office Modernization", "lineManagerName": "Jordan Lee", "teamName": "Platform" }`. Names must identify one project assigned to the named team and one active Line Manager; the department is taken from the team. Quantity and `expectedDurationDays` are positive integers. Unit price, manufacturer label, vendor, and department ID are not requested. `requestedBy`, relationship IDs, and initial status are set by the server.
-- **Response:** `201` submitted request. Duplicate team, project, or Line Manager names are rejected as ambiguous.
+- **Request:** JSON body: `{ "resourceId": "550e8400-e29b-41d4-a716-446655440000", "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "quantity": 3, "expectedDurationDays": 14, "projectId": 12, "lineManagerName": "Jordan Lee", "teamId": 4 }`. `resourceId` must identify a catalog resource; `projectId` must be assigned to `teamId`; `lineManagerName` must identify an active Line Manager. Quantity and `expectedDurationDays` are positive integers. The department is derived from the team and `requestedBy` from the caller.
+- **Response:** `201` submitted request. The Line Manager is notified whether a matching catalog resource is marked `AVAILABLE` with enough quantity; missing resources and insufficient quantities are reported as unavailable for review.
 
 ### `GET /resource-requests/api/v1/resource-request`
 - **Access:** `TEAM_LEAD`, `LINE_MANAGER`, `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
@@ -147,7 +154,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 
 ### `PATCH /resource-requests/api/v1/resource-request/{id}`
 - **Access:** `TEAM_LEAD` (own queried requests), `LINE_MANAGER` (assigned submitted requests)
-- **Request:** Partial request fields from create body (including the name fields `projectName`, `lineManagerName`, and `teamName`) plus optional `status` and `note`. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
+- **Request:** Partial request fields from create body (including `resourceId`, `projectId`, `lineManagerName`, and `teamId`) plus optional `status` and `note`. Approving reserves the unfulfilled quantity against available inventory; approval fails if stock is insufficient. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
 - **Response:** `200` updated request, with review fields updated on manager review.
 
 ## Departments — `/api/v1/departments`
