@@ -88,17 +88,15 @@ export class DepartmentsController {
      }
 
      @Get(':id/resource-requests')
-     @ApiOperation({ summary: 'List resource requests for a department', description: 'The service permits only a Department Head to view requests, and only for the department assigned to that caller.' })
+     @ApiOperation({ summary: 'List resource requests for a department', description: 'Department Heads can view requests only for their assigned department. Managing Directors can view requests for any existing department.' })
      @ApiParam({ name: 'id', description: 'Department ID' })
      @ApiResponse({ status: 200, description: 'Department resource requests returned.', schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
      @ApiResponse({ status: 400, description: 'Department ID must be an integer.' })
-     @ApiResponse({ status: 403, description: 'Caller is not a Department Head or is not assigned to a department.' })
+     @ApiResponse({ status: 403, description: 'Caller is not a Department Head or Managing Director, or a Department Head is not assigned to a department.' })
      @ApiResponse({ status: 404, description: 'Department not found or not visible to the caller.' })
      @ApiBearerAuth('access-token')
      @UseGuards(JwtAuthGuard, RolesGuard)
      @Roles(UserRole.DEPARTMENT_HEAD, UserRole.MANAGING_DIRECTOR)
-     @ApiBearerAuth('access-token')
-     @UseGuards(JwtAuthGuard, RolesGuard)
      findResourceRequests(
         @Param('id', ParseIntPipe) id: number,
         @Req() request: AuthenticatedRequest,
