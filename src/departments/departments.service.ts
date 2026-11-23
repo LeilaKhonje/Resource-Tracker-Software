@@ -167,6 +167,12 @@ export class DepartmentsService {
     user.department = department;
     const saved = await this.userRepository.save(user);
     await this.email.send(user.email, 'Department assignment updated', `You have been assigned as head of the ${department.name} department.`);
-    return saved;
+    return {
+      id: saved.id,
+      fullName: saved.fullName,
+      email: saved.email,
+      role: saved.role,
+      department: saved.department,
+    };
   }
 }
