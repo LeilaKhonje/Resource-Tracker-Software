@@ -152,9 +152,9 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 - **Request:** UUID path parameter. Optional query `include=audit` adds chronological `auditTrail`.
 - **Response:** `200` request details; audit trail when requested.
 
-### `PATCH /resource-requests/api/v1/resource-request/{id}`
+### `PATCH /api/v1/resource-request/{id}`
 - **Access:** `TEAM_LEAD` (own queried requests), `LINE_MANAGER` (assigned submitted requests)
-- **Request:** Partial request fields from create body (including `resourceId`, `projectId`, `lineManagerName`, and `teamId`) plus optional `status` and `note`. Approving reserves the unfulfilled quantity against available inventory; approval fails if stock is insufficient. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
+- **Request:** Partial request fields from create body (including `resourceId`, `projectId`, `lineManagerName`, and `teamId`) plus optional `status` and `note`. Approving reserves the unfulfilled quantity against available inventory; approval fails if stock is insufficient. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
 - **Response:** `200` updated request, with review fields updated on manager review.
 
 ## Departments — `/api/v1/departments`
