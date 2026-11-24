@@ -31,7 +31,6 @@ export class UsersService {
   async createAccount(dto: CreateUserDto, adminId: string) {
     const role = dto.role;
     const email = dto.email.trim().toLowerCase();
-    const role = dto.role;
     const fullName = [dto.firstName, dto.middleName, dto.surname]
       .map((part) => part?.trim())
       .filter((part): part is string => Boolean(part))
@@ -46,13 +45,6 @@ export class UsersService {
       throw new ConflictException('A Managing Director is already assigned');
     }
 
-    const fullName = [dto.firstName, dto.middleName, dto.surname]
-      .map((part) => part?.trim())
-      .filter(Boolean)
-      .join(' ');
-    if (fullName.length > 120) {
-      throw new BadRequestException('The combined name must not exceed 120 characters');
-    }
     const password = this.generateInitialPassword();
     const user = await this.usersRepository.save(this.usersRepository.create({
       fullName,

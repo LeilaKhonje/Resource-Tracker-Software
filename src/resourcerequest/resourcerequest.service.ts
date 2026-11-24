@@ -14,7 +14,6 @@ import { Resources } from '../resources/entities/resources.entity';
 import { UserRole as AccountUserRole } from '../users/user-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
-import { Resources } from '../resources/entities/resources.entity';
 import { ResourceStatus } from '../resources/enum/resource-status.enum';
 import { ResourceAllocation, AllocationStatus } from '../resources/entities/resource-allocation.entity';
 
@@ -150,8 +149,7 @@ export class ResourcerequestService {
       teamId,
       projectId,
       lineManagerName,
-      teamId,
-      projectId,
+      resourceId,
       ...fields
     } = dto;
     const referenceChanges = Object.fromEntries(
