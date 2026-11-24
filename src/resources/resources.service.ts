@@ -410,7 +410,7 @@ export class ResourcesService {
     const repository = manager.getRepository(ResourceUnit);
     const lastUnit = await repository.findOne({
       where: { resource: { id: resource.id } },
-      select: { unitNumber: true },
+      select: { id: true, unitNumber: true },
       order: { unitNumber: 'DESC' },
     });
     const firstNumber = (lastUnit?.unitNumber ?? 0) + 1;
