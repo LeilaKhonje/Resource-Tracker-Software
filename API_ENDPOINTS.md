@@ -29,11 +29,12 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 
 ### `POST /api/v1/auth`
 - **Request:** JSON `{ "email": "alex@company.com", "password": "secure123" }`. Both strings; email must be valid, password must contain a digit and be at most 12 characters.
-- **Response:** `200` `{ "accessToken": "…", "refreshToken": "…", "mustChangePassword": false }`. Newly created accounts receive `true` until they change the emailed temporary password.
+- **Response:** `200` `{ "accessToken": "…", "refreshToken": "…", "accessTokenExpiresAt": "2026-11-24T10:00:00.000Z", "refreshTokenExpiresAt": "2026-12-01T09:00:00.000Z" }`. Expiry values are ISO 8601 UTC timestamps matching each JWT's `exp` claim. The access-token JWT contains the boolean `mustChangePassword` claim; it is not returned separately. Newly created accounts receive `true` until they change the emailed temporary password.
 
 ### `POST /api/v1/auth/refresh`
 - **Request:** JSON `{ "refreshToken": "<JWT>" }`
-- **Response:** `200` with new access and refresh tokens plus `mustChangePassword`.
+- **Response:** `200` with new access and refresh tokens plus `accessTokenExpiresAt` and `refreshTokenExpiresAt` ISO 8601 UTC timestamps. The access-token JWT contains the boolean `mustChangePassword` claim; it is not returned separately.
+- **Expired session:** If the refresh token is expired, the API returns `401`. The client must clear both stored tokens and require the user to sign in again; this repository does not include a frontend session store to clear automatically.
 
 ### `POST /api/v1/auth/logout`
 - **Request:** JSON `{ "refreshToken": "<JWT>" }`
@@ -48,19 +49,19 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 ### `POST /api/v1/users`
 - **Access:** Bearer token; role: `SYSTEM_ADMIN`
 - **Request:** `{ "firstName": "Alex", "middleName": "Jordan", "surname": "Morgan", "email": "alex@company.com", "role": "TEAM_MEMBER" }`. `firstName`, `surname`, email, and role are required; `middleName` is optional. No password is accepted in the request. The initial `SYSTEM_ADMIN` role cannot be assigned here.
-- **Response:** `201` created account; a generated temporary password is emailed to the user, who must change it at first login. The password is not returned by the API.
+- **Response:** `201` created account with `user: { id, firstName, middleName? , surname, email, role, isActive }`; a generated temporary password is emailed to the user, who must change it at first login. The password is not returned by the API.
 - **Errors:** `400` invalid fields or role; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned; `503` email delivery is unavailable and the account was not created.
 
 ### `GET /api/v1/users`
 - **Access:** Bearer token; role: `SYSTEM_ADMIN`, `MANAGING_DIRECTOR`
 - **Request:** Optional `startDate` and `endDate` query parameters as ISO 8601 timestamps, for example `?startDate=2026-11-01T00:00:00.000Z&endDate=2026-11-11T23:59:59.999Z`. If either is supplied, both are required. Both boundaries are inclusive; `startDate` must be less than or equal to `endDate`.
-- **Response:** `200` array of user accounts without credential data.
+- **Response:** `200` array of user accounts without credential data; each includes `id`, `firstName`, optional `middleName`, `surname`, `email`, `role`, `isActive`, and `createdAt`.
 - **Errors:** `400` one date missing, invalid timestamp, or start later than end; `401` missing/invalid token; `403` caller lacks permission.
 
 ### `GET /api/v1/users/line-managers`
 - **Access:** Bearer token; role: `TEAM_LEAD`
 - **Request:** No body or query parameters.
-- **Response:** `200` array of active Line Managers, each with `id`, `fullName`, and `email`, ordered by name. Use `fullName` as `lineManagerName` when creating a resource request.
+- **Response:** `200` array of active Line Managers, each with `id`, `firstName`, optional `middleName`, `surname`, and `email`, ordered by name. Join the separated name fields when providing the `lineManagerName` request field.
 
 ### `PATCH /api/v1/users/{id}`
 - **Access:** Bearer token; role: `SYSTEM_ADMIN`, `MANAGING_DIRECTOR`, `DEPARTMENT_HEAD`; each action still enforces its own role permissions.
@@ -71,7 +72,7 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 ### `GET /api/v1/users/me`
 - **Access:** Bearer token; role: any authenticated user
 - **Request:** No body or query parameters.
-- **Response:** `200` current profile `{ id, fullName, email, role, department, team, teamId }` (some values may be null). Team Leads can use `teamId` with `GET /api/v1/teams/{id}/projects` to populate a request form from their assigned team and project choices.
+- **Response:** `200` current profile `{ id, firstName, middleName?, surname, email, role, department, team, teamId }` (some values may be null). Team Leads can use `teamId` with `GET /api/v1/teams/{id}/projects` to populate a request form from their assigned team and project choices.
 
 ### `PATCH /api/v1/users/me`
 - **Access:** Bearer token; role: any authenticated user
@@ -87,7 +88,7 @@ This document describes the HTTP endpoints currently implemented by the NestJS c
 
 ## Resources — `/api/v1/resources`
 
-Resource types are `insourced` and `outsourced`. Responses include common fields `id`, `name`, `type`, `status`, `quantity`, `createdAt`, and `updatedAt`, plus type-specific fields. Resource status is `AVAILABLE` when there are no active allocations and `ASSIGNED` when one or more units have an active allocation.
+Resource types are `insourced` and `outsourced`. Each resource group has one generated unit record per physical unit, with a stable UUID and unit number; optional serial numbers and asset tags can be recorded. Unit statuses are `AVAILABLE`, `RESERVED`, and `ALLOCATED`.
 
 ### `POST /api/v1/resources`
 - **Access:** Bearer token; role: `MANAGING_DIRECTOR`.
@@ -99,10 +100,18 @@ Resource types are `insourced` and `outsourced`. Responses include common fields
 - **Request:** Optional query: `name` (case-insensitive substring), `type` (`insourced` or `outsourced`). Use `type` to filter to one resource type; without it, both types are returned. Example: `?name=laptop&type=outsourced`.
 - **Response:** `200` matching resource array, newest first; each resource includes its `AVAILABLE` or `ASSIGNED` status.
 
+### `GET /api/v1/resources/{id}/units`
+- **Response:** `200` unit records ordered by unit number, with `id`, `unitNumber`, optional `serialNumber` and `assetTag`, status, reservation request ID, and current allocation details.
+
+### `PATCH /api/v1/resources/{id}/units/{unitId}`
+- **Access:** Bearer token; role: `LINE_MANAGER`, `MANAGING_DIRECTOR`.
+- **Request:** One or both of `serialNumber` and `assetTag` (max 100 characters).
+- **Response:** `200` updated unit.
+
 ### `POST /api/v1/resources/{id}/allocations`
 - **Access:** Bearer token; role: `LINE_MANAGER`.
-- **Request:** `quantity`, `teamId`, `projectId`, and `assignedToUserId`; optional `expectedReturnAt` and approved `requestId`. When allocating against a request, omitting `expectedReturnAt` sets it from the request's `expectedDurationDays`. The project must be assigned to the team, and the active assigned user must belong to that team. A supplied request must be approved, routed to the caller, and match the team and project.
-- **Response:** `201` active allocation and an allocation movement event. The server rejects quantities exceeding available stock or the request's unfulfilled quantity.
+- **Request:** `quantity`, `teamId`, `projectId`, and `assignedToUserId`; optional `unitIds`, `expectedReturnAt`, and approved `requestId`. If supplied, `unitIds` must contain exactly `quantity` eligible unit IDs; otherwise the system selects available units automatically. When allocating against a request, omitting `expectedReturnAt` sets it from the request's `expectedDurationDays`. The project must be assigned to the team, and the active assigned user must belong to that team. A supplied request must be approved, routed to the caller, and match the team and project.
+- **Response:** `201` active allocation with the exact assigned unit IDs and an allocation movement event. The server rejects quantities exceeding available stock or the request's unfulfilled `approvedQuantity`.
 
 ### `GET /api/v1/resources/{id}/allocations`
 - **Access:** Bearer token; role: `LINE_MANAGER`.
@@ -133,29 +142,29 @@ Resource types are `insourced` and `outsourced`. Responses include common fields
 
 ## Resource requests
 
-**Route prefix note:** the controller combines `@Controller('resource-requests')` with route decorators that already contain `api/v1/resource-request`. The implemented paths therefore begin `/resource-requests/api/v1/resource-request`, as listed below.
+**Route prefix:** the controller uses `@Controller('api/v1/resource-request')`. The create, list, detail, and update routes all use this prefix.
 
 Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`, `APPROVED`, and `REJECTED`. All routes require a Bearer token.
 
-### `POST /resource-requests/api/v1/resource-request`
+### `POST /api/v1/resource-request`
 - **Access:** `TEAM_LEAD`
 - **Request:** JSON body: `{ "resourceId": "550e8400-e29b-41d4-a716-446655440000", "itemDescription": "Laptop for field data collection", "batchNumber": "LOT-2026-04", "quantity": 3, "expectedDurationDays": 14, "projectId": 12, "lineManagerName": "Jordan Lee", "teamId": 4 }`. `resourceId` must identify a catalog resource; `projectId` must be assigned to `teamId`; `lineManagerName` must identify an active Line Manager. Quantity and `expectedDurationDays` are positive integers. The department is derived from the team and `requestedBy` from the caller.
 - **Response:** `201` submitted request. The Line Manager is notified whether a matching catalog resource is marked `AVAILABLE` with enough quantity; missing resources and insufficient quantities are reported as unavailable for review.
 
-### `GET /resource-requests/api/v1/resource-request`
+### `GET /api/v1/resource-request`
 - **Access:** `TEAM_LEAD`, `LINE_MANAGER`, `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
 - **Request:** Optional query: `status` (one of the statuses above), `teamId` (numeric ID encoded as string). Results are scoped to the caller's role.
 - **Response:** `200` request array, newest first.
 
-### `GET /resource-requests/api/v1/resource-request/{id}`
+### `GET /api/v1/resource-request/{id}`
 - **Access:** Same roles as list
 - **Request:** UUID path parameter. Optional query `include=audit` adds chronological `auditTrail`.
 - **Response:** `200` request details; audit trail when requested.
 
 ### `PATCH /api/v1/resource-request/{id}`
 - **Access:** `TEAM_LEAD` (own queried requests), `LINE_MANAGER` (assigned submitted requests)
-- **Request:** Partial request fields from create body (including `resourceId`, `projectId`, `lineManagerName`, and `teamId`) plus optional `status` and `note`. Approving reserves the unfulfilled quantity against available inventory; approval fails if stock is insufficient. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
-- **Response:** `200` updated request, with review fields updated on manager review.
+- **Request:** Partial request fields from create body (including `resourceId`, `projectId`, `lineManagerName`, and `teamId`) plus optional `status` and `note`. A Line Manager may approve with `{ "status": "APPROVED", "approvedQuantity": 3 }`; `approvedQuantity` must be from 1 to the requested `quantity` and defaults to the full requested amount when omitted. Approval reserves that approved amount against available inventory and fails if stock is insufficient. The Team Lead is notified of the approved quantity. Team Lead may edit a `QUERIED` request and submit using `{ "status": "SUBMITTED" }`; a positive `expectedDurationDays` must be present before resubmission. Line Manager may set `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires `note`.
+- **Response:** `200` updated request, including `approvedQuantity` after approval, with review fields updated on manager review.
 
 ## Departments — `/api/v1/departments`
 
@@ -178,7 +187,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 ### `GET /api/v1/departments/{id}/users`
 - **Access:** Bearer token; role: `MANAGING_DIRECTOR`, `DEPARTMENT_HEAD`
 - **Request:** Numeric department ID.
-- **Response:** `200` user array with `id`, `fullName`, `email`, `role`.
+- **Response:** `200` user array with `id`, `firstName`, optional `middleName`, `surname`, `email`, and `role`.
 
 ### `GET /api/v1/departments/{id}/teams`
 - **Access:** Bearer token; role: `MANAGING_DIRECTOR`
@@ -230,12 +239,12 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 ### `GET /api/v1/teams/unassigned-users`
 - **Access:** Bearer token; role: `DEPARTMENT_HEAD`
 - **Request:** Optional `role` query parameter: `TEAM_LEAD` or `TEAM_MEMBER`. Omit to list both roles.
-- **Response:** `200` active users without a team, each with `id`, `fullName`, `email`, and `role`, ordered by name.
+- **Response:** `200` active users without a team, each with `id`, `firstName`, optional `middleName`, `surname`, `email`, and `role`, ordered by name.
 
 ### `GET /api/v1/teams/{id}/users`
 - **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `TEAM_LEAD`, `TEAM_MEMBER`
 - **Request:** Numeric team ID.
-- **Response:** `200` member array (`id`, `fullName`, `email`, `role`).
+- **Response:** `200` member array (`id`, `firstName`, optional `middleName`, `surname`, `email`, `role`).
 
 ### `GET /api/v1/teams/{id}/projects`
 - **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `TEAM_LEAD`, `TEAM_MEMBER`
@@ -307,7 +316,7 @@ Statuses used by list and update operations are `DRAFT`, `SUBMITTED`, `QUERIED`,
 ### `GET /api/v1/projects/{id}/team-members`
 - **Access:** Bearer token; role: `DEPARTMENT_HEAD`, `MANAGING_DIRECTOR`
 - **Request:** Numeric project ID; optional query `teamId` to return one team assigned to the project. Omit it to include all project teams.
-- **Response:** `200` `{ projectId, projectName, teams: [{ teamId, teamName, members: [{ id, fullName }] }] }`. Teams are sorted by name, and members within each team are sorted by name. An unassigned `teamId` returns `404`.
+- **Response:** `200` `{ projectId, projectName, teams: [{ teamId, teamName, members: [{ id, firstName, middleName?, surname }] }] }`. Teams are sorted by name, and members within each team are sorted by name. An unassigned `teamId` returns `404`.
 
 ### `DELETE /api/v1/projects/{id}`
 - **Access:** Bearer token; role: `DEPARTMENT_HEAD`

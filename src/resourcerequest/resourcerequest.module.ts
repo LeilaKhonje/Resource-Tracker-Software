@@ -14,10 +14,11 @@ import { Resources } from '../resources/entities/resources.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
 import { ResourceAllocation } from '../resources/entities/resource-allocation.entity';
+import { ResourceUnit } from '../resources/entities/resource-unit.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project, User, Resources, ResourceAllocation]),
+    TypeOrmModule.forFeature([ResourceRequest, AuditLog, Department, Team, Project, User, Resources, ResourceAllocation, ResourceUnit]),
     AuthSecurityModule,
     NotificationsModule,
     EmailModule,

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
+import { ArrayNotEmpty, ArrayUnique, IsArray, IsDateString, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
 
 export class CreateResourceAllocationDto {
   @ApiProperty({ example: 2, minimum: 1 })
@@ -34,4 +34,16 @@ export class CreateResourceAllocationDto {
   @IsOptional()
   @IsUUID()
   requestId?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    format: 'uuid',
+    description: 'Specific available unit IDs to allocate. If omitted, the system selects available units automatically.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  unitIds?: string[];
 }

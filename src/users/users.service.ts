@@ -14,6 +14,7 @@ import { ManageUserDto, UserManagementAction } from './dto/manage-user.dto';
 import { ManageMyAccountDto, MyAccountAction } from './dto/manage-my-account.dto';
 import { EmailService } from '../email/email.service';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { userNameFields, userNameResponse } from './user-name.util';
 
 const BCRYPT_ROUNDS = 12;
 const PASSWORD_CHARACTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -47,6 +48,9 @@ export class UsersService {
     const password = this.generateInitialPassword();
     const user = await this.usersRepository.save(this.usersRepository.create({
       fullName,
+      firstName: dto.firstName,
+      middleName: dto.middleName ?? null,
+      surname: dto.surname,
       email,
       role: dto.role,
       passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
@@ -69,7 +73,13 @@ export class UsersService {
 
     await this.logAccountAction('ACCOUNT_CREATED', user.id, adminId, `Created active account for ${email} with role ${dto.role}`);
     return {
-      user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, isActive: user.isActive },
+      user: {
+        id: user.id,
+        ...userNameFields(user),
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+      },
     };
   }
 
@@ -105,10 +115,11 @@ export class UsersService {
     }
 
     if (!hasStartDate) {
-      return this.usersRepository.find({
-        select: { id: true, fullName: true, email: true, role: true, isActive: true, createdAt: true },
+      const users = await this.usersRepository.find({
+        select: { id: true, fullName: true, firstName: true, middleName: true, surname: true, email: true, role: true, isActive: true, createdAt: true },
         order: { fullName: 'ASC' },
       });
+      return users.map(userNameResponse);
     }
 
     const startDate = new Date(filter.startDate!);
@@ -117,11 +128,14 @@ export class UsersService {
       throw new BadRequestException('startDate must be before or equal to endDate');
     }
 
-    return this.usersRepository
+    const users = await this.usersRepository
       .createQueryBuilder('user')
       .select([
         'user.id',
         'user.fullName',
+        'user.firstName',
+        'user.middleName',
+        'user.surname',
         'user.email',
         'user.role',
         'user.isActive',
@@ -132,6 +146,7 @@ export class UsersService {
       .orderBy('user.createdAt', 'ASC')
       .addOrderBy('user.fullName', 'ASC')
       .getMany();
+    return users.map(userNameResponse);
   }
 
   async requestAccountDeletion(userId: string, password: string) {
@@ -152,11 +167,12 @@ export class UsersService {
   }
 
   async listActiveLineManagers() {
-    return this.usersRepository.find({
+    const users = await this.usersRepository.find({
       where: { role: UserRole.LINE_MANAGER, isActive: true },
-      select: { id: true, fullName: true, email: true },
+      select: { id: true, fullName: true, firstName: true, middleName: true, surname: true, email: true },
       order: { fullName: 'ASC' },
     });
+    return users.map(userNameResponse);
   }
 
   private async logAccountAction(actionType: string, userId: string, actorId: string, details: string) {
@@ -181,7 +197,7 @@ export class UsersService {
 
     const baseProfile ={
       id: user.id,
-      fullName: user.fullName,
+      ...userNameFields(user),
       email: user.email,
       role: user.role,
       phoneNumber: user.phoneNumber,
@@ -250,7 +266,7 @@ export class UsersService {
     await this.usersRepository.save(user);
     return {
       id: user.id,
-      fullName: user.fullName,
+      ...userNameFields(user),
       role: user.role,
       phoneNumber: user.phoneNumber,
       address: user.address,
@@ -406,7 +422,7 @@ export class UsersService {
     userId: string,
     role: UserRole,
     assignerId: string,
-  ): Promise<Pick<User, 'id' | 'fullName' | 'role'>> {
+  ) {
     const assigner = await this.usersRepository.findOneBy({ id: assignerId });
     if (!assigner) throw new NotFoundException('Assigning user not found');
 
@@ -455,7 +471,7 @@ export class UsersService {
 
     return {
       id: user.id,
-      fullName: user.fullName,
+      ...userNameFields(user),
       role: user.role,
     };
   }

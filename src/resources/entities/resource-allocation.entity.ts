@@ -4,6 +4,8 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  ManyToMany,
+  JoinTable,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Resources } from './resources.entity';
@@ -11,6 +13,7 @@ import { Team } from '../../teams/entities/team.entity';
 import { Project } from '../../projects/entities/project.entity';
 import { User } from '../../users/user.entity';
 import { ResourceRequest } from '../../resourcerequest/entities/resourcerequest.entity';
+import { ResourceUnit } from './resource-unit.entity';
 
 export enum AllocationStatus {
   ACTIVE = 'ACTIVE',
@@ -49,6 +52,14 @@ export class ResourceAllocation {
   @ManyToOne(() => ResourceRequest, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'request_id' })
   request: ResourceRequest | null;
+
+  @ManyToMany(() => ResourceUnit)
+  @JoinTable({
+    name: 'resource_allocation_units',
+    joinColumn: { name: 'allocation_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'unit_id', referencedColumnName: 'id' },
+  })
+  units: ResourceUnit[];
 
   @Column({ type: 'enum', enum: AllocationStatus, default: AllocationStatus.ACTIVE })
   status: AllocationStatus;

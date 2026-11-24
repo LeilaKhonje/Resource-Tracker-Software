@@ -11,6 +11,7 @@ import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.ent
 import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
 import { UserRole } from '../users/user-role.enum';
 import { EmailService } from '../email/email.service';
+import { userNameFields, userNameResponse } from '../users/user-name.util';
 
 @Injectable()
 export class DepartmentsService {
@@ -77,7 +78,8 @@ export class DepartmentsService {
 
   async findUsers(id: number) {
     await this.findOne(id);
-    return this.userRepository.find({ where: { department: { id } } });
+    const users = await this.userRepository.find({ where: { department: { id } } });
+    return users.map(userNameResponse);
   }
 
   async findTeams(id: number) {
@@ -169,7 +171,7 @@ export class DepartmentsService {
     await this.email.send(user.email, 'Department assignment updated', `You have been assigned as head of the ${department.name} department.`);
     return {
       id: saved.id,
-      fullName: saved.fullName,
+      ...userNameFields(saved),
       email: saved.email,
       role: saved.role,
       department: saved.department,
