@@ -13,9 +13,12 @@ import { LogoutDto } from './dto/logout.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
+} from './auth.constants';
 
 const BCRYPT_ROUNDS = 12;
-const REFRESH_TOKEN_TTL = '7d';
 
 @Injectable()
 export class AuthService {
@@ -146,25 +149,48 @@ export class AuthService {
   }
 
   private async loginUser(user: User){
+    const issuedAt = Math.floor(Date.now() / 1000);
     const payload: AuthTokenPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
+      mustChangePassword: user.mustChangePassword,
       tokenVersion: user.tokenVersion,
+      iat: issuedAt,
     }
 
+    const refreshPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+      tokenUse: 'refresh',
+      iat: issuedAt,
+    };
+
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload),
+      this.jwtService.signAsync(payload, {
+        expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      }),
       this.jwtService.signAsync(
-        { ...payload, tokenUse: 'refresh' },
-        { expiresIn: REFRESH_TOKEN_TTL },
+        refreshPayload,
+        { expiresIn: REFRESH_TOKEN_TTL_SECONDS },
       ),
     ]);
 
     user.refreshTokenHash = this.hashToken(refreshToken);
     await this.usersRepository.save(user);
 
-    return { accessToken, refreshToken, mustChangePassword: user.mustChangePassword };
+    return {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt: new Date(
+        (issuedAt + ACCESS_TOKEN_TTL_SECONDS) * 1000,
+      ).toISOString(),
+      refreshTokenExpiresAt: new Date(
+        (issuedAt + REFRESH_TOKEN_TTL_SECONDS) * 1000,
+      ).toISOString(),
+    };
   }
 
   private async getRefreshTokenUser(refreshToken: string) {

@@ -16,6 +16,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
 import { ResourceStatus } from '../resources/enum/resource-status.enum';
 import { ResourceAllocation, AllocationStatus } from '../resources/entities/resource-allocation.entity';
+import { ResourceUnit, ResourceUnitStatus } from '../resources/entities/resource-unit.entity';
 
 // The only statuses a line manager is allowed to set.
 const REVIEW_DECISIONS = [
@@ -78,7 +79,7 @@ export class ResourcerequestService {
       itemName: catalogItem.name,
       resourceId: catalogItem.id,
       itemDescription: dto.itemDescription,
-      batchNumber: dto.batchNumber,
+      batchNumber: dto.batchNumber ?? null,
       quantity: dto.quantity,
       expectedDurationDays: dto.expectedDurationDays,
       teamId: String(references.team.id),
@@ -146,10 +147,11 @@ export class ResourcerequestService {
     const {
       status,
       note,
+      approvedQuantity,
+      resourceId,
       teamId,
       projectId,
       lineManagerName,
-      resourceId,
       ...fields
     } = dto;
     const referenceChanges = Object.fromEntries(
@@ -169,6 +171,9 @@ export class ResourcerequestService {
       changedKeys.length === 0 &&
       Object.keys(referenceChanges).length === 0
     ) {
+      if (approvedQuantity !== undefined) {
+        throw new BadRequestException('approvedQuantity can only be provided with status APPROVED');
+      }
       throw new BadRequestException('Nothing to update');
     }
 
@@ -179,7 +184,13 @@ export class ResourcerequestService {
           'A review decision cannot be combined with edits',
         );
       }
-      return this.review(request, status, note, user);
+      if (approvedQuantity !== undefined && status !== RequestStatus.APPROVED) {
+        throw new BadRequestException('approvedQuantity can only be provided with status APPROVED');
+      }
+      return this.review(request, status, note, user, approvedQuantity);
+    }
+    if (approvedQuantity !== undefined) {
+      throw new BadRequestException('approvedQuantity can only be provided with status APPROVED');
     }
 
     // Everything below is the team lead's: editing and resubmitting.
@@ -262,6 +273,7 @@ export class ResourcerequestService {
     status: RequestStatus,
     note: string | undefined,
     user: AuthUser,
+    requestedApprovedQuantity?: number,
   ) {
     if (user.role !== UserRole.LINE_MANAGER) {
       throw new ForbiddenException(
@@ -289,6 +301,10 @@ export class ResourcerequestService {
 
     let saved: ResourceRequest;
     if (status === RequestStatus.APPROVED) {
+      const approvedQuantity = requestedApprovedQuantity ?? request.quantity;
+      if (approvedQuantity > request.quantity) {
+        throw new BadRequestException('approvedQuantity cannot exceed the requested quantity');
+      }
       if (!request.resourceId) {
         throw new BadRequestException('This request is not linked to a resource catalog item');
       }
@@ -299,15 +315,31 @@ export class ResourcerequestService {
         });
         if (!resource) throw new NotFoundException(`Resource ${request.resourceId} not found`);
         const available = await this.getAvailableQuantity(resource.id, manager);
-        if (available < request.quantity) {
+        if (available < approvedQuantity) {
           throw new BadRequestException(`Cannot approve: only ${available} unit(s) of ${resource.name} are available`);
         }
+        const unitRepository = manager.getRepository(ResourceUnit);
+        const unitsToReserve = await unitRepository.find({
+          where: { resource: { id: resource.id }, status: ResourceUnitStatus.AVAILABLE },
+          order: { unitNumber: 'ASC' },
+          take: approvedQuantity,
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (unitsToReserve.length < approvedQuantity) {
+          throw new BadRequestException(`Cannot approve: only ${unitsToReserve.length} unit(s) of ${resource.name} are available`);
+        }
+        for (const unit of unitsToReserve) {
+          unit.status = ResourceUnitStatus.RESERVED;
+          unit.reservedForRequest = request;
+        }
+        await unitRepository.save(unitsToReserve);
         request.status = status;
+        request.approvedQuantity = approvedQuantity;
         request.reviewNote = note ?? null;
         request.reviewedBy = user.id;
         request.reviewedAt = new Date();
         const savedRequest = await manager.getRepository(ResourceRequest).save(request);
-        resource.status = available - request.quantity > 0
+        resource.status = available - approvedQuantity > 0
           ? ResourceStatus.AVAILABLE
           : ResourceStatus.ASSIGNED;
         await manager.getRepository(Resources).save(resource);
@@ -320,12 +352,25 @@ export class ResourcerequestService {
       request.reviewedAt = new Date();
       saved = await this.requests.save(request);
     }
-    await this.log(request.id, status, user.id, note);
+    await this.log(
+      request.id,
+      status,
+      user.id,
+      status === RequestStatus.APPROVED
+        ? `Approved ${saved.approvedQuantity} of ${request.quantity} requested unit(s).${note ? ` ${note}` : ''}`
+        : note,
+    );
 
     const requester = await this.users.findOne({ where: { id: request.requestedBy } });
     if (requester) {
       const resourceName = request.resource?.name ?? request.itemDescription ?? 'resource';
-      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, `Your request for ${request.quantity} x ${resourceName} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`);
+      const decisionMessage = status === RequestStatus.APPROVED
+        ? `Your request for ${request.quantity} x ${resourceName} was approved for ${saved.approvedQuantity} unit(s).${note ? ` Note: ${note}` : ''}`
+        : `Your request for ${request.quantity} x ${resourceName} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ''}`;
+      await this.email.send(requester.email, `Resource request ${status.toLowerCase()}`, decisionMessage);
+      if (status === RequestStatus.APPROVED) {
+        await this.notifications.createNotification(requester.id, decisionMessage);
+      }
     }
     return saved;
   }
@@ -340,31 +385,13 @@ export class ResourcerequestService {
   }
 
   private async getAvailableQuantity(resourceId: string, manager?: import('typeorm').EntityManager) {
-    const allocationRepo = manager?.getRepository(ResourceAllocation) ?? this.allocations;
-    const requestRepo = manager?.getRepository(ResourceRequest) ?? this.requests;
     const resourceRepo = manager?.getRepository(Resources) ?? this.resources;
     const resource = await resourceRepo.findOne({ where: { id: resourceId } });
     if (!resource) throw new NotFoundException(`Resource ${resourceId} not found`);
-    const active = await allocationRepo.createQueryBuilder('allocation')
-      .where('allocation.resource_id = :resourceId', { resourceId })
-      .andWhere('allocation.status = :active', { active: AllocationStatus.ACTIVE })
-      .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
-      .getRawOne<{ quantity: string }>();
-    const approved = await requestRepo.createQueryBuilder('request')
-      .where('request.resourceId = :resourceId', { resourceId })
-      .andWhere('request.status = :status', { status: RequestStatus.APPROVED })
-      .select('COALESCE(SUM(request.quantity), 0)', 'quantity')
-      .getRawOne<{ quantity: string }>();
-    const fulfilled = await allocationRepo.createQueryBuilder('allocation')
-      .innerJoin('allocation.request', 'request')
-      .where('request.resourceId = :resourceId', { resourceId })
-      .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
-      .getRawOne<{ quantity: string }>();
-    const committed = Number(active?.quantity ?? 0) + Math.max(
-      0,
-      Number(approved?.quantity ?? 0) - Number(fulfilled?.quantity ?? 0),
-    );
-    return Math.max(0, resource.quantity - committed);
+    const unitRepository = manager?.getRepository(ResourceUnit) ?? this.dataSource.getRepository(ResourceUnit);
+    return unitRepository.count({
+      where: { resource: { id: resourceId }, status: ResourceUnitStatus.AVAILABLE },
+    });
   }
 
   private async resolveOrganizationReferences(reference: {
@@ -417,7 +444,7 @@ export class ResourcerequestService {
           role: AccountUserRole.LINE_MANAGER,
           isActive: true,
         },
-        select: { id: true, fullName: true, role: true, isActive: true },
+        select: { id: true, fullName: true, email: true, role: true, isActive: true },
       });
       if (matches.length === 0) {
         throw new NotFoundException(
@@ -442,7 +469,7 @@ export class ResourcerequestService {
   private async assertLineManager(lineManagerId: string): Promise<User> {
     const manager = await this.users.findOne({
       where: { id: lineManagerId },
-      select: { id: true, role: true, isActive: true },
+      select: { id: true, email: true, role: true, isActive: true },
     });
 
     if (!manager) {

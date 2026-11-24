@@ -12,6 +12,7 @@ import { Team } from '../teams/entities/team.entity';
 import { Project } from '../projects/entities/project.entity';
 import { User } from '../users/user.entity';
 import { EmailModule } from '../email/email.module';
+import { ResourceUnit } from './entities/resource-unit.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { EmailModule } from '../email/email.module';
       Department,
       ResourceAllocation,
       ResourceMovement,
+      ResourceUnit,
       ResourceRequest,
       Team,
       Project,

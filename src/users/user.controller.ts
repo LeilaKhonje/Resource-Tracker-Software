@@ -22,7 +22,7 @@ export class UserController {
   @Post('')
   @ApiOperation({ summary: 'Create a user account and email a generated temporary password (System Admin only)' })
   @ApiBody({ type: CreateUserDto })
-  @ApiResponse({ status: 201, description: 'Active account created and generated temporary password emailed; password is not returned', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
+  @ApiResponse({ status: 201, description: 'Active account created and generated temporary password emailed; password is not returned', schema: { type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, firstName: { type: 'string' }, middleName: { type: 'string', nullable: true }, surname: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' } } } } } })
   @ApiResponse({ status: 400, description: 'Invalid account details' })
   @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiResponse({ status: 403, description: 'Only System Admins can create user accounts.' })
@@ -39,7 +39,7 @@ export class UserController {
   @ApiOperation({ summary: 'List user accounts', description: 'System Admin and Managing Director only. If either creation-date filter is supplied, both are required and the range is inclusive.' })
   @ApiQuery({ name: 'startDate', required: false, type: String, format: 'date-time', example: '2026-11-01T00:00:00.000Z' })
   @ApiQuery({ name: 'endDate', required: false, type: String, format: 'date-time', example: '2026-11-11T23:59:59.999Z' })
-  @ApiResponse({ status: 200, description: 'User accounts without credential data', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
+  @ApiResponse({ status: 200, description: 'User accounts without credential data', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, firstName: { type: 'string' }, middleName: { type: 'string', nullable: true }, surname: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: Object.values(UserRole) }, isActive: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' } } } } })
   @ApiResponse({ status: 400, description: 'Both dates must be supplied as valid timestamps, and startDate must not be after endDate' })
   @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiResponse({ status: 403, description: 'Only System Admins and Managing Directors can list users.' })
@@ -51,7 +51,7 @@ export class UserController {
   }
 
   @Get('line-managers')
-  @ApiOperation({ summary: 'List active Line Managers for request routing', description: 'Team Lead only. The returned IDs and full names can be used to select the request reviewer.' })
+  @ApiOperation({ summary: 'List active Line Managers for request routing', description: 'Team Lead only. The returned IDs and separated names can be used to select the request reviewer.' })
   @ApiResponse({
     status: 200,
     description: 'Active Line Managers available to receive resource requests',
@@ -61,7 +61,9 @@ export class UserController {
         type: 'object',
         properties: {
           id: { type: 'string', format: 'uuid' },
-          fullName: { type: 'string' },
+          firstName: { type: 'string' },
+          middleName: { type: 'string', nullable: true },
+          surname: { type: 'string' },
           email: { type: 'string', format: 'email' },
         },
       },
@@ -81,7 +83,7 @@ export class UserController {
   description: 'Any authenticated user. Choose one action per request. Profile updates accept profile fields only; password changes require currentPassword and newPassword only.'
 })
 @ApiBody({ type: ManageMyAccountDto })
-@ApiResponse({ status: 200, description: 'Requested profile or password action completed.', schema: { oneOf: [{ type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, role: { type: 'string', enum: Object.values(UserRole) }, phoneNumber: { type: 'string', nullable: true }, address: { type: 'string', nullable: true }, dateOfBirth: { type: 'string', format: 'date', nullable: true }, preferredPronoun: { type: 'string', nullable: true } } }, { type: 'object', properties: { message: { type: 'string', example: 'Password changed successfully' } } }] } })
+@ApiResponse({ status: 200, description: 'Requested profile or password action completed.', schema: { oneOf: [{ type: 'object', properties: { id: { type: 'string', format: 'uuid' }, firstName: { type: 'string' }, middleName: { type: 'string', nullable: true }, surname: { type: 'string' }, role: { type: 'string', enum: Object.values(UserRole) }, phoneNumber: { type: 'string', nullable: true }, address: { type: 'string', nullable: true }, dateOfBirth: { type: 'string', format: 'date', nullable: true }, preferredPronoun: { type: 'string', nullable: true } } }, { type: 'object', properties: { message: { type: 'string', example: 'Password changed successfully' } } }] } })
 @ApiResponse({ status: 400, description: 'Invalid action, fields, profile data, or password' })
 @ApiResponse({ status: 401, description: 'Authentication required or current password is incorrect' })
 @ApiResponse({ status: 404, description: 'User not found' })
@@ -154,7 +156,7 @@ manageUser(
 
 @Get('me')
 @ApiOperation({ summary: 'Get the current user profile', description: 'Available to any authenticated user. Team Lead profiles include teamId for selecting team-specific project choices.' })
-@ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) }, department: { type: 'string', nullable: true }, team: { type: 'string', nullable: true }, teamId: { type: 'string', nullable: true } } } })
+@ApiResponse({ status: 200, description: 'User profile', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, firstName: { type: 'string' }, middleName: { type: 'string', nullable: true }, surname: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true, enum: Object.values(UserRole) }, department: { type: 'string', nullable: true }, team: { type: 'string', nullable: true }, teamId: { type: 'string', nullable: true } } } })
 @ApiResponse({ status: 401, description: 'Authentication required' })
 @ApiResponse({ status: 404, description: 'User not found' })
 @ApiResponse({ status: 403, description: 'Insufficient permissions' })

@@ -19,6 +19,7 @@ import { UserRole } from '../users/user-role.enum';
 import { AssignTeamLeadDto } from './dto/assign-team-lead.dto';
 import { AssignTeamUserDto } from './dto/assign-team-user.dto';
 import { EmailService } from '../email/email.service';
+import { userNameResponse } from '../users/user-name.util';
 
 const ASSIGNABLE_TEAM_ROLES = [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] as const;
 
@@ -58,15 +59,16 @@ export class TeamsService {
     const roles = role
       ? [role as (typeof ASSIGNABLE_TEAM_ROLES)[number]]
       : [...ASSIGNABLE_TEAM_ROLES];
-    return this.userRepository.find({
+    const users = await this.userRepository.find({
       where: roles.map((userRole) => ({
         role: userRole,
         isActive: true,
         team: IsNull(),
       })),
-      select: { id: true, fullName: true, email: true, role: true },
+      select: { id: true, fullName: true, firstName: true, middleName: true, surname: true, email: true, role: true },
       order: { fullName: 'ASC' },
     });
+    return users.map(userNameResponse);
   }
 
   async findOne(id: number) {
@@ -142,7 +144,8 @@ export class TeamsService {
 
   async findUsers(id: number) {
     await this.findOne(id);
-    return this.userRepository.find({ where: { team: { id } } });
+    const users = await this.userRepository.find({ where: { team: { id } } });
+    return users.map(userNameResponse);
   }
 
   async findProjects(id: number) {
