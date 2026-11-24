@@ -1,7 +1,8 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { ResourceType } from '../enum/resource-type.enum';
 import { ResourceStatus } from '../enum/resource-status.enum';
 import { Department } from '../../departments/entities/department.entity';
+import { ResourceUnit } from './resource-unit.entity';
 
 @Entity('resources')
 export class Resources {
@@ -47,6 +48,9 @@ export class Resources {
 
     @Column({ type: 'int', default: 1 })
     quantity: number;
+
+    @OneToMany(() => ResourceUnit, (unit) => unit.resource)
+    units: ResourceUnit[];
 
     @CreateDateColumn({name: 'created_at'})
     createdAt: Date;

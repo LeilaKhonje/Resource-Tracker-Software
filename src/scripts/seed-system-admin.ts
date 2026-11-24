@@ -5,6 +5,7 @@ import { Department } from '../departments/entities/department.entity';
 import { Team } from '../teams/entities/team.entity';
 import { User } from '../users/user.entity';
 import { UserRole } from '../users/user-role.enum';
+import { splitFullName } from '../users/user-name.util';
 
 const email = process.env.SYSTEM_ADMIN_EMAIL?.trim().toLowerCase();
 const password = process.env.SYSTEM_ADMIN_PASSWORD;
@@ -25,6 +26,7 @@ if (password.length < 8 || password.length > 12 || !/\d/.test(password)) {
 const adminEmail = email;
 const adminPassword = password;
 const adminFullName = fullName;
+const adminName = splitFullName(adminFullName);
 
 const dataSource = new DataSource({
   type: (process.env.DB_CONNECTION || 'mysql') as 'mysql',
@@ -62,6 +64,7 @@ async function seedSystemAdmin() {
     const user = users.create({
       email: adminEmail,
       fullName: adminFullName,
+      ...adminName,
       role: UserRole.SYSTEM_ADMIN,
       passwordHash: await bcrypt.hash(adminPassword, 12),
       isActive: true,

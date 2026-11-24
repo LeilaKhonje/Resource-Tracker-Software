@@ -8,8 +8,13 @@ with the business role specified during creation. The database enforces at
 most one System Admin and at most one Managing Director.
 
 Passwords are stored as bcrypt hashes with a cost factor of 12. Login returns
-an `accessToken`. The one-hour
-bearer token contains the user's ID, email, and role.
+an `accessToken` and a `refreshToken`, with ISO 8601 UTC expiry timestamps for
+both. The one-hour access token contains the user's ID, email, role, and the
+`mustChangePassword` boolean claim. The claim reflects the account state when
+the token was issued; the API enforces password changes against the current
+account state. Refresh tokens expire after seven days. When a refresh attempt
+returns `401` for an expired token, the client must clear both tokens and
+require the user to sign in again.
 
 Set `JWT_SECRET` to a random value of at least 16 characters before starting
 the application. Database connection settings are `DB_CONNECTION`, `DB_HOST`,
@@ -132,8 +137,8 @@ contain a number.
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
-| `POST /auth` | Checks the email and password and returns access and refresh tokens plus `mustChangePassword`. When true, the user must change the temporary password before using other protected endpoints. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
-| `POST /auth/refresh` | Exchanges a valid refresh token for a new access and refresh token pair. | `401` refresh token is invalid, expired, revoked, or the account is inactive. |
+| `POST /auth` | Checks the email and password and returns access and refresh tokens. The access token contains the `mustChangePassword` claim; when true, the user must change the temporary password before using other protected endpoints. | `400` invalid input format; `401` email or password is incorrect, or the account has been deactivated. |
+| `POST /auth/refresh` | Exchanges a valid refresh token for a new access and refresh token pair, with expiry timestamps for both. If refresh returns `401` because the token expired, the client must clear both tokens and require sign-in. | `401` refresh token is invalid, expired, revoked, or the account is inactive. |
 | `POST /auth/logout` | Revokes the supplied refresh token. | `401` refresh token is invalid, expired, or revoked. |
 | `POST /auth/forgot-password` | Sends a password reset code to an active account and returns a generic confirmation with the submitted email masked, so the response does not disclose whether an account exists. | `400` invalid email format. |
 
@@ -147,7 +152,7 @@ business roles according to the role rules above.
 | --- | --- | --- |
 | `POST /users` | System Admin creates an active account from `firstName`, optional `middleName`, `surname`, `email`, and `role`. The system generates and emails a temporary password; it is never returned by the API. | `400` invalid fields or role; `401` missing/invalid token; `403` caller is not System Admin; `409` email already registered or a Managing Director is already assigned; `503` credential email could not be delivered. |
 | `GET /users?startDate=<ISO-8601>&endDate=<ISO-8601>` | System Admin or Managing Director lists accounts without credential data. The date filters are optional; if either is supplied, both are required, and the inclusive range filters by creation time. | `400` one date missing, invalid timestamp, or start later than end; `401` missing/invalid token; `403` caller lacks permission. |
-| `GET /users/line-managers` | Team Lead lists active Line Managers to choose a recipient for a resource request. Returns `id`, `fullName`, and `email`, ordered by name. | `401` missing/invalid token; `403` caller is not a Team Lead. |
+| `GET /users/line-managers` | Team Lead lists active Line Managers to choose a recipient for a resource request. Returns `id`, `firstName`, optional `middleName`, `surname`, and `email`, ordered by name. Join the name fields when supplying `lineManagerName` in a request. | `401` missing/invalid token; `403` caller is not a Team Lead. |
 
 | Method and path | What it does | Possible errors |
 | --- | --- | --- |
@@ -211,12 +216,12 @@ are for Department Heads, while Managing Directors can also list and view.
 | `GET /projects/:id` | Returns a project visible to the caller. | `400` ID is not an integer; `401` missing/invalid token; `403` caller lacks role/department; `404` project does not exist or is outside the Department Head's department. |
 | `PATCH /projects/:id/teams` | Replaces a project's team assignments (`teamIds`). | `400` invalid body or ID; `401` missing/invalid token; `403` wrong role, no department, or cross-department team; `404` project not found; `422` team ID not found or no team remains assigned. |
 | `PATCH /projects/:id` | Updates project `name`, `description`, `startDate`, and/or `endDate`. Dates use `YYYY-MM-DD`; the resulting `endDate` must be on or after `startDate`. | `400` invalid ID/body, invalid date range, or no fields supplied; `401` missing/invalid token; `403` wrong role/no department; `404` project does not exist or is outside the caller's department. |
-| `GET /projects/:id/team-members?teamId=<id>` | Lists members grouped by team, sorted by team name and then member name. Omit `teamId` for all project teams or provide a team assigned to the project to return just that team. Response includes `projectId`, `projectName`, and `teams: [{ teamId, teamName, members: [{ id, fullName }] }]`. | `400` invalid project/team ID; `401` missing/invalid token; `403` caller lacks role/department; `404` project does not exist or is outside the caller's department, or team is not assigned to the project. |
+| `GET /projects/:id/team-members?teamId=<id>` | Lists members grouped by team, sorted by team name and then member name. Omit `teamId` for all project teams or provide a team assigned to the project to return just that team. Response includes `projectId`, `projectName`, and `teams: [{ teamId, teamName, members: [{ id, firstName, middleName?, surname }] }]`. | `400` invalid project/team ID; `401` missing/invalid token; `403` caller lacks role/department; `404` project does not exist or is outside the caller's department, or team is not assigned to the project. |
 | `DELETE /projects/:id` | Deletes a project. | `400` ID is not an integer; `401` missing/invalid token; `403` wrong role/no department; `404` project does not exist or is outside the caller's department. |
 
 ### Resources
 
-The resources API manages catalog records and stores the count of units represented by each record. Line Managers can allocate units to a team member and project, record returns and transfers, and review movement history. A resource has status `AVAILABLE` when it has no active allocations and `ASSIGNED` when one or more units are actively allocated. Available quantity is still checked against recorded quantity minus active allocations. Creating resources requires a Managing Director. Listing requires a bearer token and permits Department Heads, Line Managers, Managing Directors, and Team Leads; Team Leads use the catalog list to select a resource when creating a request. Resource IDs are UUIDs. The returned fields depend on the resource `type`:
+The resources API manages catalog groups and creates one individually trackable unit for every quantity in a group. Each unit has a stable UUID and unit number; Line Managers and Managing Directors can record its serial number or asset tag. Units are marked `AVAILABLE`, `RESERVED`, or `ALLOCATED`. Line Managers can allocate exact unit IDs or let the system select available units, record returns and transfers, and review movement history. Available quantity is calculated from units currently marked available. Line Managers can approve all or part of a request with `approvedQuantity`, then allocate up to that approved amount. Approval notifies the Team Lead by email and in-app notification. Creating resources requires a Managing Director. Listing requires a bearer token and permits Department Heads, Line Managers, Managing Directors, and Team Leads; Team Leads use the catalog list to select a resource when creating a request. Resource IDs are UUIDs. The returned fields depend on the resource `type`:
 
 - `insourced`: `id`, `name`, `type`, `status`, `description`, `departmentName`, `quantity`, `createdAt`, `updatedAt`
 - `outsourced`: `id`, `name`, `type`, `status`, `price`, `label`, `batchNumber`, `vendor`, `createdAt`, `updatedAt`
@@ -225,7 +230,9 @@ The resources API manages catalog records and stores the count of units represen
 | --- | --- | --- | --- |
 | `POST /resources` | Managing Director bearer token and JSON resource object; see examples below. | Creates a catalog resource. `type` is `insourced` or `outsourced`; insourced requires `description` and an existing `departmentName`, outsourced requires `price`, `label`, `batchNumber`, and `vendor`. Quantity must be at least 1. | `400` invalid or conflicting type-specific fields; `401` missing/invalid token; `403` caller is not Managing Director; `404` department not found; database errors. |
 | `GET /resources?name=lap&type=insourced` | Bearer token for Department Head, Line Manager, Managing Director, or Team Lead; optional `name` substring and `type` filters. | Lists matching catalog resources, newest first. `name` matching is case-insensitive. | `400` invalid `type`; `401` missing/invalid token; `403` caller lacks an allowed role. |
-| `POST /resources/:id/allocations` | Line Manager bearer token; quantity, team, project, assigned user; optional due date and approved request ID. | Assigns available units and records a movement. When linked to a request without an explicit due date, the due date is calculated from the Team Lead's requested duration. The project must be assigned to the team and the active user must belong to that team. | `400` invalid assignment; `401` missing/invalid token; `403` caller is not authorized; `404` referenced record not found; `409` insufficient availability/request quantity. |
+| `POST /resources/:id/allocations` | Line Manager bearer token; quantity, team, project, assigned user; optional exact `unitIds`, due date, and approved request ID. | Assigns the specified units, or automatically selects available units, up to the request's remaining approved quantity and records a movement. When linked to a request without an explicit due date, the due date is calculated from the Team Lead's requested duration. | `400` invalid assignment or unit count; `401` missing/invalid token; `403` caller is not authorized; `404` referenced record not found; `409` selected units unavailable or insufficient request quantity. |
+| `GET /resources/:id/units` | Authenticated Department Head, Line Manager, Managing Director, or Team Lead. | Lists each unit with its ID, unit number, status, serial/asset tag, and current allocation. | `401` missing/invalid token; `404` resource not found. |
+| `PATCH /resources/:id/units/:unitId` | Line Manager or Managing Director bearer token; optional serial number and/or asset tag. | Records physical identifiers for a unit. | `400` invalid/missing identifier; `404` unit not found; `409` asset tag already used. |
 | `GET /resources/:id/allocations` | Line Manager bearer token. | Lists active assignments and current holders. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` resource not found. |
 | `PATCH /resources/allocations/:allocationId/return` | Line Manager bearer token; optional note. | Marks an assignment returned and records a movement. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` allocation not found; `409` allocation is not active. |
 | `PATCH /resources/allocations/:allocationId/transfer` | Line Manager bearer token; destination team, project, and assigned user. | Closes the prior assignment, opens a new assignment, and records the transfer. | `401` missing/invalid token; `403` caller is not a Line Manager; `404` destination/allocation not found; `409` allocation is not active. |
@@ -286,7 +293,7 @@ below: `/resource-requests/api/v1/resource-request...`.
 | `POST /resource-requests/api/v1/resource-request` | Creates and submits a request; body includes `resourceId`, item details, `quantity`, positive integer `expectedDurationDays`, `teamId`, `projectId`, and `lineManagerName`. Department is derived from the team. | `400` invalid fields or a project not assigned to the team; `401` missing/invalid token; `403` caller is not a Team Lead; `404` resource, team, project, or active Line Manager not found. |
 | `GET /resource-requests/api/v1/resource-request` | Lists requests visible to the caller; supports `status` and `teamId` filters. | `400` invalid query; `401` missing/invalid token; `403` unsupported role. |
 | `GET /resource-requests/api/v1/resource-request/:id` | Returns one request. Add `?include=audit` to include its request audit trail. | `403` caller cannot view it; `404` request not found. |
-| `PATCH /resource-requests/api/v1/resource-request/:id` | Team Lead edits a queried request and may resubmit with `{"status":"SUBMITTED"}`. The assigned Line Manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`; rejection/query requires a `note`. | `400` invalid status/state or missing required fields; `401` missing/invalid token; `403` wrong owner/role/manager; `404` request not found. |
+| `PATCH /resource-requests/api/v1/resource-request/:id` | Team Lead edits a queried request and may resubmit with `{"status":"SUBMITTED"}`. The assigned Line Manager reviews with `APPROVED`, `REJECTED`, or `QUERIED`. Approval accepts optional `approvedQuantity` (1 through the requested quantity; defaults to all requested units), persists it on the request, and tells the Team Lead the approved amount. | `400` invalid status/state, approved amount outside the request quantity, insufficient stock, or missing required fields; `401` missing/invalid token; `403` wrong owner/role/manager; `404` request not found. |
 
 ### Reports
 

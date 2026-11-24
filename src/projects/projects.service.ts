@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Team } from '../teams/entities/team.entity';
 import { User } from '../users/user.entity';
+import { userNameFields } from '../users/user-name.util';
 import { UserRole } from '../users/user-role.enum';
 import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -122,7 +123,7 @@ export class ProjectsService {
     const members = await this.users.find({
       where: { team: { id: In(teams.map((team) => team.id)) } },
       relations: { team: true },
-      select: { id: true, fullName: true, team: { id: true, name: true } },
+      select: { id: true, fullName: true, firstName: true, middleName: true, surname: true, team: { id: true, name: true } },
       order: { team: { name: 'ASC' }, fullName: 'ASC' },
     });
     return {
@@ -133,7 +134,7 @@ export class ProjectsService {
         teamName: team.name,
         members: members
           .filter((member) => member.team?.id === team.id)
-          .map((member) => ({ id: member.id, fullName: member.fullName })),
+          .map((member) => ({ id: member.id, ...userNameFields(member) })),
       })),
     };
   }

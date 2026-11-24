@@ -12,6 +12,15 @@ export class User {
   @Column({ name: 'full_name', length: 120 })
   fullName: string;
 
+  @Column({ name: 'first_name', type: 'varchar', length: 120 })
+  firstName: string;
+
+  @Column({ name: 'middle_name', type: 'varchar', length: 120, nullable: true })
+  middleName: string | null;
+
+  @Column({ name: 'surname', type: 'varchar', length: 120 })
+  surname: string;
+
   @Column({ unique: true, length: 254 })
   email: string;
 

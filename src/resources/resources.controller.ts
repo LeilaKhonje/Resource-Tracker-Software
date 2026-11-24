@@ -11,6 +11,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user-role.enum';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
+import { UpdateResourceUnitDto } from './dto/update-resource-unit.dto';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import {
   ApiBearerAuth,
@@ -35,6 +36,7 @@ const resourceResponseSchema = {
         type: { type: 'string', enum: ['insourced'] },
         status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] },
         quantity: { type: 'integer' },
+        units: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, unitNumber: { type: 'integer' }, serialNumber: { type: 'string', nullable: true }, assetTag: { type: 'string', nullable: true }, status: { type: 'string', enum: ['AVAILABLE', 'RESERVED', 'ALLOCATED'] } } } },
         description: { type: 'string' },
         departmentName: { type: 'string', nullable: true },
         batchNumber: { type: 'string', nullable: true },
@@ -50,6 +52,7 @@ const resourceResponseSchema = {
         type: { type: 'string', enum: ['outsourced'] },
         status: { type: 'string', enum: ['AVAILABLE', 'ASSIGNED'] },
         quantity: { type: 'integer' },
+        units: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, unitNumber: { type: 'integer' }, serialNumber: { type: 'string', nullable: true }, assetTag: { type: 'string', nullable: true }, status: { type: 'string', enum: ['AVAILABLE', 'RESERVED', 'ALLOCATED'] } } } },
         price: { type: 'number' },
         label: { type: 'string' },
         batchNumber: { type: 'string' },
@@ -81,7 +84,7 @@ export class ResourcesController {
       'Managing Director only. The required fields depend on type: insourced requires description and departmentName; outsourced requires price, label, batchNumber, and vendor. Fields for the other type are rejected.',
   })
   @ApiBody({ type: CreateResourceDto })
-  @ApiResponse({ status: 201, description: 'Created resource with fields for its resource type.'})
+  @ApiResponse({ status: 201, description: 'Created resource group and its generated individual units.', schema: resourceResponseSchema as any })
   @ApiResponse({ status: 400, description: 'Invalid fields for the selected resource type.' })
   @ApiResponse({ status: 404, description: 'The named department does not exist.' })
   @ApiUnauthorizedResponse({ description: 'A valid bearer access token is required.' })
@@ -105,14 +108,42 @@ export class ResourcesController {
     return resources.map(toResourceResponse);
   }
 
+  @Get(':id/units')
+  @Roles(UserRole.DEPARTMENT_HEAD, UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR, UserRole.TEAM_LEAD)
+  @ApiOperation({ summary: 'List individual units in a resource group', description: 'Returns each physical unit with its generated unit number, optional serial/asset tag, availability status, and current allocation details.' })
+  @ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Resource units ordered by unit number.', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, unitNumber: { type: 'integer' }, serialNumber: { type: 'string', nullable: true }, assetTag: { type: 'string', nullable: true }, status: { type: 'string', enum: ['AVAILABLE', 'RESERVED', 'ALLOCATED'] }, reservedForRequestId: { type: 'string', format: 'uuid', nullable: true }, currentAllocation: { type: 'object', nullable: true, additionalProperties: true } } } } })
+  @ApiResponse({ status: 404, description: 'Resource not found.' })
+  async getResourceUnits(@Param('id', ParseUUIDPipe) id: string) {
+    return this.resourcesService.getResourceUnits(id);
+  }
+
+  @Patch(':id/units/:unitId')
+  @Roles(UserRole.LINE_MANAGER, UserRole.MANAGING_DIRECTOR)
+  @ApiOperation({ summary: 'Record a unit serial number or asset tag', description: 'Line Manager or Managing Director only.' })
+  @ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
+  @ApiParam({ name: 'unitId', description: 'Unit UUID', format: 'uuid' })
+  @ApiBody({ type: UpdateResourceUnitDto })
+  @ApiResponse({ status: 200, description: 'Updated unit identifiers.' })
+  @ApiResponse({ status: 400, description: 'No unit identifier was provided or the data is invalid.' })
+  @ApiResponse({ status: 404, description: 'Resource unit not found.' })
+  @ApiResponse({ status: 409, description: 'Asset tag is already assigned to another unit.' })
+  async updateResourceUnit(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('unitId', ParseUUIDPipe) unitId: string,
+    @Body() dto: UpdateResourceUnitDto,
+  ) {
+    return this.resourcesService.updateResourceUnit(id, unitId, dto);
+  }
+
   @Post(':id/allocations')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.LINE_MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Allocate available resource units to a team member', description: 'Line Manager only. The project must belong to the selected team, the active assignee must belong to that team, and an optional request must be approved, routed to the caller, and match the team and project.' })
+  @ApiOperation({ summary: 'Allocate available resource units to a team member', description: 'Line Manager only. Supply exact unitIds or let the system choose units automatically. The project must belong to the selected team, the active assignee must belong to that team, and an optional request must be approved, routed to the caller, and match the team and project.' })
   @ApiParam({ name: 'id', description: 'Resource UUID', format: 'uuid' })
   @ApiBody({ type: CreateResourceAllocationDto })
-  @ApiResponse({ status: 201, description: 'Created active allocation and recorded an allocation movement.', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, quantity: { type: 'integer' }, status: { type: 'string', enum: ['ACTIVE'] }, resource: { type: 'object', additionalProperties: true }, team: { type: 'object', additionalProperties: true }, project: { type: 'object', additionalProperties: true }, assignedTo: { type: 'object', additionalProperties: true }, allocatedBy: { type: 'object', additionalProperties: true }, request: { type: 'object', nullable: true, additionalProperties: true }, expectedReturnAt: { type: 'string', format: 'date-time', nullable: true }, returnedAt: { type: 'string', format: 'date-time', nullable: true }, allocatedAt: { type: 'string', format: 'date-time' } } } })
+  @ApiResponse({ status: 201, description: 'Created active allocation and recorded an allocation movement.', schema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, quantity: { type: 'integer' }, units: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, unitNumber: { type: 'integer' }, serialNumber: { type: 'string', nullable: true }, assetTag: { type: 'string', nullable: true } } } }, status: { type: 'string', enum: ['ACTIVE'] }, resource: { type: 'object', additionalProperties: true }, team: { type: 'object', additionalProperties: true }, project: { type: 'object', additionalProperties: true }, assignedTo: { type: 'object', additionalProperties: true }, allocatedBy: { type: 'object', additionalProperties: true }, request: { type: 'object', nullable: true, additionalProperties: true }, expectedReturnAt: { type: 'string', format: 'date-time', nullable: true }, returnedAt: { type: 'string', format: 'date-time', nullable: true }, allocatedAt: { type: 'string', format: 'date-time' } } } })
   @ApiResponse({ status: 400, description: 'Invalid destination or allocation data.' })
   @ApiResponse({ status: 401, description: 'A valid bearer access token is required.' })
   @ApiResponse({ status: 403, description: 'Only Line Managers can allocate resources or allocate against requests assigned to them.' })

@@ -7,7 +7,6 @@ import {
   IsUUID,
   Min,
   MaxLength,
-  IsUUID,
 } from 'class-validator';
 
 
@@ -28,10 +27,11 @@ export class CreateResourceRequestDto {
   @MaxLength(2000)
   itemDescription: string;
 
-  @ApiProperty({ description: 'Batch number printed on the item or its packaging', example: 'LOT-2026-04' })
+  @ApiPropertyOptional({ description: 'Batch number, if known when the request is submitted', example: 'LOT-2026-04' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  batchNumber: string;
+  @MaxLength(255)
+  batchNumber?: string;
 
   @ApiProperty({ example: 3, minimum: 1 })
   @IsInt()

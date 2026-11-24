@@ -148,7 +148,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'List project members grouped by team, optionally filtered to one team' })
-  @ApiResponse({ status: 200, description: 'Project members grouped by team', schema: { type: 'object', properties: { projectId: { type: 'integer' }, projectName: { type: 'string' }, teams: { type: 'array', items: { type: 'object', properties: { teamId: { type: 'integer' }, teamName: { type: 'string' }, members: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' } } } } } } } } } })
+  @ApiResponse({ status: 200, description: 'Project members grouped by team', schema: { type: 'object', properties: { projectId: { type: 'integer' }, projectName: { type: 'string' }, teams: { type: 'array', items: { type: 'object', properties: { teamId: { type: 'integer' }, teamName: { type: 'string' }, members: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, firstName: { type: 'string' }, middleName: { type: 'string', nullable: true }, surname: { type: 'string' } } } } } } } } } })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid or missing token' })
   @ApiResponse({ status: 403, description: 'Forbidden: Insufficient permissions or department access' })
   @ApiResponse({ status: 404, description: 'Project does not exist' })
