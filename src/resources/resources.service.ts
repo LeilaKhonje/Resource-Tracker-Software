@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, FindOptionsWhere, ILike, Repository } from 'typeorm';
+import { DataSource, EntityManager, FindOptionsWhere, ILike, In, IsNull, Repository } from 'typeorm';
 import {
   CreateResourceDto,
   isInsourcedResourceInput,
@@ -28,6 +28,9 @@ import { Project } from '../projects/entities/project.entity';
 import { User } from '../users/user.entity';
 import { UserRole } from '../users/user-role.enum';
 import { EmailService } from '../email/email.service';
+import { userNameResponse } from '../users/user-name.util';
+import { ResourceUnit, ResourceUnitStatus } from './entities/resource-unit.entity';
+import { UpdateResourceUnitDto } from './dto/update-resource-unit.dto';
 
 const INSOURCED_FIELDS = ['description', 'departmentName'] as const;
 const OUTSOURCED_FIELDS = ['price', 'label', 'batchNumber', 'vendor'] as const;
@@ -46,27 +49,41 @@ export class ResourcesService {
   async createResource(dto: CreateResourceDto): Promise<Resources> {
     if (isInsourcedResourceInput(dto)) {
       const department = await this.findDepartmentByName(dto.departmentName);
-      const resource = this.resourcesRepository.create({
-        name: dto.name.trim(),
-        type: ResourceType.INSOURCED,
-        description: dto.description.trim(),
-        department,
-        quantity: dto.quantity,
+      return this.dataSource.transaction(async (manager) => {
+        const resource = await manager.getRepository(Resources).save(manager.getRepository(Resources).create({
+          name: dto.name.trim(),
+          type: ResourceType.INSOURCED,
+          description: dto.description.trim(),
+          department,
+          quantity: dto.quantity,
+        }));
+        await this.addResourceUnits(manager, resource, dto.quantity);
+        resource.units = await manager.getRepository(ResourceUnit).find({
+          where: { resource: { id: resource.id } },
+          order: { unitNumber: 'ASC' },
+        });
+        return resource;
       });
-      return this.resourcesRepository.save(resource);
     }
 
     if (isOutsourcedResourceInput(dto)) {
-      const resource = this.resourcesRepository.create({
-        name: dto.name.trim(),
-        type: ResourceType.OUTSOURCED,
-        price: dto.price,
-        label: dto.label.trim(),
-        batchNumber: dto.batchNumber.trim(),
-        vendor: dto.vendor.trim(),
-        quantity: dto.quantity,
+      return this.dataSource.transaction(async (manager) => {
+        const resource = await manager.getRepository(Resources).save(manager.getRepository(Resources).create({
+          name: dto.name.trim(),
+          type: ResourceType.OUTSOURCED,
+          price: dto.price,
+          label: dto.label.trim(),
+          batchNumber: dto.batchNumber.trim(),
+          vendor: dto.vendor.trim(),
+          quantity: dto.quantity,
+        }));
+        await this.addResourceUnits(manager, resource, dto.quantity);
+        resource.units = await manager.getRepository(ResourceUnit).find({
+          where: { resource: { id: resource.id } },
+          order: { unitNumber: 'ASC' },
+        });
+        return resource;
       });
-      return this.resourcesRepository.save(resource);
     }
 
     throw new BadRequestException('Resource type must be insourced or outsourced.');
@@ -82,6 +99,49 @@ export class ResourcesService {
       relations: { department: true },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async getResourceUnits(resourceId: string) {
+    await this.findOne(resourceId);
+    const units = await this.dataSource.getRepository(ResourceUnit).find({
+      where: { resource: { id: resourceId } },
+      relations: {
+        currentAllocation: { assignedTo: true, allocatedBy: true, team: true, project: true },
+        reservedForRequest: true,
+      },
+      order: { unitNumber: 'ASC' },
+    });
+    return units.map((unit) => this.resourceUnitResponse(unit));
+  }
+
+  async updateResourceUnit(resourceId: string, unitId: string, dto: UpdateResourceUnitDto) {
+    if (Object.keys(dto).length === 0) {
+      throw new BadRequestException('Provide a serialNumber or assetTag to update');
+    }
+    const unit = await this.dataSource.getRepository(ResourceUnit).findOne({
+      where: { id: unitId, resource: { id: resourceId } },
+    });
+    if (!unit) throw new NotFoundException(`Unit ${unitId} not found for resource ${resourceId}`);
+    if (dto.serialNumber !== undefined) unit.serialNumber = dto.serialNumber.trim() || null;
+    if (dto.assetTag !== undefined) unit.assetTag = dto.assetTag.trim() || null;
+    try {
+      const repository = this.dataSource.getRepository(ResourceUnit);
+      await repository.save(unit);
+      const updated = await repository.findOne({
+        where: { id: unit.id },
+        relations: {
+          currentAllocation: { assignedTo: true, allocatedBy: true, team: true, project: true },
+          reservedForRequest: true,
+        },
+      });
+      return this.resourceUnitResponse(updated ?? unit);
+    } catch (error) {
+      const driverError = (error as { driverError?: { code?: string } })?.driverError;
+      if (driverError?.code === 'ER_DUP_ENTRY') {
+        throw new ConflictException('The asset tag is already assigned to another unit');
+      }
+      throw error;
+    }
   }
 
   async createAllocation(resourceId: string, dto: CreateResourceAllocationDto, actorId: string) {
@@ -119,7 +179,8 @@ export class ResourcesService {
           .andWhere('allocation.status != :transferred', { transferred: AllocationStatus.TRANSFERRED })
           .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
           .getRawOne<{ quantity: string }>();
-        const remainingRequestQuantity = request.quantity - Number(previouslyFulfilled?.quantity ?? 0);
+        const approvedQuantity = request.approvedQuantity ?? request.quantity;
+        const remainingRequestQuantity = approvedQuantity - Number(previouslyFulfilled?.quantity ?? 0);
         if (dto.quantity > remainingRequestQuantity) {
           throw new ConflictException(`Only ${Math.max(0, remainingRequestQuantity)} units remain to fulfill this request`);
         }
@@ -129,6 +190,8 @@ export class ResourcesService {
       } else if (dto.quantity > availableQuantity) {
         throw new ConflictException(`Only ${Math.max(0, availableQuantity)} units are available`);
       }
+
+      const units = await this.selectUnits(manager, resourceId, dto, request);
 
       const expectedReturnAt = dto.expectedReturnAt
         ? new Date(dto.expectedReturnAt)
@@ -142,7 +205,8 @@ export class ResourcesService {
       const allocationRepo = manager.getRepository(ResourceAllocation);
       const allocation = await allocationRepo.save(allocationRepo.create({
         resource,
-        quantity: dto.quantity,
+        quantity: units.length,
+        units,
         team: destination.team,
         project: destination.project,
         assignedTo: destination.assignedTo,
@@ -152,6 +216,12 @@ export class ResourcesService {
         expectedReturnAt,
         returnedAt: null,
       }));
+      for (const unit of units) {
+        unit.status = ResourceUnitStatus.ALLOCATED;
+        unit.currentAllocation = allocation;
+        unit.reservedForRequest = null;
+      }
+      await manager.getRepository(ResourceUnit).save(units);
       await this.refreshResourceStatus(manager, resource);
       await this.recordMovement(manager, {
         resource,
@@ -164,10 +234,10 @@ export class ResourcesService {
         performedBy: { id: actorId } as User,
       });
       await this.email.send(destination.assignedTo.email, 'Resource allocated to you', `${allocation.quantity} unit(s) of ${resource.name} have been allocated to you.`);
-      return allocationRepo.findOne({
+      return this.allocationNameResponse(await allocationRepo.findOne({
         where: { id: allocation.id },
-        relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true },
-      });
+        relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true, units: true },
+      }));
     });
   }
 
@@ -187,7 +257,7 @@ export class ResourcesService {
       const allocationRepo = manager.getRepository(ResourceAllocation);
       const allocation = await allocationRepo.findOne({
         where: { id: allocationId },
-        relations: { team: true, project: true, assignedTo: true },
+        relations: { team: true, project: true, assignedTo: true, units: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!allocation) throw new NotFoundException(`Allocation ${allocationId} not found`);
@@ -197,6 +267,12 @@ export class ResourcesService {
       allocation.status = AllocationStatus.RETURNED;
       allocation.returnedAt = new Date();
       await allocationRepo.save(allocation);
+      for (const unit of allocation.units) {
+        unit.status = ResourceUnitStatus.AVAILABLE;
+        unit.currentAllocation = null;
+        unit.reservedForRequest = null;
+      }
+      if (allocation.units.length > 0) await manager.getRepository(ResourceUnit).save(allocation.units);
       await this.refreshResourceStatus(manager, resource);
       await this.recordMovement(manager, {
         resource,
@@ -210,10 +286,10 @@ export class ResourcesService {
         note,
       });
       await this.email.send(allocation.assignedTo.email, 'Resource returned', `${allocation.quantity} unit(s) of ${resource.name} have been marked as returned.`);
-      return allocationRepo.findOne({
+      return this.allocationNameResponse(await allocationRepo.findOne({
         where: { id: allocation.id },
-        relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true },
-      });
+        relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true, units: true },
+      }));
     });
   }
 
@@ -233,7 +309,7 @@ export class ResourcesService {
       const allocationRepo = manager.getRepository(ResourceAllocation);
       const oldAllocation = await allocationRepo.findOne({
         where: { id: allocationId },
-        relations: { team: true, project: true, assignedTo: true, request: true },
+        relations: { team: true, project: true, assignedTo: true, request: true, units: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!oldAllocation) throw new NotFoundException(`Allocation ${allocationId} not found`);
@@ -248,6 +324,7 @@ export class ResourcesService {
       const newAllocation = await allocationRepo.save(allocationRepo.create({
         resource,
         quantity: oldAllocation.quantity,
+        units: oldAllocation.units,
         team: destination.team,
         project: destination.project,
         assignedTo: destination.assignedTo,
@@ -257,6 +334,8 @@ export class ResourcesService {
         expectedReturnAt: dto.expectedReturnAt ? new Date(dto.expectedReturnAt) : oldAllocation.expectedReturnAt,
         returnedAt: null,
       }));
+      for (const unit of oldAllocation.units) unit.currentAllocation = newAllocation;
+      if (oldAllocation.units.length > 0) await manager.getRepository(ResourceUnit).save(oldAllocation.units);
       await this.refreshResourceStatus(manager, resource);
       await this.recordMovement(manager, {
         resource,
@@ -273,29 +352,116 @@ export class ResourcesService {
         note: dto.note,
       });
       await this.email.send(destination.assignedTo.email, 'Resource transferred to you', `${oldAllocation.quantity} unit(s) of ${resource.name} have been transferred to you.`);
-      return allocationRepo.findOne({
+      return this.allocationNameResponse(await allocationRepo.findOne({
         where: { id: newAllocation.id },
-        relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true },
-      });
+        relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true, units: true },
+      }));
     });
   }
 
   async getActiveAllocations(resourceId: string) {
     await this.findOne(resourceId);
-    return this.dataSource.getRepository(ResourceAllocation).find({
+    const allocations = await this.dataSource.getRepository(ResourceAllocation).find({
       where: { resource: { id: resourceId }, status: AllocationStatus.ACTIVE },
-      relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true },
+      relations: { resource: true, team: true, project: true, assignedTo: true, allocatedBy: true, request: true, units: true },
       order: { allocatedAt: 'DESC' },
     });
+    return allocations.map((allocation) => this.allocationNameResponse(allocation));
   }
 
   async getResourceMovements(resourceId: string) {
     await this.findOne(resourceId);
-    return this.dataSource.getRepository(ResourceMovement).find({
+    const movements = await this.dataSource.getRepository(ResourceMovement).find({
       where: { resource: { id: resourceId } },
-      relations: { allocation: true, performedBy: true },
+      relations: { allocation: { units: true }, performedBy: true },
       order: { occurredAt: 'ASC' },
     });
+    return movements.map((movement) => ({
+      ...movement,
+      allocation: movement.allocation ? this.allocationNameResponse(movement.allocation) : movement.allocation,
+      performedBy: movement.performedBy ? userNameResponse(movement.performedBy) : null,
+    }));
+  }
+
+  private allocationNameResponse<T extends ResourceAllocation | null>(allocation: T) {
+    if (!allocation) return allocation;
+    return {
+      ...allocation,
+      assignedTo: allocation.assignedTo ? userNameResponse(allocation.assignedTo) : null,
+      allocatedBy: allocation.allocatedBy ? userNameResponse(allocation.allocatedBy) : null,
+    };
+  }
+
+  private resourceUnitResponse(unit: ResourceUnit) {
+    return {
+      id: unit.id,
+      unitNumber: unit.unitNumber,
+      serialNumber: unit.serialNumber,
+      assetTag: unit.assetTag,
+      status: unit.status,
+      reservedForRequestId: unit.reservedForRequest?.id ?? null,
+      currentAllocation: unit.currentAllocation
+        ? this.allocationNameResponse(unit.currentAllocation)
+        : null,
+    };
+  }
+
+  private async addResourceUnits(manager: EntityManager, resource: Resources, quantity: number) {
+    const repository = manager.getRepository(ResourceUnit);
+    const lastUnit = await repository.findOne({
+      where: { resource: { id: resource.id } },
+      select: { unitNumber: true },
+      order: { unitNumber: 'DESC' },
+    });
+    const firstNumber = (lastUnit?.unitNumber ?? 0) + 1;
+    const units = repository.create(Array.from({ length: quantity }, (_, index) => ({
+      resource,
+      unitNumber: firstNumber + index,
+      serialNumber: null,
+      assetTag: null,
+      status: ResourceUnitStatus.AVAILABLE,
+      currentAllocation: null,
+      reservedForRequest: null,
+    })));
+    await repository.save(units);
+  }
+
+  private async selectUnits(
+    manager: EntityManager,
+    resourceId: string,
+    dto: CreateResourceAllocationDto,
+    request: ResourceRequest | null,
+  ) {
+    const repository = manager.getRepository(ResourceUnit);
+    const status = request ? ResourceUnitStatus.RESERVED : ResourceUnitStatus.AVAILABLE;
+    const baseWhere = {
+      resource: { id: resourceId },
+      status,
+      reservedForRequest: request ? { id: request.id } : IsNull(),
+    };
+    let units: ResourceUnit[];
+    if (dto.unitIds) {
+      if (dto.unitIds.length !== dto.quantity) {
+        throw new BadRequestException('unitIds must contain exactly quantity unit IDs');
+      }
+      units = await repository.find({
+        where: { ...baseWhere, id: In(dto.unitIds) },
+        order: { unitNumber: 'ASC' },
+      });
+      if (units.length !== dto.quantity) {
+        throw new ConflictException('One or more selected units are unavailable or not eligible for this request');
+      }
+    } else {
+      units = await repository.find({
+        where: baseWhere,
+        order: { unitNumber: 'ASC' },
+        take: dto.quantity,
+      });
+      if (units.length < dto.quantity) {
+        throw new ConflictException(`Only ${units.length} eligible units are available`);
+      }
+    }
+    return units;
   }
 
   async findOne(id: string): Promise<Resources> {
@@ -334,47 +500,46 @@ export class ResourcesService {
           Object.assign(resource, { [field]: value });
         }
       }
-      await this.assertQuantityCoversAllocations(manager, resource);
+      await this.syncResourceUnits(manager, resource);
       await this.refreshResourceStatus(manager, resource);
       return manager.getRepository(Resources).save(resource);
     });
   }
 
-  private async assertQuantityCoversAllocations(manager: EntityManager, resource: Resources) {
-    const active = await this.getActiveAllocationQuantity(manager, resource.id);
-    if (resource.quantity < active) {
+  private async syncResourceUnits(manager: EntityManager, resource: Resources) {
+    const repository = manager.getRepository(ResourceUnit);
+    const units = await repository.find({
+      where: { resource: { id: resource.id } },
+      order: { unitNumber: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    const occupiedUnits = units.filter((unit) => unit.status !== ResourceUnitStatus.AVAILABLE).length;
+    if (resource.quantity < occupiedUnits) {
       throw new ConflictException(
-        `Quantity cannot be lower than the ${active} units currently allocated`,
+        `Quantity cannot be lower than the ${occupiedUnits} units currently reserved or allocated`,
       );
     }
-  }
-
-  private async getActiveAllocationQuantity(manager: EntityManager, resourceId: string) {
-    const result = await manager.getRepository(ResourceAllocation)
-      .createQueryBuilder('allocation')
-      .where('allocation.resource_id = :resourceId', { resourceId })
-      .andWhere('allocation.status = :status', { status: AllocationStatus.ACTIVE })
-      .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
-      .getRawOne<{ quantity: string }>();
-    return Number(result?.quantity ?? 0);
+    if (units.length < resource.quantity) {
+      await this.addResourceUnits(manager, resource, resource.quantity - units.length);
+      return;
+    }
+    if (units.length > resource.quantity) {
+      const availableToRemove = units
+        .filter((unit) => unit.status === ResourceUnitStatus.AVAILABLE)
+        .slice(0, units.length - resource.quantity);
+      if (availableToRemove.length !== units.length - resource.quantity) {
+        throw new ConflictException('Only unreserved, unallocated units can be removed from the resource quantity');
+      }
+      await repository.remove(availableToRemove);
+    }
   }
 
   private async getAvailableQuantity(manager: EntityManager, resourceId: string) {
     const resource = await manager.getRepository(Resources).findOne({ where: { id: resourceId } });
     if (!resource) throw new NotFoundException(`Resource with id "${resourceId}" not found`);
-    const activeQuantity = await this.getActiveAllocationQuantity(manager, resourceId);
-    const approved = await manager.getRepository(ResourceRequest).createQueryBuilder('request')
-      .where('request.resourceId = :resourceId', { resourceId })
-      .andWhere('request.status = :status', { status: RequestStatus.APPROVED })
-      .select('COALESCE(SUM(request.quantity), 0)', 'quantity')
-      .getRawOne<{ quantity: string }>();
-    const fulfilled = await manager.getRepository(ResourceAllocation).createQueryBuilder('allocation')
-      .innerJoin('allocation.request', 'request')
-      .where('request.resourceId = :resourceId', { resourceId })
-      .select('COALESCE(SUM(allocation.quantity), 0)', 'quantity')
-      .getRawOne<{ quantity: string }>();
-    const reservation = Math.max(0, Number(approved?.quantity ?? 0) - Number(fulfilled?.quantity ?? 0));
-    return Math.max(0, resource.quantity - activeQuantity - reservation);
+    return manager.getRepository(ResourceUnit).count({
+      where: { resource: { id: resourceId }, status: ResourceUnitStatus.AVAILABLE },
+    });
   }
 
   private async refreshResourceStatus(manager: EntityManager, resource: Resources) {

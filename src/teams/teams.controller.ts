@@ -48,7 +48,7 @@ export class TeamsController {
   @Roles(UserRole.DEPARTMENT_HEAD)
   @ApiOperation({ summary: 'List active Team Leads and Team Members without a team' })
   @ApiQuery({ name: 'role', required: false, enum: [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] })
-  @ApiResponse({ status: 200, description: 'Unassigned active users, ordered by name.', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] } } } } })
+  @ApiResponse({ status: 200, description: 'Unassigned active users, ordered by name.', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, firstName: { type: 'string' }, middleName: { type: 'string', nullable: true }, surname: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: [UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER] } } } } })
   @ApiResponse({ status: 400, description: 'Role filter must be team_lead or team_member' })
   @ApiResponse({ status: 401, description: 'Authentication is missing or invalid.' })
   @ApiResponse({ status: 403, description: 'Only department heads can list unassigned users.' })
@@ -62,7 +62,7 @@ export class TeamsController {
   @Roles(UserRole.DEPARTMENT_HEAD, UserRole.TEAM_LEAD, UserRole.TEAM_MEMBER)
   @ApiOperation({ summary: 'List users assigned to a team', description: 'Returns the users currently assigned to this team. Department Heads, Team Leads, and Team Members may call this route.' })
   @ApiParam({ name: 'id', description: 'Numeric team ID', type: Number, example: 1 })
-  @ApiResponse({ status: 200, description: 'Team members', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fullName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true } } } } })
+  @ApiResponse({ status: 200, description: 'Team members', schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, firstName: { type: 'string' }, middleName: { type: 'string', nullable: true }, surname: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', nullable: true } } } } })
   @ApiResponse({ status: 404, description: 'Team not found' })
   findUsers(@Param('id') id: string) {
     return this.teamsService.findUsers(Number(id));

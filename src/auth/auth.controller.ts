@@ -15,7 +15,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @ApiOperation({ summary: 'Login a user' })
-  @ApiResponse({ status: 200, description: 'User logged in successfully. For a newly created account, mustChangePassword is true and the user must change the temporary password before using other endpoints.', schema: { type: 'object', properties: { accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }, refreshToken: { type: 'string' }, mustChangePassword: { type: 'boolean' } }, required: ['accessToken', 'refreshToken', 'mustChangePassword'] } })
+  @ApiResponse({ status: 200, description: 'User logged in successfully. The access token includes a mustChangePassword boolean claim. Expiry timestamps are returned for both tokens. For a newly created account, the claim is true and the user must change the temporary password before using other endpoints.', schema: { type: 'object', properties: { accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }, refreshToken: { type: 'string' }, accessTokenExpiresAt: { type: 'string', format: 'date-time' }, refreshTokenExpiresAt: { type: 'string', format: 'date-time' } }, required: ['accessToken', 'refreshToken', 'accessTokenExpiresAt', 'refreshTokenExpiresAt'] } })
   @ApiResponse({ status: 400, description: 'Invalid email or password field format' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Invalid credentials' })
   @ApiBody({ 
@@ -44,20 +44,26 @@ export class AuthController {
   @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({
     status: 200,
-    description: 'New access and refresh tokens issued. Includes mustChangePassword for accounts with a temporary password.',
+    description: 'New access and refresh tokens issued with their expiry timestamps. The access token includes the mustChangePassword boolean claim.',
     schema: {
       type: 'object',
       properties: {
         accessToken: { type: 'string' },
         refreshToken: { type: 'string' },
-        mustChangePassword: { type: 'boolean' },
+        accessTokenExpiresAt: { type: 'string', format: 'date-time' },
+        refreshTokenExpiresAt: { type: 'string', format: 'date-time' },
       },
-      required: ['accessToken', 'refreshToken', 'mustChangePassword'],
+      required: [
+        'accessToken',
+        'refreshToken',
+        'accessTokenExpiresAt',
+        'refreshTokenExpiresAt',
+      ],
     },
   })
   @ApiResponse({
     status: 401,
-    description: 'Refresh token is invalid, expired, or user is inactive',
+    description: 'Refresh token is invalid, expired, or user is inactive. The client should clear both stored tokens and require sign-in.',
   })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)

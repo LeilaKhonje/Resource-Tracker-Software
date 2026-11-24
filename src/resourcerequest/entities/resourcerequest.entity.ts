@@ -53,14 +53,17 @@ export class ResourceRequest {
   })
   price: number | null;
 
-  @Column()
-  batchNumber: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  batchNumber: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   vendor: string | null;
 
   @Column({ default: 1 })
   quantity: number;
+
+  @Column({ type: 'int', nullable: true })
+  approvedQuantity: number | null;
 
   @Column({ type: 'int', nullable: true })
   expectedDurationDays: number | null;

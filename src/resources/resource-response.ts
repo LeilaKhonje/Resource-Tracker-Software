@@ -9,6 +9,17 @@ export function toResourceResponse(resource: Resources) {
     status: resource.status,
     batchNumber: resource.batchNumber,
     quantity: resource.quantity,
+    ...(resource.units
+      ? {
+          units: resource.units.map((unit) => ({
+            id: unit.id,
+            unitNumber: unit.unitNumber,
+            serialNumber: unit.serialNumber,
+            assetTag: unit.assetTag,
+            status: unit.status,
+          })),
+        }
+      : {}),
     createdAt: resource.createdAt,
     updatedAt: resource.updatedAt,
   };

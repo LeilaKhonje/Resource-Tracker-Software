@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../users/user.entity';
+import { ACCESS_TOKEN_TTL_SECONDS } from './auth.constants';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { User } from '../users/user.entity';
         }
         return {
           secret,
-          signOptions: { expiresIn: '1h' },
+          signOptions: { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
         };
       },
     }),
