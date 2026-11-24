@@ -216,10 +216,10 @@ The following use cases describe the principal interactions between Resource Tra
 | --- | --- |
 | Actors | Line Manager |
 | Description | Approve, reject, or query a submitted request. |
-| Data | Request ID, decision status, optional review note. |
+| Data | Request ID, decision status, optional approved quantity, optional review note. |
 | Stimulus | Line Manager records a review decision. |
-| Response | System updates status and review details, records the decision in the audit trail, and notifies the Team Lead. |
-| Comment | Rejection and query require a note. |
+| Response | System updates status and review details, records the decision in the audit trail, reserves the approved units, and tells the Team Lead the approved quantity. |
+| Comment | `approvedQuantity` may be from 1 through the requested quantity and defaults to the full quantity. Rejection and query require a note. Approval sends email and an in-app notification with the approved count; rejection and query send email. |
 
 ##### UC-20: Edit and resubmit a queried request.
 
@@ -229,8 +229,8 @@ The following use cases describe the principal interactions between Resource Tra
 | Description | Edit and resubmit a queried request. |
 | Data | Request ID and updated request fields; resubmission status. |
 | Stimulus | Team Lead responds to a query and resubmits. |
-| Response | System updates the request and returns it to the review workflow, notifying the assigned Line Manager. |
-| Comment | A positive expected duration is required before resubmission. |
+| Response | System updates the request and returns it to the review workflow. |
+| Comment | A positive expected duration is required before resubmission. The current API does not notify the Line Manager when a request is resubmitted. |
 
 #### Resource catalogue and allocations
 
@@ -242,8 +242,8 @@ The following use cases describe the principal interactions between Resource Tra
 | Description | Add or update a resource catalogue entry. |
 | Data | Name, type, quantity, and type-specific fields: insourced description/department or outsourced price/label/batch/vendor. |
 | Stimulus | Managing Director submits a resource record or edits an existing record. |
-| Response | System saves and returns the catalogue entry. |
-| Comment | Quantity cannot be reduced below currently allocated units; the system does not place purchase orders. |
+| Response | System saves and returns the catalogue group and its individually tracked units. |
+| Comment | Creating a group generates one unit per quantity. Each unit has a generated ID and group-local number, status, and optional serial number and asset tag. Quantity cannot be reduced below reserved and allocated units; the system does not place purchase orders. |
 
 ##### UC-22: Search and view resource catalogue entries.
 
@@ -265,7 +265,7 @@ The following use cases describe the principal interactions between Resource Tra
 | Data | No required input; optional resource filters where supported. |
 | Stimulus | Line Manager opens the availability view. |
 | Response | System returns resources grouped by type with available quantities. |
-| Comment | Available quantity is catalogue quantity minus active allocations. |
+| Comment | Availability is based on unit status: only `AVAILABLE` units can be assigned; `RESERVED` units are held for an approved request and `ALLOCATED` units have a current holder. |
 
 ##### UC-24: Allocate a resource to a team member.
 
@@ -273,10 +273,10 @@ The following use cases describe the principal interactions between Resource Tra
 | --- | --- |
 | Actors | Line Manager |
 | Description | Allocate a resource to a team member. |
-| Data | Resource ID, quantity, team, project, assignee, optional expected return date and approved request ID. |
+| Data | Resource ID, quantity, optional exact unit IDs, team, project, assignee, optional expected return date and approved request ID. |
 | Stimulus | Line Manager assigns available units. |
-| Response | System creates an active allocation and movement record, updates availability, and notifies the assignee. |
-| Comment | Assignee must be active and belong to the selected team; project must belong to that team. Allocation cannot exceed stock or linked request balance. |
+| Response | System creates an active allocation and movement record for the selected units, updates their status to `ALLOCATED`, and notifies the assignee. |
+| Comment | Assignee must be active and belong to the selected team; project must belong to that team. The system selects available units if IDs are omitted. For a linked request, it uses that request's reserved units and enforces its approved quantity balance. |
 
 ##### UC-25: Review current allocations for a resource.
 
@@ -286,7 +286,7 @@ The following use cases describe the principal interactions between Resource Tra
 | Description | Review current allocations for a resource. |
 | Data | Resource ID. |
 | Stimulus | Line Manager requests allocation details. |
-| Response | System returns active assignments with assignee, team, project, quantity, and expected return date. |
+| Response | System returns active assignments with assignee, team, project, quantity, exact unit identities, and expected return date. |
 | Comment | Shows current holders and active allocations. |
 
 ##### UC-26: Transfer an active allocation.
@@ -297,7 +297,7 @@ The following use cases describe the principal interactions between Resource Tra
 | Description | Transfer an active allocation. |
 | Data | Allocation ID, destination user/team/project, optional expected return date and note. |
 | Stimulus | Line Manager transfers the assigned resource. |
-| Response | System closes the old assignment, creates a new active assignment for the same resource and quantity, records movement details, and notifies the new assignee. |
+| Response | System closes the old assignment, creates a new active assignment for the same resource, quantity, and unit identities, records movement details, and notifies the new assignee. |
 | Comment | Destination user must be active and team/project assignment valid; existing return date is preserved unless replaced. |
 
 ##### UC-27: Record a resource return.
@@ -308,7 +308,7 @@ The following use cases describe the principal interactions between Resource Tra
 | Description | Record a resource return. |
 | Data | Allocation ID and optional note. |
 | Stimulus | Line Manager marks an active allocation as returned. |
-| Response | System closes the allocation, records the return movement, releases the quantity to available stock, and notifies the assignee. |
+| Response | System closes the allocation, records the return movement, changes its units to `AVAILABLE`, and notifies the assignee. |
 | Comment | Only active allocations can be returned. |
 
 #### Movement history
@@ -321,7 +321,7 @@ The following use cases describe the principal interactions between Resource Tra
 | Description | Review a resource's movement history. |
 | Data | Resource ID. |
 | Stimulus | Line Manager opens movement history. |
-| Response | System returns chronological allocation, transfer, and return events with users and organizational assignments. |
+| Response | System returns chronological allocation, transfer, and return events with users, organizational assignments, and affected unit identities. |
 | Comment | History supports accountability for resource custody. |
 
 #### Notifications, dashboards, and oversight
@@ -335,7 +335,7 @@ The following use cases describe the principal interactions between Resource Tra
 | Data | Assigned Line Manager, request details, message and timestamp. |
 | Stimulus | A Team Lead submits a resource request. |
 | Response | System stores an unread notification for the assigned Line Manager; the system also sends that manager an email. |
-| Comment | Request review and allocation events currently send email where configured, but do not create in-app notifications. |
+| Comment | Approval also creates an in-app notification for the Team Lead with the approved quantity. Rejection and query send email but do not create in-app notifications. Allocation events currently send email where configured. |
 
 ##### UC-30: View and manage notifications.
 
@@ -403,3 +403,14 @@ The following use cases describe the principal interactions between Resource Tra
 | Stimulus | User submits an account deletion request or signs in before the scheduled deletion date. |
 | Response | System schedules account deletion five days after a valid request. A successful sign-in within that period cancels the scheduled deletion. |
 | Comment | The current password is verified. Scheduling deletion revokes the refresh token; only the account owner can request deletion. |
+
+##### UC-36: Inspect and identify individual units in a resource group.
+
+| Field | Details |
+| --- | --- |
+| Actors | Department Head; Line Manager; Managing Director; Team Lead |
+| Description | View a resource group's individual units and record physical identifiers. |
+| Data | Resource ID; optional unit ID, serial number, and asset tag. |
+| Stimulus | Actor opens a resource's unit list or records identifying information for a unit. |
+| Response | System returns units ordered by unit number with their status, reservation or current allocation, serial number, and asset tag. Line Managers and Managing Directors can update the serial number or asset tag. |
+| Comment | Unit IDs and unit numbers are generated when the resource group is created. A serial number or asset tag can identify the physical item; asset tags must be unique. |

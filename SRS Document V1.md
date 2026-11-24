@@ -2,9 +2,9 @@
 
 ## Resource Tracker
 
-**Version:** 1.2
+**Version:** 1.3
 
-**Date:** 20 November 2026
+**Date:** 24 November 2026
 
 **Status:** Implementation baseline
 
@@ -38,7 +38,7 @@ Resource Tracker is an API-backed system for managing organizational users, depa
 - Role-based operations for System Admins, Team Leads, Line Managers, Department Heads, Managing Directors, and Team Members.
 - Department, team, project, and membership management.
 - Team Lead resource requests routed to a selected active Line Manager, with approval, rejection, query, and request history.
-- Insourced and outsourced resource catalogue records, allocations, transfers, returns, and movement history.
+- Insourced and outsourced resource groups with individually tracked units, allocations, transfers, returns, and movement history.
 - In-app notifications and email notifications for selected request and allocation events.
 - Dashboard data, reports, and audit-log queries.
 
@@ -52,6 +52,8 @@ The system does not place purchase orders. Resource catalogue quantities and all
 | FR | Functional requirement |
 | NFR | Non-functional requirement |
 | Resource request | A Team Lead's request for a resource for a team and project |
+| Resource unit | One individually tracked item within a resource catalogue group, with a generated identifier and unit number, optional serial number or asset tag, and availability status |
+| Reserved unit | An available unit held for an approved resource request until it is allocated |
 | Active allocation | A resource assignment that has not been returned or transferred out |
 | Movement | A recorded allocation, transfer, or return event |
 | Audit log | A recorded action and its actor, entity, details, and timestamp |
@@ -83,10 +85,11 @@ Role authorization is enforced per controller route, with several exceptions and
 
 #### 2.3.1 Authentication and account management
 
-- The API shall authenticate accounts using email and password and issue access and refresh tokens.
+- The API shall authenticate accounts using email and password and issue access and refresh tokens with separate `accessTokenExpiresAt` and `refreshTokenExpiresAt` timestamps. The access token shall include the `mustChangePassword` claim for users who must change their temporary password; user response objects shall not expose that property.
 - The API shall rotate tokens through the refresh operation and revoke the stored refresh token on logout.
+- An access token shall be rejected after its expiry. A valid refresh token may be exchanged for a new token pair before the refresh token expires; after it expires, the user must sign in again to establish a session.
 - Inactive accounts shall not log in or refresh a session.
-- The System Admin shall be able to create active user accounts with a unique email, full name, role, and initial password. The System Admin role is provisioned separately through the seed process and is not assignable through account creation.
+- The System Admin shall be able to create active user accounts with a unique email, `firstName`, nullable `middleName`, `surname`, role, and initial password. User API responses shall return names as separate fields, with `middleName` null when absent; they shall not return a `fullName` field. The System Admin role is provisioned separately through the seed process and is not assignable through account creation.
 - Authorized account administrators shall be able to deactivate/reactivate accounts or assign roles, subject to role-specific service rules. Account actions are written to the audit log where implemented.
 - Authenticated users shall be able to read their own profile, update supported profile fields, and change their password after supplying the current password.
 - A user shall be able to request account deletion. The request is scheduled for five days; a successful login during that grace period cancels the pending request. Expired deletion requests prevent login; actual deletion is dependent on the application's account-deletion processing.
@@ -107,6 +110,8 @@ Role authorization is enforced per controller route, with several exceptions and
 - The selected project shall be assigned to the selected team. The selected Line Manager must be active. Ambiguous matching names shall be rejected.
 - Request creation immediately submits the request with status `SUBMITTED`. The implementation does not currently provide a separate draft-creation workflow, although `DRAFT` appears in some request status definitions and query documentation.
 - The assigned Line Manager shall be able to approve, reject, or query a `SUBMITTED` request. Rejection and query require a note. The service shall record reviewer and review time and create an audit entry.
+- An approval may specify `approvedQuantity` from 1 through the requested quantity. If omitted, the full requested quantity is approved. The approved quantity shall be persisted and shall not exceed available units; the approved number of individual units is reserved for that request. The review response and requester notifications identify the approved count, such as “approved for 3 of 5”.
+- A request's approved quantity, rather than its original requested quantity, shall limit subsequent allocation. Allocations against the request shall not exceed the approved quantity, less units already allocated against it.
 - A Team Lead shall be able to edit a queried request and resubmit it. Resubmission requires complete team, department, project, Line Manager, and expected-duration details. The system records request changes and resubmission in its audit history.
 - Team Leads shall see their own requests; Line Managers shall see requests routed to them; Department Heads shall see requests for their assigned department; Managing Directors shall see all requests.
 - Authorized users shall be able to view request details. Request detail can include the chronological request audit trail when requested.
@@ -115,27 +120,28 @@ Role authorization is enforced per controller route, with several exceptions and
 #### 2.3.4 Resource catalogue and availability
 
 - The Managing Director shall be able to create and update resource catalogue entries.
-- A catalogue entry shall be either `insourced` or `outsourced`. Insourced entries store a description and department; outsourced entries store price, manufacturer's label, batch number, and vendor. Both store a name and positive quantity.
-- Department Heads, Line Managers, and Managing Directors shall be able to list/search catalogue entries by name and type. The list response indicates whether a resource is `AVAILABLE` or `ASSIGNED`.
-- Resource status shall be refreshed from active allocation quantities. Available units are catalogue quantity minus active allocated quantity.
-- Catalogue quantity shall not be reduced below allocated units. Allocations shall not exceed available quantity.
-- Line Managers shall be able to view active allocations for a resource and its chronological movement events.
+- A catalogue entry shall be either `insourced` or `outsourced`. Insourced entries store a description and department; outsourced entries store price, manufacturer's label, batch number, and vendor. Both store a name and positive quantity. Creating a group creates one `ResourceUnit` record per quantity, each with a UUID, a per-group unit number, status, and optional serial number and asset tag.
+- Department Heads, Line Managers, Managing Directors, and Team Leads shall be able to list/search catalogue entries by name and type. The list response indicates whether a resource is `AVAILABLE` or `ASSIGNED`.
+- Unit status shall be `AVAILABLE`, `RESERVED`, or `ALLOCATED`. Available quantity is the number of units with `AVAILABLE` status; reserved and allocated units cannot be assigned to another request or allocation.
+- Department Heads, Line Managers, Managing Directors, and Team Leads shall be able to list a resource's units and their status, current allocation, and reservation where applicable. Line Managers and Managing Directors shall be able to change a unit's serial number or asset tag.
+- Updating a resource quantity shall create additional unit records when it increases. A decrease shall remove available, unreserved units only and shall not reduce the quantity below occupied units (reserved or allocated).
+- Line Managers shall be able to view active allocations for a resource and its chronological movement events, including the identity of the units in each allocation.
 - **Access limitation:** the single-resource `GET /api/v1/resources/{id}` route has no authentication/role guard in the current controller. Catalogue update operations use Managing Director role guards. The catalogue and allocation access rules should therefore be understood from the implemented route guards, not inferred from the role descriptions alone.
 
 #### 2.3.5 Allocate, transfer, and return resources
 
-- A Line Manager shall be able to allocate a positive quantity to an active user belonging to the selected team, for a project assigned to that team.
-- An allocation shall record resource, quantity, team, project, assignee, allocating Line Manager, status, and allocation time. It may link to an approved request routed to that Line Manager.
-- When linked to a request, the allocation team/project shall match the request and the total quantity allocated against the request shall not exceed the request quantity remaining to fulfill.
+- A Line Manager shall be able to allocate a positive quantity of available units to an active user belonging to the selected team, for a project assigned to that team. The caller may specify exact unit IDs; otherwise, the service selects eligible units automatically. The number of selected units shall equal the allocation quantity.
+- An allocation shall record resource, quantity, exact unit identities, team, project, assignee, allocating Line Manager, status, and allocation time. It may link to an approved request routed to that Line Manager.
+- When linked to a request, the allocation team/project shall match the request and the total quantity allocated against the request shall not exceed its approved quantity remaining to fulfill. Units reserved for that request are selected for its allocation.
 - If an allocation is linked to a request with an expected duration and no explicit return deadline is given, the service shall calculate the expected return date from that duration. Otherwise, an explicitly supplied date is stored or the deadline is absent.
-- A Line Manager shall be able to transfer an active allocation to an eligible user/team/project. The old allocation is marked transferred and a new active allocation is created for the same resource and quantity. Transfer history records the source and destination and optional note; the expected return date is retained unless changed.
-- A Line Manager shall be able to mark an active allocation returned. The service records the return time and optional note and releases the quantity for future allocation.
+- A Line Manager shall be able to transfer an active allocation to an eligible user/team/project. The old allocation is marked transferred and a new active allocation is created for the same resource, quantity, and unit identities. Transfer history records the source and destination and optional note; the expected return date is retained unless changed.
+- A Line Manager shall be able to mark an active allocation returned. The service records the return time and optional note and changes its units to `AVAILABLE` for future allocation.
 - The service shall record movement events for allocations, transfers, and returns. It shall send email to the assignee on allocation, transfer, and return where email delivery is configured.
 
 #### 2.3.6 Notifications and email
 
 - The system shall create an in-app notification and send an email to the assigned Line Manager when a Team Lead creates a request.
-- On a Line Manager's approval, rejection, or query, the system shall send an email to the requester. The current review flow does not create an in-app notification for the requester.
+- On a Line Manager's approval, the system shall send the requester an email and create an in-app notification that includes the approved quantity. On rejection or query, the system shall send an email to the requester; those review outcomes do not currently create an in-app notification.
 - Resubmitting a queried request records the resubmission but currently has no notification to the Line Manager.
 - Allocation, transfer, and return events send email to the relevant assignee. These resource allocation events are recorded as movements; they do not create in-app notifications in the current service.
 - The API provides notification list, create, mark-read, and delete operations. Only the `me` list operation has a JWT guard; other notification operations currently lack route-level authentication/ownership guards.
@@ -168,7 +174,8 @@ Role authorization is enforced per controller route, with several exceptions and
 - Dashboard summary and spending figures have legacy-field/status mismatches described in section 2.3.7.
 - Reports are available to System Admins and Managing Directors through guarded report routes; Department Heads do not have access to those routes in the current controller.
 - The database is not automatically synchronized at application startup. Migrations define schema changes.
-- The resource catalogue tracks recorded quantities and allocations. It does not place orders, receive purchases, or manage procurement.
+- Existing resource quantities and active allocations are backfilled into individual unit records by migration. Historical physical serial numbers and asset tags are not available, so backfilled units receive generated identities and may be labelled after migration. The migration also reserves units for outstanding approved requests.
+- The resource catalogue tracks recorded quantities and individual units. It does not place orders, receive purchases, or manage procurement.
 
 ## 4. External interfaces and references
 
