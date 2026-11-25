@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsNotIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsNotIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { UserRole } from '../user-role.enum';
 
 export class CreateUserDto {
@@ -8,6 +8,7 @@ export class CreateUserDto {
   @ApiProperty({ example: 'Alex' })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^[^\p{N}]+$/u, { message: 'Name fields must not contain numbers' })
   @MaxLength(60)
   firstName: string;
 
@@ -16,6 +17,7 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @Matches(/^[^\p{N}]+$/u, { message: 'Name fields must not contain numbers' })
   @MaxLength(60)
   middleName?: string;
 
@@ -23,6 +25,7 @@ export class CreateUserDto {
   @ApiProperty({ example: 'Morgan' })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^[^\p{N}]+$/u, { message: 'Name fields must not contain numbers' })
   @MaxLength(60)
   surname: string;
 
