@@ -364,6 +364,12 @@ export class UsersService {
 
     await this.usersRepository.save(user);
     await this.logAccountAction('ACCOUNT_DEACTIVATED', user.id, adminId, 'Account deactivated');
+    await this.email.send(
+      user.email,
+      'Your Resource Tracker account has been deactivated',
+      'Your Resource Tracker account has been deactivated. You can no longer sign in. Please contact your System Admin if you believe this was a mistake.',
+      '<p>Your Resource Tracker account has been deactivated. You can no longer sign in. Please contact your System Admin if you believe this was a mistake.</p>',
+    );
 
     return 'User account deactivated successfully';
   }
@@ -406,6 +412,12 @@ export class UsersService {
 
     await this.usersRepository.save(user);
     await this.logAccountAction('ACCOUNT_REACTIVATED', user.id, adminId, 'Account reactivated');
+    await this.email.send(
+      user.email,
+      'Your Resource Tracker account has been reactivated',
+      'Your Resource Tracker account has been reactivated. You can sign in to Resource Tracker again.',
+      '<p>Your Resource Tracker account has been reactivated. You can sign in to Resource Tracker again.</p>',
+    );
 
     return 'Account successfully re-activated';
   }
