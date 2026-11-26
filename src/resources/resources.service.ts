@@ -34,6 +34,18 @@ import { UpdateResourceUnitDto } from './dto/update-resource-unit.dto';
 
 const INSOURCED_FIELDS = ['description', 'departmentName'] as const;
 const OUTSOURCED_FIELDS = ['price', 'label', 'batchNumber', 'vendor'] as const;
+const USER_RESPONSE_EXCLUDED_FIELDS = new Set([
+  'mustChangePassword',
+  'tokenVersion',
+  'deletionRequestedAt',
+  'address',
+  'dateOfBirth',
+  'preferredPronoun',
+  'isActive',
+  'createdAt',
+  'updatedAt',
+  'id',
+]);
 
 @Injectable()
 export class ResourcesService {
@@ -379,7 +391,9 @@ export class ResourcesService {
     return movements.map((movement) => ({
       ...movement,
       allocation: movement.allocation ? this.allocationNameResponse(movement.allocation) : movement.allocation,
-      performedBy: movement.performedBy ? userNameResponse(movement.performedBy) : null,
+      performedBy: movement.performedBy
+        ? this.userNameResponseWithoutSensitiveFields(movement.performedBy)
+        : null,
     }));
   }
 
@@ -387,9 +401,21 @@ export class ResourcesService {
     if (!allocation) return allocation;
     return {
       ...allocation,
-      assignedTo: allocation.assignedTo ? userNameResponse(allocation.assignedTo) : null,
-      allocatedBy: allocation.allocatedBy ? userNameResponse(allocation.allocatedBy) : null,
+      assignedTo: allocation.assignedTo
+        ? this.userNameResponseWithoutSensitiveFields(allocation.assignedTo)
+        : null,
+      allocatedBy: allocation.allocatedBy
+        ? this.userNameResponseWithoutSensitiveFields(allocation.allocatedBy)
+        : null,
     };
+  }
+
+  private userNameResponseWithoutSensitiveFields(user: User) {
+    return Object.fromEntries(
+      Object.entries(userNameResponse(user)).filter(
+        ([field]) => !USER_RESPONSE_EXCLUDED_FIELDS.has(field),
+      ),
+    );
   }
 
   private resourceUnitResponse(unit: ResourceUnit) {
