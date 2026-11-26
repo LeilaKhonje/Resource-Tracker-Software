@@ -1,11 +1,16 @@
 
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
 import { DataSource } from 'typeorm';
 import { DepartmentsService } from '../departments/departments.service';
+import { ResourceRequest } from '../resourcerequest/entities/resourcerequest.entity';
+import { User } from '../users/user.entity';
+import { UserRole } from '../users/user-role.enum';
+import { AuthTokenPayload } from '../auth/interfaces/auth-token-payload.interface';
 
 @Injectable()
 export class DashboardService {
@@ -104,7 +109,34 @@ export class DashboardService {
   }
 
   // Complete dashboard data
-  async getDashboard(departmentId?: number) {
+  async getDashboard(user: AuthTokenPayload, departmentId?: number) {
+    if (user.role === UserRole.LINE_MANAGER) {
+      return {
+        requests: await this.dataSource.getRepository(ResourceRequest).find({
+          where: { lineManagerId: user.sub },
+          order: { createdAt: 'DESC' },
+        }),
+      };
+    }
+
+    if (user.role === UserRole.DEPARTMENT_HEAD) {
+      const departmentHead = await this.dataSource.getRepository(User).findOne({
+        where: { id: user.sub },
+        select: { id: true, department: { id: true } },
+        relations: { department: true },
+      });
+      if (!departmentHead?.department) {
+        throw new ForbiddenException('Department Head is not assigned to a department');
+      }
+
+      return {
+        requests: await this.dataSource.getRepository(ResourceRequest).find({
+          where: { departmentId: String(departmentHead.department.id) },
+          order: { createdAt: 'DESC' },
+        }),
+      };
+    }
+
     return {
       summary: await this.getSummary(departmentId),
       recentActivity: await this.getRecentActivity(),
